@@ -96,7 +96,7 @@ src/
 - [ ] `nextfile` statement
 - [x] `delete array` (delete entire array, not just one key)
 - [x] `length(array)` (return number of elements)
-- [x] Negative field indexes (`$-1` = last field, `$-2` = second-to-last)
+- [x] Negative field indexes (`$-1` = last field, `$-2` = second-to-last) and `$(expr)` computed fields
 - [x] `/dev/stderr` and `/dev/stdout` special files for output redirection
 - [x] `fflush()` and `system()` builtins
 - [x] Time functions: `systime()`, `strftime()`, `mktime()`
@@ -106,16 +106,32 @@ src/
 - [ ] Unicode-aware `length()`, `substr()`, field splitting
 - [ ] REPL / interactive mode
 
-#### 4 - Add dedicated benchmarks
-- [ ] ...
+#### Phase 4 — Benchmarks
+- [ ] Create `benches/` directory with criterion-based benchmarks
+- [ ] Field splitting throughput (whitespace, single-char, multi-char FS)
+- [ ] Lexer + parser throughput on realistic programs
+- [ ] Record processing throughput (simple print, field access, pattern match)
+- [ ] Comparison harness: `fk` vs `awk` vs `gawk` vs `mawk` on common tasks
+- [ ] Large-file benchmark (1M+ lines, CSV-like data)
 
-#### 5 - Add a tutorial/showcase script
-- [ ] ...
+#### Phase 5 — Tutorial & showcase
+- [ ] `examples/` directory with annotated scripts
+- [ ] Basics: field extraction, filtering, summing columns
+- [ ] Text transforms: CSV wrangling, log parsing, frequency counting
+- [ ] Advanced: user-defined functions, associative arrays, multi-file processing
+- [ ] Showcase fk-only features: `**`, `$-1`, hex literals, `\u` escapes, time functions
+- [ ] One-liner cheat sheet in README or separate doc
 
-#### 6 - Additional improvements optimizations
-- [ ] ...
+#### Phase 6 — Hardening & optimisation
+- [ ] Fuzz testing (lexer, parser, executor) with `cargo-fuzz`
+- [ ] Edge-case audit: empty input, binary data, extremely long lines, deep recursion
+- [ ] Reduce allocations in hot paths (field splitting, record loop, string concat)
+- [ ] Intern frequently-used variable names (NR, NF, FS, …) to avoid HashMap lookups
+- [ ] Profile-guided review of the executor loop
+- [ ] CI pipeline (build, test, lint, clippy)
+- [ ] Publish to crates.io
 
-## Usage (goal)
+## Usage
 
 ```sh
 # Print second field of every line (tab-separated)
@@ -126,6 +142,21 @@ fk '{ sum += $1 } END { print sum }' numbers.txt
 
 # Pattern match
 fk '/error/ { print NR, $0 }' log.txt
+
+# Exponentiation and hex literals
+echo "4" | fk '{ print $1 ** 0.5, 0xFF }'
+
+# Negative field indexes (last field)
+echo "a b c d" | fk '{ print $-1 }'
+
+# Time functions
+echo "" | fk '{ print strftime("%Y-%m-%d %H:%M:%S", systime()) }'
+
+# Run a shell command
+echo "" | fk '{ system("echo hello from system()") }'
+
+# Print to stderr
+echo "oops" | fk '{ print $0 > "/dev/stderr" }'
 ```
 
 ## Building
