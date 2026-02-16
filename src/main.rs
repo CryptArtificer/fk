@@ -1,6 +1,7 @@
 mod action;
 mod builtins;
 mod cli;
+mod error;
 mod field;
 mod input;
 mod lexer;

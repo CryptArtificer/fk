@@ -1,3 +1,5 @@
+use crate::error::Span;
+
 /// Token types for the fk language.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -71,6 +73,13 @@ pub enum Token {
     Eof,
 }
 
+/// A token with its source location.
+#[derive(Debug, Clone)]
+pub struct Spanned {
+    pub token: Token,
+    pub span: Span,
+}
+
 pub struct Lexer {
     input: Vec<char>,
     pos: usize,
@@ -84,16 +93,33 @@ impl Lexer {
         }
     }
 
-    pub fn tokenize(&mut self) -> Result<Vec<Token>, String> {
+    /// Compute the line and column for a given byte position.
+    fn span_at(&self, pos: usize) -> Span {
+        let mut line = 1;
+        let mut col = 1;
+        for i in 0..pos.min(self.input.len()) {
+            if self.input[i] == '\n' {
+                line += 1;
+                col = 1;
+            } else {
+                col += 1;
+            }
+        }
+        Span::new(line, col)
+    }
+
+    pub fn tokenize(&mut self) -> Result<Vec<Spanned>, String> {
         let mut tokens = Vec::new();
 
         loop {
             self.skip_whitespace();
             if self.pos >= self.input.len() {
-                tokens.push(Token::Eof);
+                let span = self.span_at(self.pos);
+                tokens.push(Spanned { token: Token::Eof, span });
                 break;
             }
 
+            let span = self.span_at(self.pos);
             let ch = self.input[self.pos];
 
             // Comments
@@ -220,7 +246,7 @@ impl Lexer {
                         self.pos += 1;
                         Token::And
                     } else {
-                        return Err(format!("unexpected character '&' at position {}", self.pos - 1));
+                        return Err(format!("{}: unexpected character '&'", span));
                     }
                 }
                 '|' => {
@@ -237,11 +263,11 @@ impl Lexer {
                 _ if ch.is_ascii_digit() || ch == '.' => self.read_number()?,
                 _ if ch.is_ascii_alphabetic() || ch == '_' => self.read_ident(),
                 _ => {
-                    return Err(format!("unexpected character '{}' at position {}", ch, self.pos));
+                    return Err(format!("{}: unexpected character '{}'", span, ch));
                 }
             };
 
-            tokens.push(token);
+            tokens.push(Spanned { token, span });
         }
 
         Ok(tokens)
@@ -262,8 +288,8 @@ impl Lexer {
         }
     }
 
-    fn is_regex_context(&self, tokens: &[Token]) -> bool {
-        match tokens.last() {
+    fn is_regex_context(&self, tokens: &[Spanned]) -> bool {
+        match tokens.last().map(|s| &s.token) {
             None => true,
             Some(Token::LBrace) | Some(Token::Semicolon) | Some(Token::Newline)
             | Some(Token::And) | Some(Token::Or) | Some(Token::Not)
@@ -274,11 +300,12 @@ impl Lexer {
     }
 
     fn read_regex(&mut self) -> Result<Token, String> {
+        let span = self.span_at(self.pos);
         self.pos += 1; // skip opening /
         let mut pattern = String::new();
         loop {
             if self.pos >= self.input.len() {
-                return Err("unterminated regex".to_string());
+                return Err(format!("{}: unterminated regex", span));
             }
             let ch = self.input[self.pos];
             if ch == '/' {
@@ -296,11 +323,12 @@ impl Lexer {
     }
 
     fn read_string(&mut self) -> Result<Token, String> {
+        let span = self.span_at(self.pos);
         self.pos += 1; // skip opening "
         let mut s = String::new();
         loop {
             if self.pos >= self.input.len() {
-                return Err("unterminated string".to_string());
+                return Err(format!("{}: unterminated string", span));
             }
             let ch = self.input[self.pos];
             if ch == '"' {
@@ -330,6 +358,7 @@ impl Lexer {
     }
 
     fn read_field(&mut self) -> Result<Token, String> {
+        let span = self.span_at(self.pos);
         self.pos += 1; // skip $
         if self.pos < self.input.len() && self.input[self.pos].is_ascii_digit() {
             let start = self.pos;
@@ -340,7 +369,7 @@ impl Lexer {
                 .iter()
                 .collect::<String>()
                 .parse()
-                .map_err(|_| "invalid field number".to_string())?;
+                .map_err(|_| format!("{}: invalid field number", span))?;
             Ok(Token::Field(num))
         } else if self.pos < self.input.len()
             && (self.input[self.pos].is_ascii_alphabetic() || self.input[self.pos] == '_')
@@ -348,11 +377,12 @@ impl Lexer {
             let ident = self.read_ident_str();
             Ok(Token::FieldVar(ident))
         } else {
-            Err("expected field number or variable after $".to_string())
+            Err(format!("{}: expected field number or variable after $", span))
         }
     }
 
     fn read_number(&mut self) -> Result<Token, String> {
+        let span = self.span_at(self.pos);
         let start = self.pos;
         let mut has_dot = false;
         while self.pos < self.input.len() {
@@ -367,7 +397,7 @@ impl Lexer {
             }
         }
         let s: String = self.input[start..self.pos].iter().collect();
-        let num: f64 = s.parse().map_err(|_| format!("invalid number: {}", s))?;
+        let num: f64 = s.parse().map_err(|_| format!("{}: invalid number: {}", span, s))?;
         Ok(Token::Number(num))
     }
 
@@ -406,12 +436,17 @@ impl Lexer {
 mod tests {
     use super::*;
 
+    /// Extract bare tokens from spanned output for easy comparison.
+    fn tokens(spanned: Vec<Spanned>) -> Vec<Token> {
+        spanned.into_iter().map(|s| s.token).collect()
+    }
+
     #[test]
     fn simple_print() {
         let mut lexer = Lexer::new("{ print $1 }");
-        let tokens = lexer.tokenize().unwrap();
+        let toks = tokens(lexer.tokenize().unwrap());
         assert_eq!(
-            tokens,
+            toks,
             vec![Token::LBrace, Token::Print, Token::Field(1), Token::RBrace, Token::Eof]
         );
     }
@@ -419,9 +454,9 @@ mod tests {
     #[test]
     fn regex_pattern() {
         let mut lexer = Lexer::new("/error/ { print $0 }");
-        let tokens = lexer.tokenize().unwrap();
+        let toks = tokens(lexer.tokenize().unwrap());
         assert_eq!(
-            tokens,
+            toks,
             vec![
                 Token::Regex("error".to_string()),
                 Token::LBrace,
@@ -436,48 +471,66 @@ mod tests {
     #[test]
     fn begin_end() {
         let mut lexer = Lexer::new("BEGIN { print \"start\" } END { print \"done\" }");
-        let tokens = lexer.tokenize().unwrap();
-        assert!(matches!(tokens[0], Token::Begin));
-        assert!(tokens.iter().any(|t| matches!(t, Token::End)));
+        let toks = tokens(lexer.tokenize().unwrap());
+        assert!(matches!(toks[0], Token::Begin));
+        assert!(toks.iter().any(|t| matches!(t, Token::End)));
     }
 
     #[test]
     fn increment_decrement() {
         let mut lexer = Lexer::new("{ i++; j-- }");
-        let tokens = lexer.tokenize().unwrap();
-        assert!(tokens.contains(&Token::Increment));
-        assert!(tokens.contains(&Token::Decrement));
+        let toks = tokens(lexer.tokenize().unwrap());
+        assert!(toks.contains(&Token::Increment));
+        assert!(toks.contains(&Token::Decrement));
     }
 
     #[test]
     fn compound_assign() {
         let mut lexer = Lexer::new("{ x += 1; y -= 2; z *= 3; w /= 4; m %= 5 }");
-        let tokens = lexer.tokenize().unwrap();
-        assert!(tokens.contains(&Token::PlusAssign));
-        assert!(tokens.contains(&Token::MinusAssign));
-        assert!(tokens.contains(&Token::StarAssign));
-        assert!(tokens.contains(&Token::SlashAssign));
-        assert!(tokens.contains(&Token::PercentAssign));
+        let toks = tokens(lexer.tokenize().unwrap());
+        assert!(toks.contains(&Token::PlusAssign));
+        assert!(toks.contains(&Token::MinusAssign));
+        assert!(toks.contains(&Token::StarAssign));
+        assert!(toks.contains(&Token::SlashAssign));
+        assert!(toks.contains(&Token::PercentAssign));
     }
 
     #[test]
     fn array_access() {
         let mut lexer = Lexer::new("{ a[\"key\"] = 1 }");
-        let tokens = lexer.tokenize().unwrap();
-        assert!(tokens.contains(&Token::LBracket));
-        assert!(tokens.contains(&Token::RBracket));
+        let toks = tokens(lexer.tokenize().unwrap());
+        assert!(toks.contains(&Token::LBracket));
+        assert!(toks.contains(&Token::RBracket));
     }
 
     #[test]
     fn keywords_phase1() {
         let mut lexer = Lexer::new("if else for while in delete printf");
-        let tokens = lexer.tokenize().unwrap();
-        assert!(tokens.contains(&Token::If));
-        assert!(tokens.contains(&Token::Else));
-        assert!(tokens.contains(&Token::For));
-        assert!(tokens.contains(&Token::While));
-        assert!(tokens.contains(&Token::In));
-        assert!(tokens.contains(&Token::Delete));
-        assert!(tokens.contains(&Token::Printf));
+        let toks = tokens(lexer.tokenize().unwrap());
+        assert!(toks.contains(&Token::If));
+        assert!(toks.contains(&Token::Else));
+        assert!(toks.contains(&Token::For));
+        assert!(toks.contains(&Token::While));
+        assert!(toks.contains(&Token::In));
+        assert!(toks.contains(&Token::Delete));
+        assert!(toks.contains(&Token::Printf));
+    }
+
+    #[test]
+    fn span_tracks_line_and_column() {
+        let mut lexer = Lexer::new("{\n  print $1\n}");
+        let spanned = lexer.tokenize().unwrap();
+        // { at 1:1
+        assert_eq!(spanned[0].span, Span::new(1, 1));
+        // \n at 1:2
+        assert_eq!(spanned[1].span, Span::new(1, 2));
+        // print at 2:3
+        assert_eq!(spanned[2].span, Span::new(2, 3));
+        // $1 at 2:9
+        assert_eq!(spanned[3].span, Span::new(2, 9));
+        // \n at 2:11
+        assert_eq!(spanned[4].span, Span::new(2, 11));
+        // } at 3:1
+        assert_eq!(spanned[5].span, Span::new(3, 1));
     }
 }

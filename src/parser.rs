@@ -1,4 +1,5 @@
-use crate::lexer::Token;
+use crate::error::Span;
+use crate::lexer::{Spanned, Token};
 
 /// A complete fk program: optional BEGIN, a set of rules, optional END, and functions.
 #[derive(Debug)]
@@ -100,13 +101,25 @@ pub enum BinOp {
 }
 
 pub struct Parser {
-    tokens: Vec<Token>,
+    tokens: Vec<Spanned>,
     pos: usize,
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>) -> Self {
+    pub fn new(tokens: Vec<Spanned>) -> Self {
         Parser { tokens, pos: 0 }
+    }
+
+    fn current(&self) -> &Token {
+        self.tokens.get(self.pos)
+            .map(|s| &s.token)
+            .unwrap_or(&Token::Eof)
+    }
+
+    fn current_span(&self) -> Span {
+        self.tokens.get(self.pos)
+            .map(|s| s.span)
+            .unwrap_or(Span::new(0, 0))
     }
 
     pub fn parse(&mut self) -> Result<Program, String> {
@@ -150,7 +163,7 @@ impl Parser {
         self.advance(); // consume 'function'
         let name = match self.current().clone() {
             Token::Ident(n) => { self.advance(); n }
-            _ => return Err("expected function name".to_string()),
+            _ => return Err(format!("{}: expected function name", self.current_span())),
         };
         self.expect(&Token::LParen)?;
 
@@ -158,13 +171,13 @@ impl Parser {
         if !self.check(&Token::RParen) {
             match self.current().clone() {
                 Token::Ident(p) => { self.advance(); params.push(p); }
-                _ => return Err("expected parameter name".to_string()),
+                _ => return Err(format!("{}: expected parameter name", self.current_span())),
             }
             while self.check(&Token::Comma) {
                 self.advance();
                 match self.current().clone() {
                     Token::Ident(p) => { self.advance(); params.push(p); }
-                    _ => return Err("expected parameter name".to_string()),
+                    _ => return Err(format!("{}: expected parameter name", self.current_span())),
                 }
             }
         }
@@ -284,6 +297,7 @@ impl Parser {
     }
 
     fn parse_printf(&mut self) -> Result<Statement, String> {
+        let span = self.current_span();
         self.advance(); // consume 'printf'
         let mut args = Vec::new();
         if !self.is_terminator() && !self.check(&Token::RBrace) {
@@ -294,7 +308,7 @@ impl Parser {
             }
         }
         if args.is_empty() {
-            return Err("printf requires a format string".to_string());
+            return Err(format!("{}: printf requires a format string", span));
         }
         let redir = self.parse_redirect()?;
         Ok(Statement::Printf(args, redir))
@@ -444,6 +458,7 @@ impl Parser {
     }
 
     fn parse_delete(&mut self) -> Result<Statement, String> {
+        let span = self.current_span();
         self.advance(); // consume 'delete'
         if let Token::Ident(name) = self.current().clone() {
             self.advance();
@@ -452,7 +467,7 @@ impl Parser {
             self.expect(&Token::RBracket)?;
             Ok(Statement::Delete(name, key))
         } else {
-            Err("delete requires array[subscript]".to_string())
+            Err(format!("{}: delete requires array[subscript]", span))
         }
     }
 
@@ -509,7 +524,7 @@ impl Parser {
     fn check_lvalue(&self, expr: &Expr) -> Result<(), String> {
         match expr {
             Expr::Var(_) | Expr::ArrayRef(_, _) | Expr::Field(_) => Ok(()),
-            _ => Err("invalid assignment target".to_string()),
+            _ => Err(format!("{}: invalid assignment target", self.current_span())),
         }
     }
 
@@ -578,7 +593,7 @@ impl Parser {
                 self.advance();
                 return Ok(Expr::Match(Box::new(left), pat));
             } else {
-                return Err("expected regex after ~".to_string());
+                return Err(format!("{}: expected regex after ~", self.current_span()));
             }
         }
         if self.check(&Token::NotMatch) {
@@ -587,7 +602,7 @@ impl Parser {
                 self.advance();
                 return Ok(Expr::NotMatch(Box::new(left), pat));
             } else {
-                return Err("expected regex after !~".to_string());
+                return Err(format!("{}: expected regex after !~", self.current_span()));
             }
         }
 
@@ -777,7 +792,7 @@ impl Parser {
                         self.advance();
                         return Ok(Expr::ArrayIn(name, arr));
                     } else {
-                        return Err("expected array name after 'in'".to_string());
+                        return Err(format!("{}: expected array name after 'in'", self.current_span()));
                     }
                 }
 
@@ -787,8 +802,6 @@ impl Parser {
                 self.advance();
                 // getline [var] [< file]
                 let var = if let Token::Ident(name) = self.current().clone() {
-                    // Peek to see if this is really a var (not followed by something
-                    // that makes it look like a different expression)
                     let saved = self.pos;
                     self.advance();
                     if self.check(&Token::Lt) || self.is_terminator()
@@ -817,11 +830,12 @@ impl Parser {
                 self.expect(&Token::RParen)?;
                 Ok(expr)
             }
-            _ => Err(format!("unexpected token: {:?}", self.current())),
+            _ => Err(format!("{}: unexpected token: {:?}", self.current_span(), self.current())),
         }
     }
 
     fn parse_sprintf_args(&mut self) -> Result<Expr, String> {
+        let span = self.current_span();
         self.expect(&Token::LParen)?;
         let mut args = Vec::new();
         if !self.check(&Token::RParen) {
@@ -833,7 +847,7 @@ impl Parser {
         }
         self.expect(&Token::RParen)?;
         if args.is_empty() {
-            return Err("sprintf requires a format string".to_string());
+            return Err(format!("{}: sprintf requires a format string", span));
         }
         Ok(Expr::Sprintf(args))
     }
@@ -854,10 +868,6 @@ impl Parser {
 
     // --- helpers ---
 
-    fn current(&self) -> &Token {
-        self.tokens.get(self.pos).unwrap_or(&Token::Eof)
-    }
-
     fn advance(&mut self) {
         if self.pos < self.tokens.len() {
             self.pos += 1;
@@ -877,7 +887,7 @@ impl Parser {
             self.advance();
             Ok(())
         } else {
-            Err(format!("expected {:?}, got {:?}", token, self.current()))
+            Err(format!("{}: expected {:?}, got {:?}", self.current_span(), token, self.current()))
         }
     }
 
