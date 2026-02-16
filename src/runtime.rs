@@ -99,6 +99,14 @@ impl Runtime {
         }
     }
 
+    pub fn delete_array_all(&mut self, name: &str) {
+        self.arrays.remove(name);
+    }
+
+    pub fn array_len(&self, name: &str) -> usize {
+        self.arrays.get(name).map_or(0, |a| a.len())
+    }
+
     pub fn array_has_key(&self, name: &str, key: &str) -> bool {
         self.arrays
             .get(name)

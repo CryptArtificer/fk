@@ -12,6 +12,7 @@ pub enum Token {
     Ident(String),
     Field(u32),         // $0, $1, ...
     FieldVar(String),   // $variable (resolved at runtime)
+    Dollar,             // bare $ (followed by expression)
 
     // Keywords
     Begin,
@@ -397,7 +398,7 @@ impl Lexer {
             let ident = self.read_ident_str();
             Ok(Token::FieldVar(ident))
         } else {
-            Err(format!("{}: expected field number or variable after $", span))
+            Ok(Token::Dollar)
         }
     }
 

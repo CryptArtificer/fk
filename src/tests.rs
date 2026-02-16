@@ -582,3 +582,71 @@ fn unicode_escape_emoji() {
     let rt = eval(r#"{ result = "\u2764" }"#, &["x"]);
     assert_eq!(rt.get_var("result"), "❤");
 }
+
+// ── delete array (whole array) ───────────────────────────────────
+
+#[test]
+fn delete_entire_array() {
+    let rt = eval(
+        "{ a[1]=\"x\"; a[2]=\"y\"; delete a; result = length(a) }",
+        &["z"],
+    );
+    assert_eq!(rt.get_var("result"), "0");
+}
+
+#[test]
+fn delete_entire_array_then_rebuild() {
+    let rt = eval(
+        "{ a[1]=\"old\"; delete a; a[1]=\"new\"; result = a[1] }",
+        &["z"],
+    );
+    assert_eq!(rt.get_var("result"), "new");
+}
+
+// ── length(array) ────────────────────────────────────────────────
+
+#[test]
+fn length_of_array() {
+    let rt = eval(
+        "{ a[\"x\"]=1; a[\"y\"]=2; a[\"z\"]=3; result = length(a) }",
+        &["w"],
+    );
+    assert_eq!(rt.get_var("result"), "3");
+}
+
+#[test]
+fn length_of_empty_array() {
+    let rt = eval(
+        "{ split(\"\", a); result = length(a) }",
+        &["w"],
+    );
+    assert_eq!(rt.get_var("result"), "0");
+}
+
+#[test]
+fn length_of_string_still_works() {
+    let rt = eval("{ result = length(\"hello\") }", &["x"]);
+    assert_eq!(rt.get_var("result"), "5");
+}
+
+// ── Negative field indexes ───────────────────────────────────────
+
+#[test]
+fn negative_field_last() {
+    // $-1 should be the last field
+    let rt = eval("{ result = $-1 }", &["a b c"]);
+    assert_eq!(rt.get_var("result"), "c");
+}
+
+#[test]
+fn negative_field_second_to_last() {
+    let rt = eval("{ result = $-2 }", &["a b c d"]);
+    assert_eq!(rt.get_var("result"), "c");
+}
+
+#[test]
+fn negative_field_beyond_start_gives_whole_record() {
+    // $-99 on a 3-field record should resolve to $0
+    let rt = eval("{ result = $-99 }", &["a b c"]);
+    assert_eq!(rt.get_var("result"), "a b c");
+}

@@ -197,6 +197,9 @@ impl<'a> Executor<'a> {
                 let key = self.eval_expr(key_expr);
                 self.rt.delete_array(array, &key);
             }
+            Statement::DeleteAll(array) => {
+                self.rt.delete_array_all(array);
+            }
             Statement::Return(expr) => {
                 let val = match expr {
                     Some(e) => self.eval_expr(e),
@@ -223,8 +226,8 @@ impl<'a> Executor<'a> {
             Expr::Var(name) => self.rt.get_var(name),
             Expr::Field(idx_expr) => {
                 let idx_str = self.eval_expr(idx_expr);
-                let idx: usize = idx_str.parse::<f64>().unwrap_or(0.0) as usize;
-                self.rt.get_field(idx)
+                let n = idx_str.parse::<f64>().unwrap_or(0.0);
+                self.rt.get_field(self.resolve_field_idx(n))
             }
             Expr::ArrayRef(name, key_expr) => {
                 let key = self.eval_expr(key_expr);
@@ -325,6 +328,14 @@ impl<'a> Executor<'a> {
                     "gsub" => return self.builtin_sub(args, true),
                     "match" => return self.builtin_match(args),
                     "split" => return self.builtin_split(args),
+                    "length" if args.len() == 1 => {
+                        // length(array) returns element count if arg is an array
+                        if let Expr::Var(var_name) = &args[0] {
+                            if self.rt.arrays.contains_key(var_name.as_str()) {
+                                return format_number(self.rt.array_len(var_name) as f64);
+                            }
+                        }
+                    }
                     _ => {}
                 }
                 let evaled: Vec<String> = args.iter().map(|e| self.eval_expr(e)).collect();
@@ -344,6 +355,18 @@ impl<'a> Executor<'a> {
         }
     }
 
+    /// Resolve a field index, supporting negative values ($-1 = last field).
+    fn resolve_field_idx(&self, n: f64) -> usize {
+        let i = n as isize;
+        if i >= 0 {
+            i as usize
+        } else {
+            let nf = self.rt.fields.len() as isize;
+            let resolved = nf + 1 + i; // -1 → nf, -2 → nf-1, etc.
+            if resolved < 0 { 0 } else { resolved as usize }
+        }
+    }
+
     fn eval_lvalue(&mut self, expr: &Expr) -> String {
         match expr {
             Expr::Var(name) => self.rt.get_var(name),
@@ -353,8 +376,8 @@ impl<'a> Executor<'a> {
             }
             Expr::Field(idx_expr) => {
                 let idx_str = self.eval_expr(idx_expr);
-                let idx: usize = idx_str.parse::<f64>().unwrap_or(0.0) as usize;
-                self.rt.get_field(idx)
+                let n = idx_str.parse::<f64>().unwrap_or(0.0);
+                self.rt.get_field(self.resolve_field_idx(n))
             }
             _ => String::new(),
         }
@@ -369,8 +392,8 @@ impl<'a> Executor<'a> {
             }
             Expr::Field(idx_expr) => {
                 let idx_str = self.eval_expr(idx_expr);
-                let idx: usize = idx_str.parse::<f64>().unwrap_or(0.0) as usize;
-                self.rt.set_field(idx, value);
+                let n = idx_str.parse::<f64>().unwrap_or(0.0);
+                self.rt.set_field(self.resolve_field_idx(n), value);
             }
             _ => {}
         }

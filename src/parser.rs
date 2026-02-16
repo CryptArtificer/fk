@@ -51,6 +51,7 @@ pub enum Statement {
     For(Option<Box<Statement>>, Option<Expr>, Option<Box<Statement>>, Block),
     ForIn(String, String, Block),
     Delete(String, Expr),
+    DeleteAll(String),
     Return(Option<Expr>),
     Block(Block),
     Expression(Expr),
@@ -463,12 +464,17 @@ impl Parser {
         self.advance(); // consume 'delete'
         if let Token::Ident(name) = self.current().clone() {
             self.advance();
-            self.expect(&Token::LBracket)?;
-            let key = self.parse_expr()?;
-            self.expect(&Token::RBracket)?;
-            Ok(Statement::Delete(name, key))
+            if self.check(&Token::LBracket) {
+                self.advance();
+                let key = self.parse_expr()?;
+                self.expect(&Token::RBracket)?;
+                Ok(Statement::Delete(name, key))
+            } else {
+                // delete entire array
+                Ok(Statement::DeleteAll(name))
+            }
         } else {
-            Err(format!("{}: delete requires array[subscript]", span))
+            Err(format!("{}: delete requires array or array[subscript]", span))
         }
     }
 
@@ -787,6 +793,11 @@ impl Parser {
             Token::FieldVar(name) => {
                 self.advance();
                 Ok(Expr::Field(Box::new(Expr::Var(name))))
+            }
+            Token::Dollar => {
+                self.advance();
+                let expr = self.parse_unary()?;
+                Ok(Expr::Field(Box::new(expr)))
             }
             Token::Ident(name) => {
                 self.advance();
