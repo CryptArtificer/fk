@@ -5,3 +5,18 @@ edition = "2024"
 
 [dependencies]
 regex = "1.12.3"
+
+[dev-dependencies]
+criterion = "0.8.2"
+
+[[bench]]
+name = "field_split"
+harness = false
+
+[[bench]]
+name = "lex_parse"
+harness = false
+
+[[bench]]
+name = "record_processing"
+harness = false

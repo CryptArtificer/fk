@@ -1,18 +1,6 @@
-mod action;
-mod builtins;
-mod cli;
-mod error;
-mod field;
-mod input;
-mod lexer;
-mod parser;
-mod repl;
-mod runtime;
-
-#[cfg(test)]
-mod tests;
-
 use std::process;
+
+use fk::{action, cli, input, lexer, parser, runtime, repl};
 
 fn main() {
     let args = cli::parse_args();
