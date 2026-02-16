@@ -126,10 +126,11 @@ src/
 - [x] One-liner cheat sheet (`docs/cheatsheet.md`)
 
 #### Phase 6 — Hardening & optimisation
+- [x] Buffer stdout output (`BufWriter` in Executor, flushed at END / fflush / system)
+- [x] Intern built-in variable names (NR, NF, FS, OFS, RS, ORS as dedicated fields)
 - [ ] Fuzz testing (lexer, parser, executor) with `cargo-fuzz`
 - [ ] Edge-case audit: empty input, binary data, extremely long lines, deep recursion
 - [ ] Reduce allocations in hot paths (field splitting, record loop, string concat)
-- [ ] Intern frequently-used variable names (NR, NF, FS, …) to avoid HashMap lookups
 - [ ] Profile-guided review of the executor loop
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io

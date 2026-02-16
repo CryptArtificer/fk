@@ -499,10 +499,11 @@ impl<'a> Executor<'a> {
     }
 
     fn call_user_func(&mut self, func: &FuncDef, args: &[String]) -> String {
-        let mut saved: Vec<(String, Option<String>)> = Vec::new();
+        let mut saved: Vec<(String, bool, String)> = Vec::new();
         for param in &func.params {
-            let old = self.rt.variables.get(param).cloned();
-            saved.push((param.clone(), old));
+            let existed = self.rt.has_var(param);
+            let old = self.rt.get_var(param);
+            saved.push((param.clone(), existed, old));
         }
 
         for (i, param) in func.params.iter().enumerate() {
@@ -515,10 +516,11 @@ impl<'a> Executor<'a> {
             None => String::new(),
         };
 
-        for (name, old_val) in saved {
-            match old_val {
-                Some(v) => self.rt.set_var(&name, &v),
-                None => { self.rt.variables.remove(&name); }
+        for (name, existed, old_val) in saved {
+            if existed {
+                self.rt.set_var(&name, &old_val);
+            } else {
+                self.rt.remove_var(&name);
             }
         }
 

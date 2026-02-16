@@ -121,13 +121,12 @@ fn brace_depth(s: &str) -> i32 {
 }
 
 fn print_vars(rt: &Runtime) {
-    if rt.variables.is_empty() {
+    let names = rt.all_var_names();
+    if names.is_empty() {
         println!("(no variables)");
         return;
     }
-    let mut names: Vec<&String> = rt.variables.keys().collect();
-    names.sort();
-    for name in names {
-        println!("  {} = \"{}\"", name, &rt.variables[name]);
+    for name in &names {
+        println!("  {} = \"{}\"", name, rt.get_var(name));
     }
 }

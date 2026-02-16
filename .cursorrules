@@ -1,0 +1,104 @@
+# fk — filter-kernel: session handoff notes
+#
+# Read this first when resuming work on this project.
+
+## What this is
+
+A modernized awk clone in Rust called `fk` (filter-kernel). Built
+incrementally as a learning exercise. The user values:
+- Modularity and composability (no spaghetti)
+- Commits in logical, coherent pieces
+- Minimal dependencies (only `regex` crate so far; `criterion` for benchmarks)
+- Never add co-author tags to commits — use `git commit-tree` plumbing
+
+## Current state
+
+- **~5,400 lines of Rust** across 22 source files
+- **137 tests**, zero warnings
+- **Phases 0–5 complete**, Phase 6 (Hardening & Optimisation) in progress
+- Single dependency: `regex` crate (for RS-as-regex)
+- Dev dependency: `criterion` (benchmarks)
+
+## Architecture (read src/lib.rs for module list)
+
+```
+main.rs        — CLI dispatch, record loop
+cli.rs         — argument parsing (-F, -v, -i, -H, --repl)
+lexer.rs       — tokenizer (Spanned tokens with line:col)
+parser.rs      — recursive-descent → AST (Program, Rules, Exprs, Stmts)
+action.rs      — executor: pattern matching, eval, statement dispatch
+runtime.rs     — variables, fields, arrays
+field.rs       — field splitting (FS semantics)
+error.rs       — Span type for diagnostics
+repl.rs        — interactive REPL (--repl)
+input/mod.rs   — Record struct, RecordReader trait, multi-source orchestration
+input/line.rs  — default newline reader
+input/csv.rs   — RFC 4180 CSV/TSV reader
+input/json.rs  — JSON Lines reader
+input/regex_rs.rs — regex-based RS reader
+builtins/mod.rs   — dispatch + coercion helpers (to_number, format_number)
+builtins/string.rs — length, substr, index, tolower, toupper (unicode-aware)
+builtins/math.rs   — int, sqrt, sin, cos, log, exp
+builtins/printf.rs — format_printf
+builtins/time.rs   — systime, strftime, mktime (pure UTC, no libc)
+builtins/json.rs   — jpath() with JSON parser, path evaluator, iteration
+```
+
+## Key design decisions
+
+- `RecordReader` trait returns `Record { text, fields: Option<Vec<String>> }`
+  so structured readers (CSV/JSON) can pre-split fields
+- Builtins that need runtime access (sub, gsub, split, jpath 3-arg, system)
+  are special-cased in action.rs; pure builtins go through builtins::call_builtin
+- Lexer produces `Spanned` tokens (token + Span); parser threads Span into errors
+- Runtime stores everything as strings; to_number() coerces on demand (awk semantics)
+- Built-in vars (NR, NF, FS, OFS, RS, ORS) are dedicated fields in Runtime,
+  not in the HashMap; NR/NF stored as integers, formatted on read
+- Executor owns a BufWriter<Stdout>; flushed at END, fflush(), and before system()
+- All string builtins are unicode-aware (chars, not bytes)
+- jpath() supports multi-value navigation: .key[], .arr.key (implicit iteration)
+
+## What's done (Phases 0–5, Phase 6 in progress)
+
+Phase 0: CLI, I/O, field splitting, print, patterns, BEGIN/END, built-in vars
+Phase 1: Expressions, assignment, control flow, arrays, printf, operators
+Phase 2: User functions, getline, output redirect, sub/gsub/match/split, ranges, ternary
+Phase 3a: Refactored builtins/, input/, error.rs
+Phase 3b: CSV, TSV, JSON input modes, header mode (-H), RS regex, jpath()
+Phase 3c: **, hex literals, \x/\u escapes, nextfile, delete arr, length(arr), $-1, system/fflush, time funcs
+Phase 3d: Unicode-aware strings, REPL
+Phase 4: Criterion benchmarks (field split, lex+parse, record processing), Makefile, comparison harness
+Phase 5: 5 example scripts, cheat sheet, man page
+Phase 6 (partial): Buffered stdout, interned built-in variables
+
+## What's next: Phase 6 — Hardening & Optimisation (remaining)
+
+- [ ] Fuzz testing (lexer, parser, executor) with cargo-fuzz
+- [ ] Edge-case audit: empty input, binary data, extremely long lines, deep recursion
+- [ ] Reduce allocations in hot paths (field splitting, record loop, string concat)
+- [ ] Profile-guided review of the executor loop
+- [ ] CI pipeline (build, test, lint, clippy)
+- [ ] Publish to crates.io
+
+### Performance (from `make bench-compare` on 1M lines):
+- `print $2`: fk ~0.71s vs awk ~0.58s (1.2× — remaining gap likely format!/join overhead)
+- Sum/arithmetic: fk ~0.39s vs awk ~0.60s (fk faster)
+- Pattern matching: fk ~0.39s vs awk ~0.82s (fk 2× faster)
+- Field arithmetic: fk ~0.41s vs awk ~0.62s (fk faster)
+- Associative arrays: fk ~0.52s vs awk ~0.67s (fk faster)
+
+## Tooling
+
+- `make` — shows all targets
+- `make test` / `make lint` / `make ci` — testing and linting
+- `make bench` — criterion benchmarks
+- `make bench-compare` — fk vs awk head-to-head (generates 1M-line CSV)
+- `make man` — view the man page
+- `make repl` — interactive mode
+
+## Commit conventions
+
+- Use `git commit-tree` to create commits (avoids hook-injected co-author tags)
+- Pattern: `git add ... && TREE=$(git write-tree) && PARENT=$(git rev-parse HEAD) && COMMIT=$(echo "message" | GIT_AUTHOR_NAME="$(git config user.name)" GIT_AUTHOR_EMAIL="$(git config user.email)" GIT_COMMITTER_NAME="$(git config user.name)" GIT_COMMITTER_EMAIL="$(git config user.email)" git commit-tree "$TREE" -p "$PARENT") && git reset --soft "$COMMIT"`
+- Never add co-author tags
+- Commit in logical, coherent pieces (one feature or concern per commit)

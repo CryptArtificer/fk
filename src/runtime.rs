@@ -7,39 +7,87 @@ pub struct Runtime {
     pub variables: HashMap<String, String>,
     pub arrays: HashMap<String, HashMap<String, String>>,
     pub fields: Vec<String>,
+    nr: u64,
+    nf: usize,
+    fs: String,
+    ofs: String,
+    rs: String,
+    ors: String,
 }
+
+/// Names that are stored as dedicated fields rather than in the HashMap.
+const INTERNED_NAMES: &[&str] = &["NR", "NF", "FS", "OFS", "RS", "ORS"];
 
 impl Runtime {
     pub fn new() -> Self {
-        let mut variables = HashMap::new();
-        variables.insert("FS".to_string(), " ".to_string());
-        variables.insert("OFS".to_string(), " ".to_string());
-        variables.insert("RS".to_string(), "\n".to_string());
-        variables.insert("ORS".to_string(), "\n".to_string());
-        variables.insert("NR".to_string(), "0".to_string());
-        variables.insert("NF".to_string(), "0".to_string());
-
         Runtime {
-            variables,
+            variables: HashMap::new(),
             arrays: HashMap::new(),
             fields: Vec::new(),
+            nr: 0,
+            nf: 0,
+            fs: " ".to_string(),
+            ofs: " ".to_string(),
+            rs: "\n".to_string(),
+            ors: "\n".to_string(),
         }
     }
 
     pub fn get_var(&self, name: &str) -> String {
-        self.variables
-            .get(name)
-            .cloned()
-            .unwrap_or_default()
+        match name {
+            "NR" => self.nr.to_string(),
+            "NF" => self.nf.to_string(),
+            "FS" => self.fs.clone(),
+            "OFS" => self.ofs.clone(),
+            "RS" => self.rs.clone(),
+            "ORS" => self.ors.clone(),
+            _ => self.variables.get(name).cloned().unwrap_or_default(),
+        }
     }
 
     pub fn set_var(&mut self, name: &str, value: &str) {
-        self.variables.insert(name.to_string(), value.to_string());
+        match name {
+            "NR" => self.nr = value.parse().unwrap_or(0),
+            "NF" => self.nf = value.parse().unwrap_or(0),
+            "FS" => self.fs = value.to_string(),
+            "OFS" => self.ofs = value.to_string(),
+            "RS" => self.rs = value.to_string(),
+            "ORS" => self.ors = value.to_string(),
+            _ => { self.variables.insert(name.to_string(), value.to_string()); }
+        }
+    }
+
+    /// Check whether a variable exists (interned vars always exist).
+    pub fn has_var(&self, name: &str) -> bool {
+        INTERNED_NAMES.contains(&name) || self.variables.contains_key(name)
+    }
+
+    /// Remove a user variable. Interned vars are reset to their defaults.
+    pub fn remove_var(&mut self, name: &str) {
+        match name {
+            "NR" => self.nr = 0,
+            "NF" => self.nf = 0,
+            "FS" => self.fs = " ".to_string(),
+            "OFS" => self.ofs = " ".to_string(),
+            "RS" => self.rs = "\n".to_string(),
+            "ORS" => self.ors = "\n".to_string(),
+            _ => { self.variables.remove(name); }
+        }
+    }
+
+    /// Iterate all variable names (interned + user-defined).
+    pub fn all_var_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = INTERNED_NAMES.iter().map(|s| s.to_string()).collect();
+        for k in self.variables.keys() {
+            names.push(k.clone());
+        }
+        names.sort();
+        names
     }
 
     pub fn get_field(&self, idx: usize) -> String {
         if idx == 0 {
-            return self.fields.join(&self.get_var("OFS"));
+            return self.fields.join(&self.ofs);
         }
         self.fields
             .get(idx - 1)
@@ -49,10 +97,8 @@ impl Runtime {
 
     pub fn set_field(&mut self, idx: usize, value: &str) {
         if idx == 0 {
-            let fs = self.get_var("FS");
-            self.fields = field::split(value, &fs);
-            let nf = self.fields.len();
-            self.set_var("NF", &nf.to_string());
+            self.fields = field::split(value, &self.fs);
+            self.nf = self.fields.len();
             return;
         }
         let idx = idx - 1;
@@ -60,28 +106,23 @@ impl Runtime {
             self.fields.push(String::new());
         }
         self.fields[idx] = value.to_string();
-        let nf = self.fields.len();
-        self.set_var("NF", &nf.to_string());
+        self.nf = self.fields.len();
     }
 
     pub fn set_record(&mut self, line: &str) {
-        let fs = self.get_var("FS");
-        self.fields = field::split(line, &fs);
-        let nf = self.fields.len();
-        self.set_var("NF", &nf.to_string());
+        self.fields = field::split(line, &self.fs);
+        self.nf = self.fields.len();
     }
 
     /// Set the record with pre-split fields (used by CSV/TSV/JSON readers).
     pub fn set_record_fields(&mut self, text: &str, fields: Vec<String>) {
         let _ = text; // $0 is reconstructed from fields via OFS
-        let nf = fields.len();
+        self.nf = fields.len();
         self.fields = fields;
-        self.set_var("NF", &nf.to_string());
     }
 
     pub fn increment_nr(&mut self) {
-        let nr: u64 = self.get_var("NR").parse().unwrap_or(0) + 1;
-        self.set_var("NR", &nr.to_string());
+        self.nr += 1;
     }
 
     // --- array operations ---
