@@ -28,6 +28,7 @@ pub enum Token {
     Function,
     Return,
     Getline,
+    Nextfile,
 
     // Operators
     Plus,
@@ -458,6 +459,7 @@ impl Lexer {
             "function" => Token::Function,
             "return" => Token::Return,
             "getline" => Token::Getline,
+            "nextfile" => Token::Nextfile,
             _ => Token::Ident(s),
         }
     }

@@ -5,6 +5,7 @@ use std::io::BufRead;
 use std::process::{Child, Command, Stdio};
 
 use crate::builtins::{self, format_number, format_printf, string_replace, to_number};
+use crate::input::Record;
 use crate::parser::{BinOp, Block, Expr, FuncDef, Pattern, Program, Redirect, Statement};
 use crate::runtime::Runtime;
 
@@ -19,6 +20,7 @@ pub struct Executor<'a> {
     range_active: Vec<bool>,
     output_files: HashMap<String, File>,
     output_pipes: HashMap<String, Child>,
+    next_file: bool,
 }
 
 impl<'a> Executor<'a> {
@@ -32,7 +34,25 @@ impl<'a> Executor<'a> {
             program, rt, functions, range_active,
             output_files: HashMap::new(),
             output_pipes: HashMap::new(),
+            next_file: false,
         }
+    }
+
+    /// Populate the HDR array from a header record (used with `-H`).
+    pub fn set_header(&mut self, fields: &[String]) {
+        for (i, name) in fields.iter().enumerate() {
+            let key = (i + 1).to_string();
+            self.rt.set_array("HDR", &key, name);
+            self.rt.set_array("HDR", name, &key);
+        }
+        self.rt.increment_nr();
+    }
+
+    /// Populate header from raw text using FS-based splitting.
+    pub fn set_header_from_text(&mut self, text: &str) {
+        let fs = self.rt.get_var("FS");
+        let fields = crate::field::split(text, &fs);
+        self.set_header(&fields);
     }
 
     pub fn run_begin(&mut self) {
@@ -58,12 +78,23 @@ impl<'a> Executor<'a> {
         }
     }
 
-    pub fn run_record(&mut self, line: &str) {
+    /// Returns true if nextfile was requested during this record.
+    pub fn take_next_file(&mut self) -> bool {
+        let v = self.next_file;
+        self.next_file = false;
+        v
+    }
+
+    pub fn run_record(&mut self, record: &Record) {
         self.rt.increment_nr();
-        self.rt.set_record(line);
+        match &record.fields {
+            Some(fields) => self.rt.set_record_fields(&record.text, fields.clone()),
+            None => self.rt.set_record(&record.text),
+        }
 
         for i in 0..self.program.rules.len() {
-            let matched = self.match_rule(i, line);
+            if self.next_file { break; }
+            let matched = self.match_rule(i, &record.text);
             if matched {
                 let action = &self.program.rules[i].action as *const Block;
                 self.exec_block(unsafe { &*action });
@@ -199,6 +230,10 @@ impl<'a> Executor<'a> {
             }
             Statement::DeleteAll(array) => {
                 self.rt.delete_array_all(array);
+            }
+            Statement::Nextfile => {
+                self.next_file = true;
+                return None;
             }
             Statement::Return(expr) => {
                 let val = match expr {

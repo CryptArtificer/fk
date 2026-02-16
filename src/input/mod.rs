@@ -1,13 +1,25 @@
+pub mod csv;
+pub mod json;
 pub mod line;
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 
+/// A record returned by a `RecordReader`.
+///
+/// `text` is the raw record text (becomes `$0`).
+/// `fields` is optionally pre-split fields — when `Some`, the runtime
+/// uses these directly instead of FS-based splitting.
+pub struct Record {
+    pub text: String,
+    pub fields: Option<Vec<String>>,
+}
+
 /// Strategy for reading one record from a byte stream.
 /// The default (`LineReader`) reads one line per record.
-/// Future implementations (CSV, JSON, …) will override this.
+/// CSV, TSV, and JSON readers override this.
 pub trait RecordReader {
-    fn next_record(&mut self, reader: &mut dyn BufRead) -> io::Result<Option<String>>;
+    fn next_record(&mut self, reader: &mut dyn BufRead) -> io::Result<Option<Record>>;
 }
 
 /// A unified reader that iterates over records from stdin or a sequence of
@@ -25,12 +37,6 @@ enum Source {
 }
 
 impl Input {
-    /// Create an Input from a list of file paths using the default line reader.
-    /// If the list is empty, read from stdin.
-    pub fn new(files: &[String]) -> Self {
-        Self::with_reader(files, Box::new(line::LineReader))
-    }
-
     /// Create an Input with a custom record reader.
     pub fn with_reader(files: &[String], record_reader: Box<dyn RecordReader>) -> Self {
         let sources = if files.is_empty() {
@@ -56,8 +62,14 @@ impl Input {
         }
     }
 
+    /// Skip the rest of the current source and advance to the next one.
+    pub fn skip_source(&mut self) {
+        self.reader = None;
+        self.current += 1;
+    }
+
     /// Read the next record. Returns None at end of all input.
-    pub fn next_record(&mut self) -> io::Result<Option<String>> {
+    pub fn next_record(&mut self) -> io::Result<Option<Record>> {
         loop {
             if self.reader.is_none() {
                 if self.current >= self.sources.len() {

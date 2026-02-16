@@ -5,28 +5,31 @@ pub fn call(name: &str, args: &[String]) -> String {
     match name {
         "length" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
-            format_number(s.len() as f64)
+            format_number(s.chars().count() as f64)
         }
         "substr" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             let start = args.get(1).map(|s| to_number(s) as usize).unwrap_or(1);
             let start = if start > 0 { start - 1 } else { 0 };
-            if start >= s.len() {
+            let char_count = s.chars().count();
+            if start >= char_count {
                 return String::new();
             }
             if let Some(len_str) = args.get(2) {
                 let len = to_number(len_str) as usize;
-                let end = (start + len).min(s.len());
-                s[start..end].to_string()
+                s.chars().skip(start).take(len).collect()
             } else {
-                s[start..].to_string()
+                s.chars().skip(start).collect()
             }
         }
         "index" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             let target = args.get(1).map(|s| s.as_str()).unwrap_or("");
             match s.find(target) {
-                Some(pos) => format_number((pos + 1) as f64),
+                Some(byte_pos) => {
+                    let char_pos = s[..byte_pos].chars().count() + 1;
+                    format_number(char_pos as f64)
+                }
                 None => "0".to_string(),
             }
         }

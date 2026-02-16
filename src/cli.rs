@@ -1,12 +1,23 @@
 use std::env;
 use std::process;
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum InputMode {
+    Line,
+    Csv,
+    Tsv,
+    Json,
+}
+
 #[derive(Debug)]
 pub struct Args {
     pub field_separator: Option<String>,
     pub assignments: Vec<(String, String)>,
     pub program: String,
     pub files: Vec<String>,
+    pub repl: bool,
+    pub input_mode: InputMode,
+    pub header_mode: bool,
 }
 
 pub fn parse_args() -> Args {
@@ -16,6 +27,9 @@ pub fn parse_args() -> Args {
     let mut assignments: Vec<(String, String)> = Vec::new();
     let mut program: Option<String> = None;
     let mut files: Vec<String> = Vec::new();
+    let mut repl = false;
+    let mut input_mode = InputMode::Line;
+    let mut header_mode = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -61,6 +75,35 @@ pub fn parse_args() -> Args {
                     process::exit(1);
                 }
             }
+        } else if arg == "--repl" {
+            repl = true;
+        } else if arg == "-H" || arg == "--header" {
+            header_mode = true;
+        } else if arg == "-i" {
+            i += 1;
+            if i >= args.len() {
+                eprintln!("fk: -i requires an argument (csv, tsv, json)");
+                process::exit(1);
+            }
+            input_mode = match args[i].as_str() {
+                "csv" => InputMode::Csv,
+                "tsv" => InputMode::Tsv,
+                "json" => InputMode::Json,
+                other => {
+                    eprintln!("fk: unknown input mode: {}", other);
+                    process::exit(1);
+                }
+            };
+        } else if arg.starts_with("-i") && arg.len() > 2 {
+            input_mode = match &arg[2..] {
+                "csv" => InputMode::Csv,
+                "tsv" => InputMode::Tsv,
+                "json" => InputMode::Json,
+                other => {
+                    eprintln!("fk: unknown input mode: {}", other);
+                    process::exit(1);
+                }
+            };
         } else if arg.starts_with('-') && arg.len() > 1 {
             eprintln!("fk: unknown option: {}", arg);
             process::exit(1);
@@ -75,8 +118,10 @@ pub fn parse_args() -> Args {
 
     let program = match program {
         Some(p) => p,
+        None if repl => String::new(),
         None => {
             eprintln!("usage: fk [-F fs] [-v var=val] 'program' [file ...]");
+            eprintln!("       fk --repl");
             process::exit(1);
         }
     };
@@ -86,6 +131,9 @@ pub fn parse_args() -> Args {
         assignments,
         program,
         files,
+        repl,
+        input_mode,
+        header_mode,
     }
 }
 

@@ -1,12 +1,12 @@
 use std::io::{self, BufRead};
 
-use super::RecordReader;
+use super::{Record, RecordReader};
 
 /// Default record reader: one record per line (awk's standard behaviour).
 pub struct LineReader;
 
 impl RecordReader for LineReader {
-    fn next_record(&mut self, reader: &mut dyn BufRead) -> io::Result<Option<String>> {
+    fn next_record(&mut self, reader: &mut dyn BufRead) -> io::Result<Option<Record>> {
         let mut line = String::new();
         let bytes = reader.read_line(&mut line)?;
         if bytes == 0 {
@@ -18,6 +18,6 @@ impl RecordReader for LineReader {
                 line.pop();
             }
         }
-        Ok(Some(line))
+        Ok(Some(Record { text: line, fields: None }))
     }
 }

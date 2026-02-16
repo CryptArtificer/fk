@@ -6,6 +6,7 @@ mod field;
 mod input;
 mod lexer;
 mod parser;
+mod repl;
 mod runtime;
 
 #[cfg(test)]
@@ -49,15 +50,46 @@ fn main() {
         rt.set_var(name, value);
     }
 
+    // REPL mode
+    if args.repl {
+        repl::run(&mut rt);
+        return;
+    }
+
+    // Select record reader based on input mode
+    let reader: Box<dyn input::RecordReader> = match args.input_mode {
+        cli::InputMode::Csv  => Box::new(input::csv::CsvReader::comma()),
+        cli::InputMode::Tsv  => Box::new(input::csv::CsvReader::tab()),
+        cli::InputMode::Json => Box::new(input::json::JsonReader),
+        cli::InputMode::Line => Box::new(input::line::LineReader),
+    };
+
     // Execute
     let mut exec = action::Executor::new(&program, &mut rt);
 
     exec.run_begin();
 
-    let mut input = input::Input::new(&args.files);
+    let mut inp = input::Input::with_reader(&args.files, reader);
+    let mut first_record = true;
     loop {
-        match input.next_record() {
-            Ok(Some(line)) => exec.run_record(&line),
+        match inp.next_record() {
+            Ok(Some(record)) => {
+                // Header mode: first record defines column names
+                if args.header_mode && first_record {
+                    first_record = false;
+                    if let Some(fields) = &record.fields {
+                        exec.set_header(fields);
+                    } else {
+                        exec.set_header_from_text(&record.text);
+                    }
+                    continue;
+                }
+                exec.run_record(&record);
+                if exec.take_next_file() {
+                    inp.skip_source();
+                    first_record = true;
+                }
+            }
             Ok(None) => break,
             Err(e) => {
                 eprintln!("{}", e);

@@ -52,6 +52,7 @@ pub enum Statement {
     ForIn(String, String, Block),
     Delete(String, Expr),
     DeleteAll(String),
+    Nextfile,
     Return(Option<Expr>),
     Block(Block),
     Expression(Expr),
@@ -267,6 +268,7 @@ impl Parser {
             Token::While => self.parse_while(),
             Token::For => self.parse_for(),
             Token::Delete => self.parse_delete(),
+            Token::Nextfile => { self.advance(); Ok(Statement::Nextfile) }
             Token::Return => self.parse_return(),
             Token::LBrace => {
                 let block = self.parse_brace_block()?;

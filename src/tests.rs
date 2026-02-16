@@ -1,4 +1,4 @@
-use crate::{action, lexer, parser, runtime};
+use crate::{action, input, lexer, parser, runtime};
 
 /// Helper: parse and run a program, return the runtime state for inspection.
 fn eval(program_text: &str, input_lines: &[&str]) -> runtime::Runtime {
@@ -12,7 +12,8 @@ fn eval(program_text: &str, input_lines: &[&str]) -> runtime::Runtime {
 
     exec.run_begin();
     for line in input_lines {
-        exec.run_record(line);
+        let rec = input::Record { text: line.to_string(), fields: None };
+        exec.run_record(&rec);
     }
     exec.run_end();
 
@@ -726,4 +727,56 @@ fn mktime_roundtrips_with_strftime() {
         &["x"],
     );
     assert_eq!(rt.get_var("result"), "2009-02-13 23:31:30");
+}
+
+// ── nextfile ─────────────────────────────────────────────────────
+
+#[test]
+fn nextfile_stops_remaining_rules_for_record() {
+    // Two rules: first sets x and calls nextfile, second should not run
+    let rt = eval(
+        "{ x++ ; nextfile } { y++ }",
+        &["a", "b", "c"],
+    );
+    // nextfile on single source: first record processed, rest skipped
+    assert_eq!(rt.get_var("x"), "1");
+    assert_eq!(rt.get_var("y"), "");
+}
+
+#[test]
+fn nextfile_parses_as_statement() {
+    let mut lex = lexer::Lexer::new("{ nextfile }");
+    let tokens = lex.tokenize().unwrap();
+    let mut par = parser::Parser::new(tokens);
+    let prog = par.parse().unwrap();
+    assert_eq!(prog.rules.len(), 1);
+}
+
+// ── Unicode-aware operations ─────────────────────────────────────
+
+#[test]
+fn unicode_length_counts_chars() {
+    let rt = eval(
+        "{ n = length($0) }",
+        &["café"],
+    );
+    assert_eq!(rt.get_var("n"), "4");
+}
+
+#[test]
+fn unicode_substr_indexes_by_char() {
+    let rt = eval(
+        "{ s = substr($0, 4, 1) }",
+        &["café"],
+    );
+    assert_eq!(rt.get_var("s"), "é");
+}
+
+#[test]
+fn unicode_index_returns_char_position() {
+    let rt = eval(
+        "{ p = index($0, \"é\") }",
+        &["café"],
+    );
+    assert_eq!(rt.get_var("p"), "4");
 }

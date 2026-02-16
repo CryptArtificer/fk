@@ -71,6 +71,14 @@ impl Runtime {
         self.set_var("NF", &nf.to_string());
     }
 
+    /// Set the record with pre-split fields (used by CSV/TSV/JSON readers).
+    pub fn set_record_fields(&mut self, text: &str, fields: Vec<String>) {
+        let _ = text; // $0 is reconstructed from fields via OFS
+        let nf = fields.len();
+        self.fields = fields;
+        self.set_var("NF", &nf.to_string());
+    }
+
     pub fn increment_nr(&mut self) {
         let nr: u64 = self.get_var("NR").parse().unwrap_or(0) + 1;
         self.set_var("NR", &nr.to_string());
