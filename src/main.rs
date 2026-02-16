@@ -6,6 +6,9 @@ mod lexer;
 mod parser;
 mod runtime;
 
+#[cfg(test)]
+mod tests;
+
 use std::process;
 
 fn main() {

@@ -1,15 +1,25 @@
-use crate::parser::{BinOp, Block, Expr, Pattern, Program, Statement};
+use std::collections::HashMap;
+
+use crate::parser::{BinOp, Block, Expr, FuncDef, Pattern, Program, Statement};
 use crate::runtime::Runtime;
+
+/// Sentinel used to propagate early return from user-defined functions.
+struct ReturnValue(String);
 
 /// Execute a parsed program against the runtime.
 pub struct Executor<'a> {
     program: &'a Program,
     rt: &'a mut Runtime,
+    functions: HashMap<String, FuncDef>,
 }
 
 impl<'a> Executor<'a> {
     pub fn new(program: &'a Program, rt: &'a mut Runtime) -> Self {
-        Executor { program, rt }
+        let mut functions = HashMap::new();
+        for f in &program.functions {
+            functions.insert(f.name.clone(), f.clone());
+        }
+        Executor { program, rt, functions }
     }
 
     pub fn run_begin(&mut self) {
@@ -48,13 +58,16 @@ impl<'a> Executor<'a> {
         }
     }
 
-    fn exec_block(&mut self, block: &Block) {
+    fn exec_block(&mut self, block: &Block) -> Option<ReturnValue> {
         for stmt in block {
-            self.exec_stmt(stmt);
+            if let Some(rv) = self.exec_stmt(stmt) {
+                return Some(rv);
+            }
         }
+        None
     }
 
-    fn exec_stmt(&mut self, stmt: &Statement) {
+    fn exec_stmt(&mut self, stmt: &Statement) -> Option<ReturnValue> {
         match stmt {
             Statement::Print(exprs) => {
                 let ofs = self.rt.get_var("OFS");
@@ -64,7 +77,7 @@ impl<'a> Executor<'a> {
             }
             Statement::Printf(exprs) => {
                 if exprs.is_empty() {
-                    return;
+                    return None;
                 }
                 let args: Vec<String> = exprs.iter().map(|e| self.eval_expr(e)).collect();
                 let result = format_printf(&args[0], &args[1..]);
@@ -73,9 +86,13 @@ impl<'a> Executor<'a> {
             Statement::If(cond, then_block, else_block) => {
                 let val = self.eval_expr(cond);
                 if is_truthy(&val) {
-                    self.exec_block(then_block);
+                    if let Some(rv) = self.exec_block(then_block) {
+                        return Some(rv);
+                    }
                 } else if let Some(eb) = else_block {
-                    self.exec_block(eb);
+                    if let Some(rv) = self.exec_block(eb) {
+                        return Some(rv);
+                    }
                 }
             }
             Statement::While(cond, body) => {
@@ -84,12 +101,16 @@ impl<'a> Executor<'a> {
                     if !is_truthy(&val) {
                         break;
                     }
-                    self.exec_block(body);
+                    if let Some(rv) = self.exec_block(body) {
+                        return Some(rv);
+                    }
                 }
             }
             Statement::For(init, cond, update, body) => {
                 if let Some(init_stmt) = init {
-                    self.exec_stmt(init_stmt);
+                    if let Some(rv) = self.exec_stmt(init_stmt) {
+                        return Some(rv);
+                    }
                 }
                 loop {
                     if let Some(cond_expr) = cond {
@@ -98,9 +119,13 @@ impl<'a> Executor<'a> {
                             break;
                         }
                     }
-                    self.exec_block(body);
+                    if let Some(rv) = self.exec_block(body) {
+                        return Some(rv);
+                    }
                     if let Some(update_stmt) = update {
-                        self.exec_stmt(update_stmt);
+                        if let Some(rv) = self.exec_stmt(update_stmt) {
+                            return Some(rv);
+                        }
                     }
                 }
             }
@@ -108,20 +133,32 @@ impl<'a> Executor<'a> {
                 let keys = self.rt.array_keys(array);
                 for key in keys {
                     self.rt.set_var(var, &key);
-                    self.exec_block(body);
+                    if let Some(rv) = self.exec_block(body) {
+                        return Some(rv);
+                    }
                 }
             }
             Statement::Delete(array, key_expr) => {
                 let key = self.eval_expr(key_expr);
                 self.rt.delete_array(array, &key);
             }
+            Statement::Return(expr) => {
+                let val = match expr {
+                    Some(e) => self.eval_expr(e),
+                    None => String::new(),
+                };
+                return Some(ReturnValue(val));
+            }
             Statement::Block(block) => {
-                self.exec_block(block);
+                if let Some(rv) = self.exec_block(block) {
+                    return Some(rv);
+                }
             }
             Statement::Expression(expr) => {
                 self.eval_expr(expr);
             }
         }
+        None
     }
 
     fn eval_expr(&mut self, expr: &Expr) -> String {
@@ -229,7 +266,11 @@ impl<'a> Executor<'a> {
             }
             Expr::FuncCall(name, args) => {
                 let evaled: Vec<String> = args.iter().map(|e| self.eval_expr(e)).collect();
-                call_builtin(name, &evaled)
+                if let Some(func) = self.functions.get(name).cloned() {
+                    self.call_user_func(&func, &evaled)
+                } else {
+                    call_builtin(name, &evaled)
+                }
             }
         }
     }
@@ -264,6 +305,39 @@ impl<'a> Executor<'a> {
             }
             _ => {}
         }
+    }
+
+    /// Call a user-defined function: save caller's locals, bind params, run body,
+    /// restore caller's locals.
+    fn call_user_func(&mut self, func: &FuncDef, args: &[String]) -> String {
+        // Save current values of param names so we can restore them after the call
+        let mut saved: Vec<(String, Option<String>)> = Vec::new();
+        for param in &func.params {
+            let old = self.rt.variables.get(param).cloned();
+            saved.push((param.clone(), old));
+        }
+
+        // Bind arguments to parameter names; extra params get ""
+        for (i, param) in func.params.iter().enumerate() {
+            let val = args.get(i).map(|s| s.as_str()).unwrap_or("");
+            self.rt.set_var(param, val);
+        }
+
+        // Execute function body
+        let result = match self.exec_block(&func.body) {
+            Some(ReturnValue(v)) => v,
+            None => String::new(),
+        };
+
+        // Restore caller's variables
+        for (name, old_val) in saved {
+            match old_val {
+                Some(v) => self.rt.set_var(&name, &v),
+                None => { self.rt.variables.remove(&name); }
+            }
+        }
+
+        result
     }
 }
 

@@ -22,6 +22,8 @@ pub enum Token {
     For,
     In,
     Delete,
+    Function,
+    Return,
 
     // Operators
     Plus,
@@ -372,6 +374,8 @@ impl Lexer {
             "for" => Token::For,
             "in" => Token::In,
             "delete" => Token::Delete,
+            "function" => Token::Function,
+            "return" => Token::Return,
             _ => Token::Ident(s),
         }
     }

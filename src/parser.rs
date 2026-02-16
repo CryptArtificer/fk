@@ -1,11 +1,20 @@
 use crate::lexer::Token;
 
-/// A complete fk program: optional BEGIN, a set of rules, optional END.
+/// A complete fk program: optional BEGIN, a set of rules, optional END, and functions.
 #[derive(Debug)]
 pub struct Program {
     pub begin: Option<Block>,
     pub rules: Vec<Rule>,
     pub end: Option<Block>,
+    pub functions: Vec<FuncDef>,
+}
+
+/// A user-defined function.
+#[derive(Debug, Clone)]
+pub struct FuncDef {
+    pub name: String,
+    pub params: Vec<String>,
+    pub body: Block,
 }
 
 /// A single pattern-action rule.
@@ -18,13 +27,13 @@ pub struct Rule {
 /// A block is a list of statements.
 pub type Block = Vec<Statement>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Pattern {
     Regex(String),
     Expression(Expr),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Statement {
     Print(Vec<Expr>),
     Printf(Vec<Expr>),
@@ -33,6 +42,7 @@ pub enum Statement {
     For(Option<Box<Statement>>, Option<Expr>, Option<Box<Statement>>, Block),
     ForIn(String, String, Block),
     Delete(String, Expr),
+    Return(Option<Expr>),
     Block(Block),
     Expression(Expr),
 }
@@ -92,6 +102,7 @@ impl Parser {
         let mut begin = None;
         let mut rules = Vec::new();
         let mut end = None;
+        let mut functions = Vec::new();
 
         self.skip_terminators();
 
@@ -109,6 +120,10 @@ impl Parser {
                     let block = self.parse_brace_block()?;
                     end = Some(block);
                 }
+                Token::Function => {
+                    let func = self.parse_func_def()?;
+                    functions.push(func);
+                }
                 _ => {
                     let rule = self.parse_rule()?;
                     rules.push(rule);
@@ -117,7 +132,37 @@ impl Parser {
             self.skip_terminators();
         }
 
-        Ok(Program { begin, rules, end })
+        Ok(Program { begin, rules, end, functions })
+    }
+
+    fn parse_func_def(&mut self) -> Result<FuncDef, String> {
+        self.advance(); // consume 'function'
+        let name = match self.current().clone() {
+            Token::Ident(n) => { self.advance(); n }
+            _ => return Err("expected function name".to_string()),
+        };
+        self.expect(&Token::LParen)?;
+
+        let mut params = Vec::new();
+        if !self.check(&Token::RParen) {
+            match self.current().clone() {
+                Token::Ident(p) => { self.advance(); params.push(p); }
+                _ => return Err("expected parameter name".to_string()),
+            }
+            while self.check(&Token::Comma) {
+                self.advance();
+                match self.current().clone() {
+                    Token::Ident(p) => { self.advance(); params.push(p); }
+                    _ => return Err("expected parameter name".to_string()),
+                }
+            }
+        }
+        self.expect(&Token::RParen)?;
+        self.skip_terminators();
+
+        let body = self.parse_brace_block()?;
+
+        Ok(FuncDef { name, params, body })
     }
 
     fn parse_rule(&mut self) -> Result<Rule, String> {
@@ -177,6 +222,7 @@ impl Parser {
             Token::While => self.parse_while(),
             Token::For => self.parse_for(),
             Token::Delete => self.parse_delete(),
+            Token::Return => self.parse_return(),
             Token::LBrace => {
                 let block = self.parse_brace_block()?;
                 Ok(Statement::Block(block))
@@ -218,6 +264,16 @@ impl Parser {
             return Err("printf requires a format string".to_string());
         }
         Ok(Statement::Printf(args))
+    }
+
+    fn parse_return(&mut self) -> Result<Statement, String> {
+        self.advance(); // consume 'return'
+        if self.is_terminator() || self.check(&Token::RBrace) {
+            Ok(Statement::Return(None))
+        } else {
+            let expr = self.parse_expr()?;
+            Ok(Statement::Return(Some(expr)))
+        }
     }
 
     fn parse_if(&mut self) -> Result<Statement, String> {
