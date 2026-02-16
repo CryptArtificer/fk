@@ -55,7 +55,7 @@ fn main() {
 
     let mut input = input::Input::new(&args.files);
     loop {
-        match input.next_line() {
+        match input.next_record() {
             Ok(Some(line)) => exec.run_record(&line),
             Ok(None) => break,
             Err(e) => {

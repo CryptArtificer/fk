@@ -1,12 +1,22 @@
+pub mod line;
+
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
 
-/// A unified reader that iterates over lines from stdin or a sequence of files,
-/// similar to awk's implicit concatenation of input sources.
+/// Strategy for reading one record from a byte stream.
+/// The default (`LineReader`) reads one line per record.
+/// Future implementations (CSV, JSON, …) will override this.
+pub trait RecordReader {
+    fn next_record(&mut self, reader: &mut dyn BufRead) -> io::Result<Option<String>>;
+}
+
+/// A unified reader that iterates over records from stdin or a sequence of
+/// files, similar to awk's implicit concatenation of input sources.
 pub struct Input {
     sources: Vec<Source>,
     current: usize,
     reader: Option<Box<dyn BufRead>>,
+    record_reader: Box<dyn RecordReader>,
 }
 
 enum Source {
@@ -15,9 +25,14 @@ enum Source {
 }
 
 impl Input {
-    /// Create an Input from a list of file paths.
+    /// Create an Input from a list of file paths using the default line reader.
     /// If the list is empty, read from stdin.
     pub fn new(files: &[String]) -> Self {
+        Self::with_reader(files, Box::new(line::LineReader))
+    }
+
+    /// Create an Input with a custom record reader.
+    pub fn with_reader(files: &[String], record_reader: Box<dyn RecordReader>) -> Self {
         let sources = if files.is_empty() {
             vec![Source::Stdin]
         } else {
@@ -37,13 +52,13 @@ impl Input {
             sources,
             current: 0,
             reader: None,
+            record_reader,
         }
     }
 
-    /// Read the next line. Returns None at end of all input.
-    pub fn next_line(&mut self) -> io::Result<Option<String>> {
+    /// Read the next record. Returns None at end of all input.
+    pub fn next_record(&mut self) -> io::Result<Option<String>> {
         loop {
-            // Open the next source if we don't have an active reader
             if self.reader.is_none() {
                 if self.current >= self.sources.len() {
                     return Ok(None);
@@ -61,24 +76,13 @@ impl Input {
             }
 
             let reader = self.reader.as_mut().unwrap();
-            let mut line = String::new();
-            let bytes = reader.read_line(&mut line)?;
-            if bytes == 0 {
-                // End of this source — move to the next
-                self.reader = None;
-                self.current += 1;
-                continue;
-            }
-
-            // Strip the trailing newline (record separator)
-            if line.ends_with('\n') {
-                line.pop();
-                if line.ends_with('\r') {
-                    line.pop();
+            match self.record_reader.next_record(reader.as_mut())? {
+                Some(record) => return Ok(Some(record)),
+                None => {
+                    self.reader = None;
+                    self.current += 1;
                 }
             }
-
-            return Ok(Some(line));
         }
     }
 }
