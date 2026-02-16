@@ -53,6 +53,7 @@ pub enum Statement {
     ForIn(String, String, Block),
     Delete(String, Expr),
     DeleteAll(String),
+    Next,
     Nextfile,
     Break,
     Continue,
@@ -273,6 +274,7 @@ impl Parser {
             Token::Do => self.parse_do_while(),
             Token::For => self.parse_for(),
             Token::Delete => self.parse_delete(),
+            Token::Next => { self.advance(); Ok(Statement::Next) }
             Token::Nextfile => { self.advance(); Ok(Statement::Nextfile) }
             Token::Break => { self.advance(); Ok(Statement::Break) }
             Token::Continue => { self.advance(); Ok(Statement::Continue) }

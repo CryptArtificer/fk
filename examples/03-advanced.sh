@@ -81,7 +81,7 @@ echo "January:"
 $FK '{ print "  ", $1, $2 }' "$TMPDIR/jan.txt"
 echo "February:"
 $FK '{ print "  ", $1, $2 }' "$TMPDIR/feb.txt"
-echo "Changes:"
+echo "Changes (using NR==FNR two-file idiom):"
 $FK '
     NR == FNR { jan[$1] = $2; next }
     {
@@ -89,24 +89,7 @@ $FK '
         sign = diff >= 0 ? "+" : ""
         printf "  %-8s %s%d\n", $1, sign, diff
     }
-' "$TMPDIR/jan.txt" "$TMPDIR/feb.txt" 2>/dev/null || \
-$FK '{ jan[$1] = $2 }' "$TMPDIR/jan.txt" && \
-$FK -v "data=$(cat "$TMPDIR/jan.txt" | $FK '{ printf "%s:%s,", $1, $2 }')" '
-BEGIN {
-    n = split(data, pairs, ",")
-    for (i = 1; i <= n; i++) {
-        if (pairs[i] != "") {
-            split(pairs[i], kv, ":")
-            jan[kv[1]] = kv[2]
-        }
-    }
-}
-{
-    diff = $2 - jan[$1]
-    sign = diff >= 0 ? "+" : ""
-    printf "  %-8s %s%d\n", $1, sign, diff
-}
-' "$TMPDIR/feb.txt"
+' "$TMPDIR/jan.txt" "$TMPDIR/feb.txt"
 echo ""
 
 # ── Pattern ranges ───────────────────────────────────────────────

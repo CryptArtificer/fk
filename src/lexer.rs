@@ -30,6 +30,7 @@ pub enum Token {
     Return,
     Getline,
     Nextfile,
+    Next,
     Break,
     Continue,
     Exit,
@@ -322,6 +323,7 @@ impl Lexer {
                 return Ok(Token::Regex(pattern));
             }
             if ch == '\\' && self.pos + 1 < self.input.len() {
+                pattern.push('\\');
                 pattern.push(self.input[self.pos + 1]);
                 self.pos += 2;
             } else {
@@ -463,6 +465,7 @@ impl Lexer {
             "function" => Token::Function,
             "return" => Token::Return,
             "getline" => Token::Getline,
+            "next" => Token::Next,
             "nextfile" => Token::Nextfile,
             "break" => Token::Break,
             "continue" => Token::Continue,

@@ -1328,3 +1328,54 @@ fn filename_default_is_empty() {
     let rt = eval(r#"BEGIN { x = FILENAME }"#, &[]);
     assert_eq!(rt.get_var("x"), "");
 }
+
+// ── next ─────────────────────────────────────────────────────────
+
+#[test]
+fn next_skips_remaining_rules() {
+    let rt = eval(
+        "{ x++; next } { y++ }",
+        &["a", "b", "c"],
+    );
+    assert_eq!(rt.get_var("x"), "3");
+    assert_eq!(rt.get_var("y"), "");
+}
+
+#[test]
+fn next_in_conditional() {
+    let rt = eval(
+        r#"$0 == "skip" { next } { n++ }"#,
+        &["a", "skip", "b", "skip", "c"],
+    );
+    assert_eq!(rt.get_var("n"), "3");
+}
+
+// ── regex backslash preservation ─────────────────────────────────
+
+#[test]
+fn regex_pattern_with_backslash_escape() {
+    let rt = eval(
+        r#"/\[data\]/ { x++ }"#,
+        &["[data]", "other", "[data] more"],
+    );
+    assert_eq!(rt.get_var("x"), "2");
+}
+
+#[test]
+fn regex_dot_is_not_literal() {
+    // . in regex should match any char, not just literal dot
+    let rt = eval(
+        r#"/a.c/ { x++ }"#,
+        &["abc", "aXc", "ac", "a.c"],
+    );
+    assert_eq!(rt.get_var("x"), "3");
+}
+
+#[test]
+fn regex_caret_anchors() {
+    let rt = eval(
+        r#"/^hello$/ { x++ }"#,
+        &["hello", "hello world", "say hello"],
+    );
+    assert_eq!(rt.get_var("x"), "1");
+}

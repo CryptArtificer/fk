@@ -136,19 +136,21 @@ src/
 - [ ] Publish to crates.io
 
 #### Phase 7 — Missing POSIX & gawk features
-- [ ] `break` / `continue` statements (loop control)
-- [ ] `do { ... } while (cond)` loop
-- [ ] `exit` / `exit(code)` statement
-- [ ] `-f program.awk` (read program from file)
-- [ ] `FILENAME` variable (current input file name)
-- [ ] `FNR` variable (per-file record number, resets each file)
-- [ ] `close(file)` / `close(cmd)` builtin (close output files and pipes)
-- [ ] `ENVIRON` array (environment variables)
-- [ ] `ARGC` / `ARGV` (command-line arguments)
-- [ ] `SUBSEP` and multi-dimensional arrays (`a[i,j]` → `a[i SUBSEP j]`)
-- [ ] `OFMT` variable (number output format)
-- [ ] Computed regex (`$0 ~ var` where var holds a pattern string)
-- [ ] `gensub(regex, replacement, how [, target])` (return modified string)
+- [x] `break` / `continue` statements (loop control)
+- [x] `do { ... } while (cond)` loop
+- [x] `exit` / `exit(code)` statement (runs END, then exits with code)
+- [x] `-f program.awk` (read program from file)
+- [x] `FILENAME` variable (current input file name)
+- [x] `FNR` variable (per-file record number, resets each file)
+- [x] `close(file)` / `close(cmd)` builtin (close output files and pipes)
+- [x] `ENVIRON` array (environment variables)
+- [x] `ARGC` / `ARGV` (command-line arguments)
+- [x] `SUBSEP` and multi-dimensional arrays (`a[i,j]` → `a[i SUBSEP j]`)
+- [x] `OFMT` variable (number output format, default `"%.6g"`)
+- [x] Computed regex (`$0 ~ var` where var holds a pattern string)
+- [x] `gensub(regex, replacement, how [, target])` (return modified string)
+- [x] `next` statement (skip to next record)
+- [x] Proper regex semantics for `/pattern/` and `~`/`!~` (use `regex::Regex`)
 
 ## Usage
 
@@ -203,6 +205,37 @@ printf 'a\nb\n\nc\nd\n' | fk -v 'RS=\n\n' '{ print NR, $0 }'
 
 # Unicode-aware: length, substr, index count characters, not bytes
 echo "café" | fk '{ print length($0), substr($0,4,1) }'
+
+# Read program from file
+echo '{ print $2 }' > prog.awk
+fk -f prog.awk data.txt
+
+# FILENAME and FNR across multiple files
+fk '{ print FILENAME, FNR, $0 }' file1.txt file2.txt
+
+# do-while loop (runs body at least once)
+echo 5 | fk '{ i=$1; do { print i; i-- } while (i>0) }'
+
+# break and continue
+echo "" | fk 'BEGIN { for (i=1; i<=10; i++) { if (i==5) break; print i } }'
+
+# exit with code
+fk '{ if ($0 == "STOP") exit(1); print }' input.txt
+
+# close() — reopen a file for writing
+echo "" | fk '{ print "first" > "/tmp/x"; close("/tmp/x"); print "second" > "/tmp/x" }'
+
+# gensub — return modified string without changing $0
+echo "hello world" | fk '{ print gensub("o", "0", "g") }'
+
+# Computed regex — match operator with variable patterns
+echo -e "hello\n123\nworld" | fk '{ pat="^[0-9]+$"; if ($0 ~ pat) print "number:", $0 }'
+
+# ENVIRON — access environment variables
+echo "" | fk 'BEGIN { print ENVIRON["HOME"] }'
+
+# Multi-dimensional arrays
+echo "" | fk 'BEGIN { a[1,2]="x"; a[3,4]="y"; for (k in a) print k, a[k] }'
 
 # REPL / interactive mode
 # fk --repl

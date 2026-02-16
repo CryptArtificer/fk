@@ -7,6 +7,7 @@ fk \(em filter-kernel: a modern awk for humans
 .SH SYNOPSIS
 .B fk
 .RB [ \-F\~\fIsep\fR ]
+.RB [ \-f\~\fIprogfile\fR ]
 .RB [ \-v\~\fIvar\fR = \fIval\fR ]
 .RB [ \-i\~\fIcsv\fR | \fItsv\fR | \fIjson\fR ]
 .RB [ \-H ]
@@ -76,6 +77,12 @@ A filename of \fB\-\fR also means stdin.
 Set the field separator.
 Default is whitespace (runs of spaces/tabs, leading/trailing trimmed).
 A single character splits on that character exactly.
+.
+.TP
+\fB\-f\fR \fIprogfile\fR
+Read the program from a file instead of the command line.
+If both \fB\-f\fR and an inline program are given, the inline argument
+becomes a file operand.
 .
 .TP
 \fB\-v\fR \fIvar\fR=\fIval\fR
@@ -151,12 +158,19 @@ Example: \fB$(NF \- 1)\fR for the second-to-last field.
 l l.
 \fBNR\fR	Record number (across all files)
 \fBNF\fR	Number of fields in current record
+\fBFNR\fR	Record number in current file (resets per file)
+\fBFILENAME\fR	Name of the current input file
 \fBFS\fR	Input field separator (default: whitespace)
 \fBOFS\fR	Output field separator (default: space)
 \fBRS\fR	Record separator (default: newline; multi-char = regex)
 \fBORS\fR	Output record separator (default: newline)
+\fBSUBSEP\fR	Subscript separator for multi-dim arrays (default: \fB\\034\fR)
+\fBOFMT\fR	Number output format (default: \fB"%.6g"\fR)
 \fBRSTART\fR	Start of last \fBmatch()\fR hit
 \fBRLENGTH\fR	Length of last \fBmatch()\fR hit
+\fBENVIRON\fR	Array of environment variables (read-only)
+\fBARGC\fR	Number of command-line arguments
+\fBARGV\fR	Array of command-line arguments
 .TE
 .
 .PP
@@ -191,9 +205,12 @@ l l.
 .nf
 \fBif\fR (cond) { ... } \fBelse\fR { ... }
 \fBwhile\fR (cond) { ... }
+\fBdo\fR { ... } \fBwhile\fR (cond)
 \fBfor\fR (init; cond; step) { ... }
 \fBfor\fR (key \fBin\fR array) { ... }
 \fBbreak\fR   \fBcontinue\fR
+\fBnext\fR                              skip to next record
+\fBexit\fR [\fIcode\fR]                      run END block, then exit
 \fBnextfile\fR                         skip to next input file \fI[fk]\fR
 .fi
 .
@@ -284,6 +301,18 @@ Run a shell command. Returns its exit status.
 .TP
 \fBfflush()\fR
 Flush stdout.
+.TP
+\fBclose(\fIname\fB)\fR
+Close an output file or pipe opened by redirection.
+Returns 0 on success, \-1 if not found.
+.
+.SS String replacement
+.TP
+\fBgensub(\fIregex\fB,\fR \fIrepl\fB,\fR \fIhow\fR [\fB,\fR \fItarget\fR]\fB)\fR
+Like \fBgsub\fR but returns the modified string without changing the target.
+\fIhow\fR can be \fB"g"\fR for global, or a number \fIN\fR to replace the
+\fIN\fRth occurrence.
+Default target is \fB$0\fR.
 .
 .SS JSON \fI[fk extensions]\fR
 .TP
@@ -325,6 +354,7 @@ x = arr["key"]
 \fBlength\fR(arr)                 element count \fI[fk]\fR
 \fBfor\fR (k \fBin\fR arr) { ... }      iterate over keys
 \fBif\fR ("key" \fBin\fR arr) { ... }   membership test
+arr[i,j] = value              multi-dimensional (SUBSEP-joined key)
 .fi
 .
 .\" ─────────────────────────────────────────────────────────────
@@ -489,7 +519,10 @@ Multi-char RS treated as regex
 .SH EXIT STATUS
 .TP
 .B 0
-Success.
+Success (or \fBexit\fR with no argument).
+.TP
+.B N
+The code given to \fBexit(\fIN\fB)\fR in the program.
 .TP
 .B 1
 Runtime error (I/O failure, etc.).

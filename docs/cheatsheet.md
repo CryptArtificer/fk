@@ -4,12 +4,14 @@
 
 ```sh
 fk [options] 'program' [file ...]
+fk -f progfile [file ...]          # read program from file
 fk --repl                          # interactive mode
 ```
 
 | Flag | Description |
 |------|-------------|
 | `-F sep` | Set field separator |
+| `-f file` | Read program from file |
 | `-v var=val` | Set variable before execution |
 | `-i csv` | CSV input mode (RFC 4180) |
 | `-i tsv` | TSV input mode |
@@ -38,10 +40,16 @@ END { ... }            # runs once after input
 | `$(expr)` | Computed field index |
 | `NR` | Record number (across all files) |
 | `NF` | Number of fields in current record |
+| `FNR` | Record number in current file |
+| `FILENAME` | Current input file name |
 | `FS` | Input field separator |
 | `OFS` | Output field separator |
 | `RS` | Record separator (multi-char = regex) |
 | `ORS` | Output record separator |
+| `SUBSEP` | Subscript separator (default `\x1c`) |
+| `OFMT` | Number output format (default `"%.6g"`) |
+| `ENVIRON` | Array of environment variables |
+| `ARGC` / `ARGV` | Argument count and values |
 
 ## Patterns
 
@@ -71,10 +79,13 @@ $1 > 0 && $2 ~ /pat/  # compound
 ```
 if (cond) { ... } else { ... }
 while (cond) { ... }
+do { ... } while (cond)
 for (init; cond; step) { ... }
 for (key in array) { ... }
 break / continue
-nextfile                # skip to next input file (fk)
+next                           # skip to next record
+exit / exit(code)              # run END block, then exit
+nextfile                       # skip to next input file (fk)
 ```
 
 ## Output
@@ -124,6 +135,8 @@ print ... > "/dev/stderr"   # write to stderr
 |----------|-------------|
 | `system(cmd)` | Run shell command, return exit status |
 | `fflush()` | Flush stdout |
+| `close(name)` | Close an output file or pipe |
+| `gensub(re, repl, how [, target])` | Like gsub but returns result (doesn't modify target) |
 
 ### JSON (fk extensions)
 | Function | Description |
@@ -143,6 +156,7 @@ delete arr              # delete entire array (fk)
 length(arr)             # element count (fk)
 for (k in arr) { ... }  # iterate keys
 if (key in arr) { ... } # membership test
+a[i,j] = value          # multi-dimensional (uses SUBSEP)
 ```
 
 ## User-defined functions
@@ -202,6 +216,27 @@ fk '{ print $-1 }' file
 
 # Square every number
 fk '{ print $1 ** 2 }' numbers.txt
+
+# Read program from file
+fk -f script.awk data.txt
+
+# Print FILENAME and FNR per file
+fk '{ print FILENAME, FNR, $0 }' f1.txt f2.txt
+
+# Access environment
+fk 'BEGIN { print ENVIRON["HOME"] }'
+
+# gensub — non-destructive replacement
+fk '{ print gensub("[0-9]+", "NUM", "g") }' file
+
+# do-while loop
+echo 5 | fk '{ n=$1; do { print n-- } while (n>0) }'
+
+# exit early with code
+fk '{ if ($0 == "STOP") exit(1); print }' file
+
+# Two-file join using FNR == NR
+fk 'NR==FNR { a[$1]=$2; next } ($1 in a) { print $1, a[$1], $2 }' ref.txt data.txt
 ```
 
 ## REPL commands

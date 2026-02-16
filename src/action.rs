@@ -29,6 +29,7 @@ pub struct Executor<'a> {
     output_pipes: HashMap<String, Child>,
     stdout: BufWriter<io::Stdout>,
     call_depth: usize,
+    next_record: bool,
     next_file: bool,
     exit_code: Option<i32>,
 }
@@ -46,6 +47,7 @@ impl<'a> Executor<'a> {
             output_pipes: HashMap::new(),
             stdout: BufWriter::new(io::stdout()),
             call_depth: 0,
+            next_record: false,
             next_file: false,
             exit_code: None,
         }
@@ -125,6 +127,7 @@ impl<'a> Executor<'a> {
 
     pub fn run_record(&mut self, record: &Record) {
         if self.exit_code.is_some() { return; }
+        self.next_record = false;
         self.rt.increment_nr();
         match &record.fields {
             Some(fields) => self.rt.set_record_fields(&record.text, fields.clone()),
@@ -132,7 +135,7 @@ impl<'a> Executor<'a> {
         }
 
         for i in 0..self.program.rules.len() {
-            if self.next_file || self.exit_code.is_some() { break; }
+            if self.next_record || self.next_file || self.exit_code.is_some() { break; }
             let matched = self.match_rule(i, &record.text);
             if matched {
                 let action = &self.program.rules[i].action as *const Block;
@@ -322,6 +325,10 @@ impl<'a> Executor<'a> {
             }
             Statement::DeleteAll(array) => {
                 self.rt.delete_array_all(array);
+            }
+            Statement::Next => {
+                self.next_record = true;
+                return None;
             }
             Statement::Nextfile => {
                 self.next_file = true;

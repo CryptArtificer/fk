@@ -90,5 +90,80 @@ trap 'rm -rf "$TMPDIR"' EXIT
 printf "a\nb\nc\n" > "$TMPDIR/f1.txt"
 printf "d\ne\nf\n" > "$TMPDIR/f2.txt"
 echo "    First line of each file:"
-$FK '{ print "  ", FILENAME, $0; nextfile }' "$TMPDIR/f1.txt" "$TMPDIR/f2.txt" 2>/dev/null || \
-$FK 'FNR == 1 { print "  ", $0 }' "$TMPDIR/f1.txt" "$TMPDIR/f2.txt"
+$FK '{ print "  ", FILENAME, $0; nextfile }' "$TMPDIR/f1.txt" "$TMPDIR/f2.txt"
+echo ""
+
+# ── FILENAME and FNR ────────────────────────────────────────────
+echo "11) FILENAME and FNR — per-file record tracking:"
+$FK '{ printf "  %-20s FNR=%-3d NR=%-3d %s\n", FILENAME, FNR, NR, $0 }' "$TMPDIR/f1.txt" "$TMPDIR/f2.txt"
+echo ""
+
+# ── do-while ────────────────────────────────────────────────────
+echo "12) do-while — runs body at least once:"
+echo "5" | $FK '{ n=$1; do { printf "  %d", n; n-- } while (n>0); print "" }'
+echo ""
+
+# ── break and continue ──────────────────────────────────────────
+echo "13) break and continue:"
+echo "x" | $FK 'BEGIN {
+    printf "  First 5 squares: "
+    for (i=1; ; i++) {
+        if (i > 5) break
+        printf "%d ", i**2
+    }
+    print ""
+    printf "  Odd numbers 1-10: "
+    for (i=1; i<=10; i++) {
+        if (i % 2 == 0) continue
+        printf "%d ", i
+    }
+    print ""
+}'
+echo ""
+
+# ── exit ────────────────────────────────────────────────────────
+echo "14) exit — stop early, still runs END:"
+printf "one\ntwo\nSTOP\nthree\nfour\n" | $FK '
+    { print "  processing:", $0 }
+    $0 == "STOP" { exit }
+    END { print "  (END block ran)" }
+'
+echo ""
+
+# ── gensub ──────────────────────────────────────────────────────
+echo "15) gensub — return modified string without changing \$0:"
+echo "foo bar foo baz foo" | $FK '{
+    print "  original:", $0
+    print "  global:  ", gensub("foo", "FOO", "g")
+    print "  2nd only:", gensub("foo", "FOO", 2)
+    print "  \$0 still:", $0
+}'
+echo ""
+
+# ── computed regex ──────────────────────────────────────────────
+echo "16) Computed regex — match with a variable pattern:"
+printf "hello\n123\nworld\n456\n" | $FK '{
+    numre = "^[0-9]+$"
+    if ($0 ~ numre) print "  number:", $0
+    else print "  word:  ", $0
+}'
+echo ""
+
+# ── ENVIRON ─────────────────────────────────────────────────────
+echo "17) ENVIRON — access environment variables:"
+echo "x" | $FK 'BEGIN { print "  HOME =", ENVIRON["HOME"] }'
+echo ""
+
+# ── Multi-dimensional arrays ────────────────────────────────────
+echo "18) Multi-dimensional arrays (SUBSEP):"
+echo "x" | $FK 'BEGIN {
+    grid[0,0] = "."
+    grid[0,1] = "X"
+    grid[1,0] = "O"
+    grid[1,1] = "."
+    for (r=0; r<=1; r++) {
+        printf "  "
+        for (c=0; c<=1; c++) printf "%s ", grid[r,c]
+        print ""
+    }
+}'
