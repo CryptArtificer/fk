@@ -1,0 +1,514 @@
+.\" fk(1) man page — meant to be read, not endured
+.TH FK 1 "February 2026" "fk 0.1.0" "User Commands"
+.
+.SH NAME
+fk \(em filter-kernel: a modern awk for humans
+.
+.SH SYNOPSIS
+.B fk
+.RB [ \-F\~\fIsep\fR ]
+.RB [ \-v\~\fIvar\fR = \fIval\fR ]
+.RB [ \-i\~\fIcsv\fR | \fItsv\fR | \fIjson\fR ]
+.RB [ \-H ]
+.IR program\~
+.RI [ file\~ .\|.\|.]
+.br
+.B fk \-\-repl
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH QUICK START
+.
+You probably want one of these.
+.
+.TP
+Print a column
+.nf
+\fBfk '{ print $2 }' data.txt\fR
+.fi
+.
+.TP
+Filter lines
+.nf
+\fBfk '/error/ { print NR, $0 }' log.txt\fR
+.fi
+.
+.TP
+Sum a column
+.nf
+\fBfk '{ s += $1 } END { print s }' numbers.txt\fR
+.fi
+.
+.TP
+Process CSV
+.nf
+\fBfk \-i csv \-H '{ print $1, $3 }' report.csv\fR
+.fi
+.
+.TP
+Dig into JSON
+.nf
+\fBfk '{ print jpath($0, ".users[].name") }' data.json\fR
+.fi
+.
+.PP
+Read on for the full picture.
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH DESCRIPTION
+.
+\fBfk\fR reads input line by line (or record by record),
+splits each record into fields,
+tests it against your patterns,
+and runs the matching actions.
+Think of it as awk rebuilt in Rust with modern extras:
+CSV/JSON input, unicode-aware strings, JSON path queries,
+and negative field indexes.
+.
+.PP
+If no files are given, \fBfk\fR reads stdin.
+A filename of \fB\-\fR also means stdin.
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH OPTIONS
+.
+.TP
+\fB\-F\fR \fIsep\fR
+Set the field separator.
+Default is whitespace (runs of spaces/tabs, leading/trailing trimmed).
+A single character splits on that character exactly.
+.
+.TP
+\fB\-v\fR \fIvar\fR=\fIval\fR
+Assign a variable before the program runs.
+Can be repeated.
+.
+.TP
+\fB\-i\fR \fImode\fR
+Input format.
+\fBcsv\fR reads RFC\ 4180 CSV (quoted fields, embedded commas and newlines).
+\fBtsv\fR reads tab-delimited (with quoting).
+\fBjson\fR reads one JSON object per line; top-level values become fields.
+.
+.TP
+\fB\-H\fR
+Header mode.
+The first record is consumed as column names and stored in the
+\fBHDR\fR array (both \fBHDR[1]\fR=\fIname\fR and \fBHDR["name"]\fR=\fI1\fR).
+Subsequent records are numbered from 1.
+.
+.TP
+\fB\-\-repl\fR
+Start an interactive session.
+Each line you type is parsed and executed immediately.
+State persists across lines.
+Type \fB:q\fR to quit, \fB:vars\fR to inspect, \fB:reset\fR to clear.
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH PROGRAM STRUCTURE
+.
+A program is one or more \fIrules\fR, each with an optional pattern and
+an action in braces.
+.
+.PP
+.nf
+\fBBEGIN     { \fR\fI...runs once before input...\fR\fB }\fR
+\fB/regex/   { \fR\fI...runs when the line matches...\fR\fB }\fR
+\fB$3 > 100  { \fR\fI...runs when expression is true...\fR\fB }\fR
+\fB          { \fR\fI...no pattern = runs every line...\fR\fB }\fR
+\fBEND       { \fR\fI...runs once after all input...\fR\fB }\fR
+.fi
+.
+.PP
+Patterns can be combined:
+.nf
+\fB$1 == "x" && $2 ~ /foo/    { ... }\fR      compound
+\fB/start/,/stop/              { ... }\fR      range (inclusive)
+.fi
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH FIELDS
+.
+Each record is split into fields.
+\fB$0\fR is the whole record.
+\fB$1\fR, \fB$2\fR, etc. are individual fields.
+\fB$NF\fR is the last field.
+.
+.PP
+\fBfk extensions:\fR
+.TP
+\fB$\-1\fR
+Last field.
+\fB$\-2\fR is second-to-last, and so on.
+.TP
+\fB$(expr)\fR
+Computed field access.
+Example: \fB$(NF \- 1)\fR for the second-to-last field.
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH VARIABLES
+.
+.TS
+l l.
+\fBNR\fR	Record number (across all files)
+\fBNF\fR	Number of fields in current record
+\fBFS\fR	Input field separator (default: whitespace)
+\fBOFS\fR	Output field separator (default: space)
+\fBRS\fR	Record separator (default: newline; multi-char = regex)
+\fBORS\fR	Output record separator (default: newline)
+\fBRSTART\fR	Start of last \fBmatch()\fR hit
+\fBRLENGTH\fR	Length of last \fBmatch()\fR hit
+.TE
+.
+.PP
+Uninitialized variables are \fB""\fR in string context and \fB0\fR in numeric context.
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH OPERATORS
+.
+Listed by precedence (highest first):
+.
+.PP
+.TS
+l l.
+\fB$\fR	Field access
+\fB++ \-\-\fR	Increment / decrement
+\fB**\fR	Exponentiation (right-associative) \fI[fk]\fR
+\fB!\fR	Logical not
+\fB* / %\fR	Multiply, divide, modulo
+\fB+ \-\fR	Add, subtract
+\fI(space)\fR	String concatenation
+\fB< <= > >= == !=\fR	Comparison
+\fB~ !~\fR	Regex match / not-match
+\fB&&\fR	Logical and
+\fB||\fR	Logical or
+\fB?:\fR	Ternary
+\fB= += \-= *= /= %=\fR	Assignment
+.TE
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH CONTROL FLOW
+.
+.nf
+\fBif\fR (cond) { ... } \fBelse\fR { ... }
+\fBwhile\fR (cond) { ... }
+\fBfor\fR (init; cond; step) { ... }
+\fBfor\fR (key \fBin\fR array) { ... }
+\fBbreak\fR   \fBcontinue\fR
+\fBnextfile\fR                         skip to next input file \fI[fk]\fR
+.fi
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH OUTPUT
+.
+.TP
+\fBprint\fR \fIexpr\fR, \fIexpr\fR
+Print values separated by OFS, terminated by ORS.
+.TP
+\fBprintf\fR \fIfmt\fR, \fIargs\fR
+Formatted output (C-style).
+No trailing newline.
+.TP
+\fBsprintf(\fIfmt\fR, \fIargs\fR)\fR
+Like printf but returns a string instead of printing.
+.
+.PP
+Redirect output:
+.nf
+print ... \fB>\fR  "file"          overwrite
+print ... \fB>>\fR "file"          append
+print ... \fB|\fR  "command"       pipe
+print ... \fB>\fR  "/dev/stderr"   stderr
+.fi
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH FUNCTIONS
+.
+.SS Strings
+.
+All string functions are unicode-aware: they count characters, not bytes.
+.
+.TP
+\fBlength(\fIs\fB)\fR
+Number of characters.
+Also works on arrays: \fBlength(arr)\fR returns the element count.
+.TP
+\fBsubstr(\fIs\fB,\fR \fIstart\fR [\fB,\fR \fIlen\fR]\fB)\fR
+Substring starting at position \fIstart\fR (1-indexed).
+.TP
+\fBindex(\fIs\fB,\fR \fItarget\fB)\fR
+Position of \fItarget\fR in \fIs\fR, or 0 if not found.
+.TP
+\fBtolower(\fIs\fB)\fR / \fBtoupper(\fIs\fB)\fR
+Case conversion.
+.TP
+\fBsub(\fIpat\fB,\fR \fIrepl\fR [\fB,\fR \fItarget\fR]\fB)\fR
+Replace first match of \fIpat\fR. Returns 0 or 1.
+Default target is \fB$0\fR.
+.TP
+\fBgsub(\fIpat\fB,\fR \fIrepl\fR [\fB,\fR \fItarget\fR]\fB)\fR
+Replace all matches. Returns replacement count.
+.TP
+\fBmatch(\fIs\fB,\fR \fIpat\fB)\fR
+Test \fIs\fR against \fIpat\fR.
+Sets \fBRSTART\fR and \fBRLENGTH\fR.
+Returns the start position, or 0.
+.TP
+\fBsplit(\fIs\fB,\fR \fIarr\fR [\fB,\fR \fIsep\fR]\fB)\fR
+Split \fIs\fR into \fIarr\fR[1], \fIarr\fR[2], etc.
+Returns the element count.
+.
+.SS Math
+.TP
+\fBint(\fIx\fB)\fR
+Truncate to integer.
+.TP
+\fBsqrt(\fIx\fB)\fR, \fBsin(\fIx\fB)\fR, \fBcos(\fIx\fB)\fR, \fBlog(\fIx\fB)\fR, \fBexp(\fIx\fB)\fR
+The usual suspects.
+.
+.SS Time \fI[fk extensions]\fR
+.TP
+\fBsystime()\fR
+Current time as seconds since epoch.
+.TP
+\fBstrftime(\fIfmt\fB,\fR \fIepoch\fB)\fR
+Format an epoch timestamp.
+Supports \fB%Y %m %d %H %M %S %A %B %a %b\fR and more.
+.TP
+\fBmktime("\fIY M D H M S\fB")\fR
+Convert a date string back to epoch.
+.
+.SS I/O
+.TP
+\fBsystem(\fIcmd\fB)\fR
+Run a shell command. Returns its exit status.
+.TP
+\fBfflush()\fR
+Flush stdout.
+.
+.SS JSON \fI[fk extensions]\fR
+.TP
+\fBjpath(\fIjson\fB,\fR \fIpath\fB)\fR
+Navigate into a JSON string and return the value at \fIpath\fR.
+.TP
+\fBjpath(\fIjson\fB,\fR \fIpath\fB,\fR \fIarr\fB)\fR
+Same, but extract into an awk array.
+Arrays become \fIarr\fR[1], \fIarr\fR[2], etc.
+Objects become \fIarr\fR["key"].
+Returns the element count.
+.
+.PP
+Path syntax:
+.nf
+\fB.key\fR           object key
+\fB[N]\fR            array index (0-based)
+\fB.key.sub\fR       chained
+\fB.arr[]\fR         iterate all elements
+\fB.arr.key\fR       implicit iteration (= \fB.arr[].key\fR)
+.fi
+.
+.PP
+Example \(em get all user names from a nested structure:
+.nf
+\fBjpath($0, ".users[].name")\fR
+.fi
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH ARRAYS
+.
+Arrays are associative (indexed by strings).
+.
+.nf
+arr["key"] = value
+x = arr["key"]
+\fBdelete\fR arr["key"]          remove one element
+\fBdelete\fR arr                  remove the entire array \fI[fk]\fR
+\fBlength\fR(arr)                 element count \fI[fk]\fR
+\fBfor\fR (k \fBin\fR arr) { ... }      iterate over keys
+\fBif\fR ("key" \fBin\fR arr) { ... }   membership test
+.fi
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH USER-DEFINED FUNCTIONS
+.
+.nf
+\fBfunction\fR grade(score) {
+    \fBif\fR (score >= 90) \fBreturn\fR "A"
+    \fBif\fR (score >= 80) \fBreturn\fR "B"
+    \fBreturn\fR "C"
+}
+{ print $1, grade($2) }
+.fi
+.
+.PP
+Parameters are local to the function.
+Recursion works.
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH NUMERIC LITERALS
+.
+.nf
+42          decimal
+3.14        float
+0xFF        hexadecimal \fI[fk]\fR
+.fi
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH STRING ESCAPES
+.
+Inside double-quoted strings:
+.
+.nf
+\\n  \\t  \\r  \\\\  \\"     standard
+\\xHH                    hex byte \fI[fk]\fR
+\\uHHHH                  unicode codepoint \fI[fk]\fR
+.fi
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH EXAMPLES
+.
+These are meant to be stolen.
+.
+.SS The basics
+.nf
+# Second column of every line
+\fBfk '{ print $2 }' file\fR
+
+# Lines containing "error"
+\fBfk '/error/' log.txt\fR
+
+# Lines where column 3 exceeds 100
+\fBfk '$3 > 100' data.txt\fR
+
+# Sum column 1
+\fBfk '{ s += $1 } END { print s }' numbers.txt\fR
+
+# Average
+\fBfk '{ s += $1 } END { print s / NR }' numbers.txt\fR
+
+# Line count (like wc -l)
+\fBfk 'END { print NR }' file\fR
+.fi
+.
+.SS Filtering and transforming
+.nf
+# Unique values in column 2
+\fBfk '!seen[$2]++' file\fR
+
+# Remove blank lines
+\fBfk 'NF > 0' file\fR
+
+# Swap two columns
+\fBfk '{ print $2, $1 }' file\fR
+
+# Add line numbers
+\fBfk '{ print NR, $0 }' file\fR
+
+# Extract between two patterns
+\fBfk '/START/,/END/' file\fR
+.fi
+.
+.SS Counting and aggregation
+.nf
+# Frequency count of column 1
+\fBfk '{ a[$1]++ } END { for (k in a) print a[k], k }' file\fR
+
+# Group-by sum
+\fBfk '{ sum[$1] += $2 } END { for (k in sum) print k, sum[k] }' file\fR
+
+# Count lines matching a pattern
+\fBfk '/error/ { c++ } END { print c+0 }' log.txt\fR
+.fi
+.
+.SS CSV and structured data
+.nf
+# Read CSV, print two columns
+\fBfk -i csv '{ print $1, $3 }' data.csv\fR
+
+# CSV with headers — skip the header row automatically
+\fBfk -i csv -H '{ print $1, $3 }' data.csv\fR
+
+# Convert CSV to TSV
+\fBfk -i csv -v 'OFS=\\t' '{ print $1, $2, $3 }' data.csv\fR
+
+# JSON lines — filter by field
+\fBfk -i json '$2 == "error" { print $1, $3 }' events.jsonl\fR
+
+# Nested JSON — extract all IDs
+\fBfk '{ print jpath($0, ".results[].id") }' response.json\fR
+
+# JSON — aggregate into array
+\fBfk '{ n=jpath($0,".items",a); for(i=1;i<=n;i++) print a[i] }' data.json\fR
+.fi
+.
+.SS fk-only tricks
+.nf
+# Exponentiation
+\fBfk '{ print $1 ** 2 }' numbers.txt\fR
+
+# Last field
+\fBfk '{ print $-1 }' file\fR
+
+# Hex and unicode
+\fBecho x | fk '{ printf "%d \\u2192 %c\\n", 0xCAFE, 0x41 }'\fR
+
+# Timestamp the current time
+\fBecho x | fk '{ print strftime("%Y-%m-%d %H:%M:%S", systime()) }'\fR
+.fi
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH DIFFERENCES FROM AWK
+.
+\fBfk\fR is awk-compatible for the vast majority of programs.
+Extensions marked \fI[fk]\fR above are additions, not changes.
+Notably:
+.
+.IP \(bu 2
+\fB**\fR exponentiation operator
+.IP \(bu 2
+\fB$\-1\fR, \fB$\-2\fR, ... for fields from the end
+.IP \(bu 2
+\fB0xFF\fR hex literals, \fB\\xHH\fR and \fB\\uHHHH\fR string escapes
+.IP \(bu 2
+\fBnextfile\fR statement
+.IP \(bu 2
+\fBdelete arr\fR (whole array) and \fBlength(arr)\fR
+.IP \(bu 2
+\fBsystime()\fR, \fBstrftime()\fR, \fBmktime()\fR
+.IP \(bu 2
+\fBjpath()\fR for JSON navigation
+.IP \(bu 2
+\fB\-i csv/tsv/json\fR, \fB\-H\fR header mode
+.IP \(bu 2
+\fB\-\-repl\fR interactive mode
+.IP \(bu 2
+Unicode-aware string functions
+.IP \(bu 2
+Multi-char RS treated as regex
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Runtime error (I/O failure, etc.).
+.TP
+.B 2
+Syntax or parse error in the program.
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH SEE ALSO
+.BR awk (1),
+.BR gawk (1),
+.BR jq (1)
+.
+.PP
+Cheat sheet: \fIdocs/cheatsheet.md\fR in the source tree.
+.br
+Examples: \fIexamples/\fR directory.
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH AUTHORS
+.
+Built as a learning exercise. Contributions welcome.

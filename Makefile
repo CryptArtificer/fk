@@ -104,9 +104,12 @@ bench-compare: release bench-data
 install: release
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(BINARY) $(DESTDIR)$(PREFIX)/bin/fk
+	install -d $(DESTDIR)$(PREFIX)/share/man/man1
+	install -m 644 docs/fk.1 $(DESTDIR)$(PREFIX)/share/man/man1/fk.1
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/fk
+	rm -f $(DESTDIR)$(PREFIX)/share/man/man1/fk.1
 
 # ── Run shortcuts ────────────────────────────────────────────────
 
@@ -121,13 +124,16 @@ repl: debug
 
 # ── Documentation ────────────────────────────────────────────────
 
-.PHONY: doc doc-open
+.PHONY: doc doc-open man
 
 doc:
 	$(CARGO) doc --no-deps
 
 doc-open:
 	$(CARGO) doc --no-deps --open
+
+man:
+	@mandoc -Tutf8 docs/fk.1 | less -R
 
 # ── CI-style full check ─────────────────────────────────────────
 
@@ -201,7 +207,8 @@ help:
 	@echo ""
 	@echo "Other:"
 	@echo "  make ci           Full CI check (fmt, clippy, test)"
-	@echo "  make install      Install to $(PREFIX)/bin"
+	@echo "  make install      Install to $(PREFIX)/bin (+ man page)"
+	@echo "  make man          Read the man page"
 	@echo "  make size         Binary size report"
 	@echo "  make loc          Lines of code"
 	@echo "  make doc-open     Generate and open docs"
