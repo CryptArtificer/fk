@@ -16,14 +16,28 @@ A modernized, modular awk clone built in Rust.
 
 ```
 src/
-  main.rs      – entry point, orchestration
-  cli.rs       – command-line argument parsing (-F, -v, program, files)
-  input.rs     – record-oriented reading (files, stdin, "-")
-  field.rs     – field splitting (FS / OFS semantics)
-  lexer.rs     – tokeniser for the fk language
-  parser.rs    – recursive-descent parser (tokens → AST)
-  action.rs    – executor: pattern matching, statements, expressions, builtins
-  runtime.rs   – runtime state (variables, fields, associative arrays)
+  main.rs          – entry point, orchestration
+  cli.rs           – command-line argument parsing
+  lexer.rs         – tokeniser
+  parser.rs        – recursive-descent parser (tokens → AST)
+  action.rs        – executor core: pattern matching, statements, expressions
+  runtime.rs       – runtime state (variables, fields, arrays)
+  field.rs         – field splitting (FS / OFS semantics)
+  error.rs         – source-location-aware diagnostics        (Phase 3)
+  unicode.rs       – char-aware field/string operations       (Phase 3)
+  repl.rs          – interactive mode                         (Phase 3)
+  input/
+    mod.rs         – InputFormat trait, record reader
+    line.rs        – default line-oriented input (current behaviour)
+    csv.rs         – RFC 4180 CSV/TSV parser                  (Phase 3)
+    json.rs        – line-delimited JSON (NDJSON) parser      (Phase 3)
+    header.rs      – first-line header → named-field mapping  (Phase 3)
+  builtins/
+    mod.rs         – dispatch table
+    string.rs      – length, substr, index, sub, gsub, …
+    math.rs        – sin, cos, sqrt, int, **, …
+    time.rs        – systime, strftime, mktime                (Phase 3)
+    io.rs          – fflush, system, /dev/stderr              (Phase 3)
 ```
 
 ## Progress
@@ -62,10 +76,34 @@ src/
 - [x] Ternary operator (`?:`)
 
 ### Phase 3 — Modernisation & extensions
-- [ ] Better error messages with source locations
-- [ ] Unicode-aware field splitting
-- [ ] JSON / CSV input modes (module)
-- [ ] Plugin / module system for user-defined extensions
+
+#### 3a — Refactor into modules (no new features, just structure)
+- [ ] Extract builtins from `action.rs` into `builtins/` (string, math, io)
+- [ ] Extract input logic into `input/` with `InputFormat` trait
+- [ ] Add `Span` (line/col) to tokens; thread through parser for error locations
+- [ ] Add `error.rs` with formatted diagnostics
+
+#### 3b — Structured input formats
+- [ ] CSV input mode (`-i csv`, RFC 4180 compliant: quoted fields, embedded commas/newlines)
+- [ ] TSV input mode (`-i tsv`)
+- [ ] Header mode (`-H`): parse first line as column names, access via `@"name"` or `$FI["name"]`
+- [ ] JSON lines input mode (`-i json`): each line is a JSON object, fields by key
+- [ ] RS as regex (multi-char / pattern record separator)
+
+#### 3c — Language additions
+- [ ] `**` exponentiation operator
+- [ ] Hex numeric literals (`0x1F`) and `\x` / `\u` escape sequences
+- [ ] `nextfile` statement
+- [ ] `delete array` (delete entire array, not just one key)
+- [ ] `length(array)` (return number of elements)
+- [ ] Negative field indexes (`$-1` = last field, `$-2` = second-to-last)
+- [ ] `/dev/stderr` special file for error output
+- [ ] `fflush()` and `system()` builtins
+- [ ] Time functions: `systime()`, `strftime()`, `mktime()`
+
+#### 3d — Quality of life
+- [ ] Better error messages with source locations and context
+- [ ] Unicode-aware `length()`, `substr()`, field splitting
 - [ ] REPL / interactive mode
 
 ## Usage (goal)

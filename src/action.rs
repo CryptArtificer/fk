@@ -4,6 +4,7 @@ use std::io::Write;
 use std::io::BufRead;
 use std::process::{Child, Command, Stdio};
 
+use crate::builtins::{self, format_number, format_printf, string_replace, to_number};
 use crate::parser::{BinOp, Block, Expr, FuncDef, Pattern, Program, Redirect, Statement};
 use crate::runtime::Runtime;
 
@@ -47,13 +48,11 @@ impl<'a> Executor<'a> {
         self.close_outputs();
     }
 
-    /// Flush files and close pipe processes.
     fn close_outputs(&mut self) {
         for (_, file) in self.output_files.drain() {
             drop(file);
         }
         for (_, mut child) in self.output_pipes.drain() {
-            // Drop stdin to signal EOF, then wait
             drop(child.stdin.take());
             let _ = child.wait();
         }
@@ -67,7 +66,6 @@ impl<'a> Executor<'a> {
             let matched = self.match_rule(i, line);
             if matched {
                 let action = &self.program.rules[i].action as *const Block;
-                // Safety: we only read the action block, executor mutations are to rt
                 self.exec_block(unsafe { &*action });
             }
         }
@@ -87,13 +85,11 @@ impl<'a> Executor<'a> {
             }
             Some(Pattern::Range(start, end)) => {
                 if self.range_active[rule_idx] {
-                    // Currently in range — check if end matches
                     if self.match_single_pattern(end, line) {
                         self.range_active[rule_idx] = false;
                     }
                     true
                 } else {
-                    // Not in range — check if start matches
                     if self.match_single_pattern(start, line) {
                         self.range_active[rule_idx] = true;
                         true
@@ -112,7 +108,7 @@ impl<'a> Executor<'a> {
                 let val = self.eval_expr(expr);
                 is_truthy(&val)
             }
-            Pattern::Range(_, _) => false, // nested ranges not supported
+            Pattern::Range(_, _) => false,
         }
     }
 
@@ -324,7 +320,6 @@ impl<'a> Executor<'a> {
                 }
             }
             Expr::FuncCall(name, args) => {
-                // Builtins that need runtime access (they modify vars/arrays)
                 match name.as_str() {
                     "sub" => return self.builtin_sub(args, false),
                     "gsub" => return self.builtin_sub(args, true),
@@ -336,7 +331,7 @@ impl<'a> Executor<'a> {
                 if let Some(func) = self.functions.get(name).cloned() {
                     self.call_user_func(&func, &evaled)
                 } else {
-                    call_builtin(name, &evaled)
+                    builtins::call_builtin(name, &evaled)
                 }
             }
             Expr::Getline(var, source) => {
@@ -388,7 +383,6 @@ impl<'a> Executor<'a> {
             }
             Some(Redirect::Overwrite(target_expr)) => {
                 let path = self.eval_expr(target_expr);
-                // Open file (truncate on first use, then append for same path)
                 let file = self.output_files.entry(path.clone()).or_insert_with(|| {
                     File::create(&path).unwrap_or_else(|e| {
                         eprintln!("fk: cannot open '{}': {}", path, e);
@@ -421,7 +415,6 @@ impl<'a> Executor<'a> {
                         .spawn()
                         .unwrap_or_else(|e| {
                             eprintln!("fk: cannot run '{}': {}", cmd, e);
-                            // Fallback: spawn cat to /dev/null
                             Command::new("cat").stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap()
                         })
                 });
@@ -432,29 +425,23 @@ impl<'a> Executor<'a> {
         }
     }
 
-    /// Call a user-defined function: save caller's locals, bind params, run body,
-    /// restore caller's locals.
     fn call_user_func(&mut self, func: &FuncDef, args: &[String]) -> String {
-        // Save current values of param names so we can restore them after the call
         let mut saved: Vec<(String, Option<String>)> = Vec::new();
         for param in &func.params {
             let old = self.rt.variables.get(param).cloned();
             saved.push((param.clone(), old));
         }
 
-        // Bind arguments to parameter names; extra params get ""
         for (i, param) in func.params.iter().enumerate() {
             let val = args.get(i).map(|s| s.as_str()).unwrap_or("");
             self.rt.set_var(param, val);
         }
 
-        // Execute function body
         let result = match self.exec_block(&func.body) {
             Some(ReturnValue(v)) => v,
             None => String::new(),
         };
 
-        // Restore caller's variables
         for (name, old_val) in saved {
             match old_val {
                 Some(v) => self.rt.set_var(&name, &v),
@@ -465,9 +452,7 @@ impl<'a> Executor<'a> {
         result
     }
 
-    /// sub(regex, replacement [, target]) / gsub(regex, replacement [, target])
-    /// Replaces first (sub) or all (gsub) occurrences of pattern in target.
-    /// If target is omitted, uses $0. Returns number of replacements made.
+    /// sub/gsub: these need runtime access to modify lvalues.
     fn builtin_sub(&mut self, args: &[Expr], global: bool) -> String {
         if args.len() < 2 {
             eprintln!("fk: sub/gsub requires at least 2 arguments");
@@ -476,7 +461,6 @@ impl<'a> Executor<'a> {
         let pattern = self.eval_expr(&args[0]);
         let replacement = self.eval_expr(&args[1]);
 
-        // Determine target: if 3rd arg given it must be an lvalue, otherwise $0
         let target_expr = if args.len() >= 3 {
             args[2].clone()
         } else {
@@ -490,7 +474,7 @@ impl<'a> Executor<'a> {
         format_number(count as f64)
     }
 
-    /// match(string, regex) — sets RSTART and RLENGTH, returns RSTART.
+    /// match(string, regex) — sets RSTART and RLENGTH.
     fn builtin_match(&mut self, args: &[Expr]) -> String {
         if args.len() < 2 {
             eprintln!("fk: match requires 2 arguments");
@@ -500,7 +484,7 @@ impl<'a> Executor<'a> {
         let pattern = self.eval_expr(&args[1]);
 
         if let Some(pos) = s.find(&pattern) {
-            let rstart = (pos + 1) as f64; // awk is 1-indexed
+            let rstart = (pos + 1) as f64;
             let rlength = pattern.len() as f64;
             self.rt.set_var("RSTART", &format_number(rstart));
             self.rt.set_var("RLENGTH", &format_number(rlength));
@@ -512,7 +496,7 @@ impl<'a> Executor<'a> {
         }
     }
 
-    /// split(string, array [, separator]) — splits string into array, returns count.
+    /// split(string, array [, separator]) — returns element count.
     fn builtin_split(&mut self, args: &[Expr]) -> String {
         if args.len() < 2 {
             eprintln!("fk: split requires at least 2 arguments");
@@ -533,7 +517,6 @@ impl<'a> Executor<'a> {
         };
 
         let parts = crate::field::split(&s, &fs);
-        // Clear existing array
         self.rt.arrays.remove(&array_name);
         for (i, part) in parts.iter().enumerate() {
             self.rt.set_array(&array_name, &format!("{}", i + 1), part);
@@ -541,17 +524,11 @@ impl<'a> Executor<'a> {
         format_number(parts.len() as f64)
     }
 
-    /// getline [var] [< file]
-    /// No source: reads next line from stdin.
-    /// With source: reads from file.
-    /// Returns "1" on success, "0" on EOF, "-1" on error.
     fn exec_getline(&mut self, var: Option<&str>, source: Option<&Expr>) -> String {
         let line = if let Some(src_expr) = source {
             let path = self.eval_expr(src_expr);
             match std::fs::File::open(&path) {
                 Ok(file) => {
-                    // Read one line — for repeated getline from same file,
-                    // full caching would be needed. Simple version for now.
                     let mut reader = std::io::BufReader::new(file);
                     let mut line = String::new();
                     match reader.read_line(&mut line) {
@@ -567,7 +544,6 @@ impl<'a> Executor<'a> {
                 Err(_) => return "-1".to_string(),
             }
         } else {
-            // Read from stdin
             let mut line = String::new();
             match std::io::stdin().read_line(&mut line) {
                 Ok(0) => return "0".to_string(),
@@ -592,7 +568,6 @@ impl<'a> Executor<'a> {
         "1".to_string()
     }
 
-    /// "cmd" | getline [var]
     fn exec_getline_pipe(&mut self, cmd: &str, var: Option<&str>) -> String {
         match Command::new("sh")
             .arg("-c")
@@ -621,92 +596,7 @@ impl<'a> Executor<'a> {
     }
 }
 
-// --- helper functions ---
-
-/// Replace first or all occurrences of a pattern in a string.
-/// Returns (new_string, replacement_count).
-fn string_replace(s: &str, pattern: &str, replacement: &str, global: bool) -> (String, usize) {
-    if pattern.is_empty() {
-        return (s.to_string(), 0);
-    }
-    if global {
-        let count = s.matches(pattern).count();
-        (s.replace(pattern, replacement), count)
-    } else {
-        if let Some(pos) = s.find(pattern) {
-            let mut result = String::with_capacity(s.len());
-            result.push_str(&s[..pos]);
-            result.push_str(replacement);
-            result.push_str(&s[pos + pattern.len()..]);
-            (result, 1)
-        } else {
-            (s.to_string(), 0)
-        }
-    }
-}
-
-/// Coerce a string to a number (awk semantics: leading numeric prefix is parsed,
-/// non-numeric strings become 0).
-fn to_number(s: &str) -> f64 {
-    let s = s.trim();
-    if s.is_empty() {
-        return 0.0;
-    }
-    // Try full parse first
-    if let Ok(n) = s.parse::<f64>() {
-        return n;
-    }
-    // Try leading numeric prefix (awk parses "123abc" as 123)
-    let mut end = 0;
-    let bytes = s.as_bytes();
-    if end < bytes.len() && (bytes[end] == b'+' || bytes[end] == b'-') {
-        end += 1;
-    }
-    let mut has_digit = false;
-    while end < bytes.len() && bytes[end].is_ascii_digit() {
-        end += 1;
-        has_digit = true;
-    }
-    if end < bytes.len() && bytes[end] == b'.' {
-        end += 1;
-        while end < bytes.len() && bytes[end].is_ascii_digit() {
-            end += 1;
-            has_digit = true;
-        }
-    }
-    if has_digit {
-        s[..end].parse::<f64>().unwrap_or(0.0)
-    } else {
-        0.0
-    }
-}
-
-/// Returns true if a string looks like a number (for comparison coercion).
-fn looks_numeric(s: &str) -> bool {
-    let s = s.trim();
-    if s.is_empty() {
-        return false;
-    }
-    s.parse::<f64>().is_ok()
-}
-
-fn format_number(n: f64) -> String {
-    if n.is_nan() {
-        return "nan".to_string();
-    }
-    if n.is_infinite() {
-        return if n > 0.0 { "inf".to_string() } else { "-inf".to_string() };
-    }
-    if n == (n as i64) as f64 {
-        format!("{}", n as i64)
-    } else {
-        // Use OFMT-style: up to 6 decimal places, trimming trailing zeros
-        let s = format!("{:.6}", n);
-        let s = s.trim_end_matches('0');
-        let s = s.trim_end_matches('.');
-        s.to_string()
-    }
-}
+// --- value helpers (used by the executor, kept here since they're tightly coupled) ---
 
 fn is_truthy(s: &str) -> bool {
     !s.is_empty() && s != "0"
@@ -716,9 +606,14 @@ fn bool_str(b: bool) -> String {
     if b { "1".to_string() } else { "0".to_string() }
 }
 
-/// Compare two values using awk coercion rules:
-/// - If both look numeric, compare as numbers.
-/// - Otherwise compare as strings.
+fn looks_numeric(s: &str) -> bool {
+    let s = s.trim();
+    if s.is_empty() {
+        return false;
+    }
+    s.parse::<f64>().is_ok()
+}
+
 fn compare(left: &str, right: &str) -> std::cmp::Ordering {
     if looks_numeric(left) && looks_numeric(right) {
         let l = to_number(left);
@@ -770,216 +665,5 @@ fn eval_binop(left: &str, op: &BinOp, right: &str) -> String {
         BinOp::Le => bool_str(compare(left, right) != std::cmp::Ordering::Greater),
         BinOp::Gt => bool_str(compare(left, right) == std::cmp::Ordering::Greater),
         BinOp::Ge => bool_str(compare(left, right) != std::cmp::Ordering::Less),
-    }
-}
-
-/// Minimal printf implementation supporting %d, %s, %f, %%, \n, \t.
-fn format_printf(fmt: &str, args: &[String]) -> String {
-    let mut result = String::new();
-    let chars: Vec<char> = fmt.chars().collect();
-    let mut i = 0;
-    let mut arg_idx = 0;
-
-    while i < chars.len() {
-        if chars[i] == '%' && i + 1 < chars.len() {
-            i += 1;
-            // Parse optional width/precision
-            let mut spec = String::new();
-            if chars[i] == '-' {
-                spec.push('-');
-                i += 1;
-            }
-            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
-                spec.push(chars[i]);
-                i += 1;
-            }
-            if i >= chars.len() {
-                result.push('%');
-                result.push_str(&spec);
-                break;
-            }
-            let conv = chars[i];
-            i += 1;
-            match conv {
-                '%' => result.push('%'),
-                'd' | 'i' => {
-                    let val = args.get(arg_idx).map(|s| to_number(s)).unwrap_or(0.0) as i64;
-                    arg_idx += 1;
-                    if spec.is_empty() {
-                        result.push_str(&format!("{}", val));
-                    } else {
-                        result.push_str(&format_with_spec(val, &spec, 'd'));
-                    }
-                }
-                'f' | 'g' | 'e' => {
-                    let val = args.get(arg_idx).map(|s| to_number(s)).unwrap_or(0.0);
-                    arg_idx += 1;
-                    if spec.is_empty() {
-                        result.push_str(&format!("{:.6}", val));
-                    } else {
-                        result.push_str(&format_with_spec_f(val, &spec));
-                    }
-                }
-                's' => {
-                    let val = args.get(arg_idx).map(|s| s.as_str()).unwrap_or("");
-                    arg_idx += 1;
-                    if spec.is_empty() {
-                        result.push_str(val);
-                    } else {
-                        result.push_str(&format_with_spec_s(val, &spec));
-                    }
-                }
-                'c' => {
-                    if let Some(s) = args.get(arg_idx) {
-                        if let Some(ch) = s.chars().next() {
-                            result.push(ch);
-                        }
-                    }
-                    arg_idx += 1;
-                }
-                _ => {
-                    result.push('%');
-                    result.push_str(&spec);
-                    result.push(conv);
-                }
-            }
-        } else if chars[i] == '\\' && i + 1 < chars.len() {
-            i += 1;
-            match chars[i] {
-                'n' => result.push('\n'),
-                't' => result.push('\t'),
-                '\\' => result.push('\\'),
-                _ => {
-                    result.push('\\');
-                    result.push(chars[i]);
-                }
-            }
-            i += 1;
-        } else {
-            result.push(chars[i]);
-            i += 1;
-        }
-    }
-
-    result
-}
-
-fn format_with_spec(val: i64, spec: &str, _conv: char) -> String {
-    let left_align = spec.starts_with('-');
-    let width_str = spec.trim_start_matches('-');
-    let width: usize = width_str.parse().unwrap_or(0);
-    let s = format!("{}", val);
-    if width == 0 {
-        return s;
-    }
-    if left_align {
-        format!("{:<width$}", s, width = width)
-    } else {
-        format!("{:>width$}", s, width = width)
-    }
-}
-
-fn format_with_spec_f(val: f64, spec: &str) -> String {
-    let left_align = spec.starts_with('-');
-    let spec_inner = spec.trim_start_matches('-');
-    let (width, prec) = if let Some(dot_pos) = spec_inner.find('.') {
-        let w: usize = spec_inner[..dot_pos].parse().unwrap_or(0);
-        let p: usize = spec_inner[dot_pos + 1..].parse().unwrap_or(6);
-        (w, p)
-    } else {
-        let w: usize = spec_inner.parse().unwrap_or(0);
-        (w, 6)
-    };
-    let s = format!("{:.prec$}", val, prec = prec);
-    if width == 0 {
-        return s;
-    }
-    if left_align {
-        format!("{:<width$}", s, width = width)
-    } else {
-        format!("{:>width$}", s, width = width)
-    }
-}
-
-fn format_with_spec_s(val: &str, spec: &str) -> String {
-    let left_align = spec.starts_with('-');
-    let width_str = spec.trim_start_matches('-');
-    let width: usize = width_str.parse().unwrap_or(0);
-    if width == 0 {
-        return val.to_string();
-    }
-    if left_align {
-        format!("{:<width$}", val, width = width)
-    } else {
-        format!("{:>width$}", val, width = width)
-    }
-}
-
-/// Built-in functions: length, substr, index, tolower, toupper, int, split.
-fn call_builtin(name: &str, args: &[String]) -> String {
-    match name {
-        "length" => {
-            let s = args.first().map(|s| s.as_str()).unwrap_or("");
-            format_number(s.len() as f64)
-        }
-        "substr" => {
-            let s = args.first().map(|s| s.as_str()).unwrap_or("");
-            let start = args.get(1).map(|s| to_number(s) as usize).unwrap_or(1);
-            let start = if start > 0 { start - 1 } else { 0 }; // awk is 1-indexed
-            if start >= s.len() {
-                return String::new();
-            }
-            if let Some(len_str) = args.get(2) {
-                let len = to_number(len_str) as usize;
-                let end = (start + len).min(s.len());
-                s[start..end].to_string()
-            } else {
-                s[start..].to_string()
-            }
-        }
-        "index" => {
-            let s = args.first().map(|s| s.as_str()).unwrap_or("");
-            let target = args.get(1).map(|s| s.as_str()).unwrap_or("");
-            match s.find(target) {
-                Some(pos) => format_number((pos + 1) as f64),
-                None => "0".to_string(),
-            }
-        }
-        "tolower" => {
-            let s = args.first().map(|s| s.as_str()).unwrap_or("");
-            s.to_lowercase()
-        }
-        "toupper" => {
-            let s = args.first().map(|s| s.as_str()).unwrap_or("");
-            s.to_uppercase()
-        }
-        "int" => {
-            let n = args.first().map(|s| to_number(s)).unwrap_or(0.0);
-            format_number(n.trunc())
-        }
-        "sin" => {
-            let n = args.first().map(|s| to_number(s)).unwrap_or(0.0);
-            format!("{:.6}", n.sin())
-        }
-        "cos" => {
-            let n = args.first().map(|s| to_number(s)).unwrap_or(0.0);
-            format!("{:.6}", n.cos())
-        }
-        "sqrt" => {
-            let n = args.first().map(|s| to_number(s)).unwrap_or(0.0);
-            format_number(n.sqrt())
-        }
-        "log" => {
-            let n = args.first().map(|s| to_number(s)).unwrap_or(0.0);
-            format!("{:.6}", n.ln())
-        }
-        "exp" => {
-            let n = args.first().map(|s| to_number(s)).unwrap_or(0.0);
-            format!("{:.6}", n.exp())
-        }
-        _ => {
-            eprintln!("fk: unknown function: {}", name);
-            String::new()
-        }
     }
 }
