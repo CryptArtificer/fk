@@ -69,6 +69,18 @@ impl Input {
         self.current += 1;
     }
 
+    /// Return the name of the current input source.
+    pub fn current_filename(&self) -> &str {
+        if self.current < self.sources.len() {
+            match &self.sources[self.current] {
+                Source::Stdin => "",
+                Source::File(path) => path,
+            }
+        } else {
+            ""
+        }
+    }
+
     /// Read the next record. Returns None at end of all input.
     pub fn next_record(&mut self) -> io::Result<Option<Record>> {
         loop {

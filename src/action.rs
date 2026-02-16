@@ -73,6 +73,19 @@ impl<'a> Executor<'a> {
         self.rt.get_var(name)
     }
 
+    /// Set a runtime variable from outside (e.g. FILENAME from main loop).
+    pub fn set_var(&mut self, name: &str, value: &str) {
+        self.rt.set_var(name, value);
+    }
+
+    pub fn increment_fnr(&mut self) {
+        self.rt.increment_fnr();
+    }
+
+    pub fn reset_fnr(&mut self) {
+        self.rt.reset_fnr();
+    }
+
     pub fn run_begin(&mut self) {
         if let Some(ref block) = self.program.begin
             && let Some(Signal::Exit(code)) = self.exec_block(block) {

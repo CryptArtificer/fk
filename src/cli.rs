@@ -18,6 +18,7 @@ pub struct Args {
     pub repl: bool,
     pub input_mode: InputMode,
     pub header_mode: bool,
+    pub program_file: Option<String>,
 }
 
 pub fn parse_args() -> Args {
@@ -30,6 +31,7 @@ pub fn parse_args() -> Args {
     let mut repl = false;
     let mut input_mode = InputMode::Line;
     let mut header_mode = false;
+    let mut program_file: Option<String> = None;
 
     let mut i = 0;
     while i < args.len() {
@@ -75,6 +77,13 @@ pub fn parse_args() -> Args {
                     process::exit(1);
                 }
             }
+        } else if arg == "-f" {
+            i += 1;
+            if i >= args.len() {
+                eprintln!("fk: -f requires an argument");
+                process::exit(1);
+            }
+            program_file = Some(args[i].clone());
         } else if arg == "--repl" {
             repl = true;
         } else if arg == "-H" || arg == "--header" {
@@ -116,11 +125,25 @@ pub fn parse_args() -> Args {
         i += 1;
     }
 
+    // -f takes priority; if both -f and inline program given, inline becomes a file arg
+    if let Some(ref pf) = program_file {
+        if let Some(p) = program {
+            files.insert(0, p);
+        }
+        match std::fs::read_to_string(pf) {
+            Ok(contents) => program = Some(contents),
+            Err(e) => {
+                eprintln!("fk: cannot read program file '{}': {}", pf, e);
+                process::exit(2);
+            }
+        }
+    }
+
     let program = match program {
         Some(p) => p,
         None if repl => String::new(),
         None => {
-            eprintln!("usage: fk [-F fs] [-v var=val] 'program' [file ...]");
+            eprintln!("usage: fk [-F fs] [-v var=val] [-f progfile] 'program' [file ...]");
             eprintln!("       fk --repl");
             process::exit(1);
         }
@@ -134,6 +157,7 @@ pub fn parse_args() -> Args {
         repl,
         input_mode,
         header_mode,
+        program_file,
     }
 }
 

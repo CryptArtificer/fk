@@ -9,14 +9,20 @@ pub struct Runtime {
     pub fields: Vec<String>,
     nr: u64,
     nf: usize,
+    fnr: u64,
     fs: String,
     ofs: String,
     rs: String,
     ors: String,
+    subsep: String,
+    ofmt: String,
+    filename: String,
 }
 
 /// Names that are stored as dedicated fields rather than in the HashMap.
-const INTERNED_NAMES: &[&str] = &["NR", "NF", "FS", "OFS", "RS", "ORS"];
+const INTERNED_NAMES: &[&str] = &[
+    "FILENAME", "FNR", "FS", "NF", "NR", "OFS", "OFMT", "ORS", "RS", "SUBSEP",
+];
 
 impl Default for Runtime {
     fn default() -> Self {
@@ -26,18 +32,20 @@ impl Default for Runtime {
 
 impl Runtime {
     pub fn new() -> Self {
-        let mut variables = HashMap::new();
-        variables.insert("SUBSEP".to_string(), "\x1c".to_string());
         Runtime {
-            variables,
+            variables: HashMap::new(),
             arrays: HashMap::new(),
             fields: Vec::new(),
             nr: 0,
             nf: 0,
+            fnr: 0,
             fs: " ".to_string(),
             ofs: " ".to_string(),
             rs: "\n".to_string(),
             ors: "\n".to_string(),
+            subsep: "\x1c".to_string(),
+            ofmt: "%.6g".to_string(),
+            filename: String::new(),
         }
     }
 
@@ -45,10 +53,14 @@ impl Runtime {
         match name {
             "NR" => self.nr.to_string(),
             "NF" => self.nf.to_string(),
+            "FNR" => self.fnr.to_string(),
             "FS" => self.fs.clone(),
             "OFS" => self.ofs.clone(),
             "RS" => self.rs.clone(),
             "ORS" => self.ors.clone(),
+            "SUBSEP" => self.subsep.clone(),
+            "OFMT" => self.ofmt.clone(),
+            "FILENAME" => self.filename.clone(),
             _ => self.variables.get(name).cloned().unwrap_or_default(),
         }
     }
@@ -57,10 +69,14 @@ impl Runtime {
         match name {
             "NR" => self.nr = value.parse().unwrap_or(0),
             "NF" => self.nf = value.parse().unwrap_or(0),
+            "FNR" => self.fnr = value.parse().unwrap_or(0),
             "FS" => self.fs = value.to_string(),
             "OFS" => self.ofs = value.to_string(),
             "RS" => self.rs = value.to_string(),
             "ORS" => self.ors = value.to_string(),
+            "SUBSEP" => self.subsep = value.to_string(),
+            "OFMT" => self.ofmt = value.to_string(),
+            "FILENAME" => self.filename = value.to_string(),
             _ => { self.variables.insert(name.to_string(), value.to_string()); }
         }
     }
@@ -75,10 +91,14 @@ impl Runtime {
         match name {
             "NR" => self.nr = 0,
             "NF" => self.nf = 0,
+            "FNR" => self.fnr = 0,
             "FS" => self.fs = " ".to_string(),
             "OFS" => self.ofs = " ".to_string(),
             "RS" => self.rs = "\n".to_string(),
             "ORS" => self.ors = "\n".to_string(),
+            "SUBSEP" => self.subsep = "\x1c".to_string(),
+            "OFMT" => self.ofmt = "%.6g".to_string(),
+            "FILENAME" => self.filename = String::new(),
             _ => { self.variables.remove(name); }
         }
     }
@@ -137,6 +157,18 @@ impl Runtime {
 
     pub fn increment_nr(&mut self) {
         self.nr += 1;
+    }
+
+    pub fn increment_fnr(&mut self) {
+        self.fnr += 1;
+    }
+
+    pub fn reset_fnr(&mut self) {
+        self.fnr = 0;
+    }
+
+    pub fn set_filename(&mut self, name: &str) {
+        self.filename = name.to_string();
     }
 
     // --- array operations ---

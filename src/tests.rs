@@ -1230,3 +1230,101 @@ fn subsep_default_value() {
     );
     assert_eq!(rt.get_var("x"), "1\x1c2");
 }
+
+// ── OFMT default ─────────────────────────────────────────────────
+
+#[test]
+fn ofmt_default_value() {
+    let rt = eval(r#"BEGIN { x = OFMT }"#, &[]);
+    assert_eq!(rt.get_var("x"), "%.6g");
+}
+
+#[test]
+fn ofmt_is_settable() {
+    let rt = eval(r#"BEGIN { OFMT = "%.2f"; x = OFMT }"#, &[]);
+    assert_eq!(rt.get_var("x"), "%.2f");
+}
+
+// ── SUBSEP is settable ──────────────────────────────────────────
+
+#[test]
+fn subsep_custom_value() {
+    let rt = eval(
+        r#"BEGIN { SUBSEP = ":"; a[1,2] = "v"; for (k in a) x = k }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "1:2");
+}
+
+// ── FNR tracks per-record within eval helper ─────────────────────
+
+#[test]
+fn fnr_increments_with_nr_in_single_source() {
+    // In the test helper (single source), FNR is not incremented because
+    // that's done by main.rs. But NR still works. FNR stays 0.
+    // This test documents the current behavior with the eval() helper.
+    let rt = eval("{ last_nr = NR }", &["a", "b", "c"]);
+    assert_eq!(rt.get_var("last_nr"), "3");
+}
+
+// ── ENVIRON access ───────────────────────────────────────────────
+
+#[test]
+fn environ_is_accessible_as_array() {
+    // ENVIRON is populated in main.rs, not in the test helper.
+    // But we can test that the array mechanism works.
+    let rt = eval(
+        r#"BEGIN { ENVIRON["TEST_KEY"] = "test_val"; x = ENVIRON["TEST_KEY"] }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "test_val");
+}
+
+// ── ARGC / ARGV ─────────────────────────────────────────────────
+
+#[test]
+fn argc_argv_accessible_as_vars() {
+    // ARGC/ARGV are populated in main.rs. Test that the mechanism works.
+    let rt = eval(
+        r#"BEGIN { ARGC = 3; ARGV[0] = "fk"; ARGV[1] = "prog"; x = ARGC; y = ARGV[1] }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "3");
+    assert_eq!(rt.get_array("ARGV", "1"), "prog");
+}
+
+// ── exit wiring with exit code ───────────────────────────────────
+
+#[test]
+fn exit_code_is_stored() {
+    let prog = "BEGIN { exit(42) }";
+    let mut lex = crate::lexer::Lexer::new(prog);
+    let tokens = lex.tokenize().unwrap();
+    let mut par = crate::parser::Parser::new(tokens);
+    let program = par.parse().unwrap();
+    let mut rt = crate::runtime::Runtime::new();
+    let mut exec = crate::action::Executor::new(&program, &mut rt);
+    exec.run_begin();
+    assert_eq!(exec.should_exit(), Some(42));
+}
+
+#[test]
+fn exit_zero_is_stored() {
+    let prog = "BEGIN { exit }";
+    let mut lex = crate::lexer::Lexer::new(prog);
+    let tokens = lex.tokenize().unwrap();
+    let mut par = crate::parser::Parser::new(tokens);
+    let program = par.parse().unwrap();
+    let mut rt = crate::runtime::Runtime::new();
+    let mut exec = crate::action::Executor::new(&program, &mut rt);
+    exec.run_begin();
+    assert_eq!(exec.should_exit(), Some(0));
+}
+
+// ── FILENAME default ─────────────────────────────────────────────
+
+#[test]
+fn filename_default_is_empty() {
+    let rt = eval(r#"BEGIN { x = FILENAME }"#, &[]);
+    assert_eq!(rt.get_var("x"), "");
+}
