@@ -295,14 +295,13 @@ impl Lexer {
     }
 
     fn is_regex_context(&self, tokens: &[Spanned]) -> bool {
-        match tokens.last().map(|s| &s.token) {
-            None => true,
-            Some(Token::LBrace) | Some(Token::Semicolon) | Some(Token::Newline)
+        matches!(
+            tokens.last().map(|s| &s.token),
+            None | Some(Token::LBrace) | Some(Token::Semicolon) | Some(Token::Newline)
             | Some(Token::And) | Some(Token::Or) | Some(Token::Not)
             | Some(Token::LParen) | Some(Token::Comma)
-            | Some(Token::Match) | Some(Token::NotMatch) => true,
-            _ => false,
-        }
+            | Some(Token::Match) | Some(Token::NotMatch)
+        )
     }
 
     fn read_regex(&mut self) -> Result<Token, String> {

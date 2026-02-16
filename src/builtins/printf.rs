@@ -56,11 +56,10 @@ pub fn format_printf(fmt: &str, args: &[String]) -> String {
                     }
                 }
                 'c' => {
-                    if let Some(s) = args.get(arg_idx) {
-                        if let Some(ch) = s.chars().next() {
+                    if let Some(s) = args.get(arg_idx)
+                        && let Some(ch) = s.chars().next() {
                             result.push(ch);
                         }
-                    }
                     arg_idx += 1;
                 }
                 _ => {

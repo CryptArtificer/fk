@@ -18,6 +18,12 @@ pub struct Runtime {
 /// Names that are stored as dedicated fields rather than in the HashMap.
 const INTERNED_NAMES: &[&str] = &["NR", "NF", "FS", "OFS", "RS", "ORS"];
 
+impl Default for Runtime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Runtime {
     pub fn new() -> Self {
         Runtime {
@@ -165,7 +171,7 @@ impl Runtime {
     pub fn array_has_key(&self, name: &str, key: &str) -> bool {
         self.arrays
             .get(name)
-            .map_or(false, |a| a.contains_key(key))
+            .is_some_and(|a| a.contains_key(key))
     }
 
     pub fn array_keys(&self, name: &str) -> Vec<String> {

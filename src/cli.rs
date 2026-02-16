@@ -52,8 +52,8 @@ pub fn parse_args() -> Args {
                 process::exit(1);
             }
             field_separator = Some(args[i].clone());
-        } else if arg.starts_with("-F") {
-            field_separator = Some(arg[2..].to_string());
+        } else if let Some(fs) = arg.strip_prefix("-F") {
+            field_separator = Some(fs.to_string());
         } else if arg == "-v" {
             i += 1;
             if i >= args.len() {
@@ -67,11 +67,11 @@ pub fn parse_args() -> Args {
                     process::exit(1);
                 }
             }
-        } else if arg.starts_with("-v") {
-            match parse_assignment(&arg[2..]) {
+        } else if let Some(rest) = arg.strip_prefix("-v") {
+            match parse_assignment(rest) {
                 Some(pair) => assignments.push(pair),
                 None => {
-                    eprintln!("fk: invalid -v assignment: {}", &arg[2..]);
+                    eprintln!("fk: invalid -v assignment: {}", rest);
                     process::exit(1);
                 }
             }

@@ -12,7 +12,7 @@
 ///
 /// Scalars are returned as their bare value (no quotes around strings).
 /// Objects and arrays are returned as compact JSON text.
-
+///
 /// Minimal JSON value representation.
 #[derive(Debug, Clone)]
 enum Value {
@@ -172,11 +172,10 @@ fn navigate_multi<'a>(val: &'a Value, steps: &[Step]) -> Vec<&'a Value> {
                 // Implicit iteration: .key on an array projects into each element
                 (Step::Key(k), Value::Array(arr)) => {
                     for elem in arr {
-                        if let Value::Object(pairs) = elem {
-                            if let Some((_, val)) = pairs.iter().find(|(key, _)| key == k) {
+                        if let Value::Object(pairs) = elem
+                            && let Some((_, val)) = pairs.iter().find(|(key, _)| key == k) {
                                 next.push(val);
                             }
-                        }
                     }
                 }
                 (Step::Index(i), Value::Array(arr)) => {
@@ -265,9 +264,8 @@ fn parse_string(chars: &mut Peekable<Chars>) -> Option<String> {
                 'u' => {
                     let mut hex = String::new();
                     for _ in 0..4 { hex.push(chars.next()?); }
-                    if let Ok(cp) = u32::from_str_radix(&hex, 16) {
-                        if let Some(ch) = char::from_u32(cp) { s.push(ch); }
-                    }
+                    if let Ok(cp) = u32::from_str_radix(&hex, 16)
+                        && let Some(ch) = char::from_u32(cp) { s.push(ch); }
                 }
                 other => { s.push('\\'); s.push(other); }
             },

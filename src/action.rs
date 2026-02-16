@@ -131,13 +131,11 @@ impl<'a> Executor<'a> {
                         self.range_active[rule_idx] = false;
                     }
                     true
+                } else if self.match_single_pattern(start, line) {
+                    self.range_active[rule_idx] = true;
+                    true
                 } else {
-                    if self.match_single_pattern(start, line) {
-                        self.range_active[rule_idx] = true;
-                        true
-                    } else {
-                        false
-                    }
+                    false
                 }
             }
         }
@@ -204,11 +202,10 @@ impl<'a> Executor<'a> {
                     if let Some(rv) = self.exec_block(then_block) {
                         return Some(rv);
                     }
-                } else if let Some(eb) = else_block {
-                    if let Some(rv) = self.exec_block(eb) {
+                } else if let Some(eb) = else_block
+                    && let Some(rv) = self.exec_block(eb) {
                         return Some(rv);
                     }
-                }
             }
             Statement::While(cond, body) => {
                 loop {
@@ -222,11 +219,10 @@ impl<'a> Executor<'a> {
                 }
             }
             Statement::For(init, cond, update, body) => {
-                if let Some(init_stmt) = init {
-                    if let Some(rv) = self.exec_stmt(init_stmt) {
+                if let Some(init_stmt) = init
+                    && let Some(rv) = self.exec_stmt(init_stmt) {
                         return Some(rv);
                     }
-                }
                 loop {
                     if let Some(cond_expr) = cond {
                         let val = self.eval_expr(cond_expr);
@@ -237,11 +233,10 @@ impl<'a> Executor<'a> {
                     if let Some(rv) = self.exec_block(body) {
                         return Some(rv);
                     }
-                    if let Some(update_stmt) = update {
-                        if let Some(rv) = self.exec_stmt(update_stmt) {
+                    if let Some(update_stmt) = update
+                        && let Some(rv) = self.exec_stmt(update_stmt) {
                             return Some(rv);
                         }
-                    }
                 }
             }
             Statement::ForIn(var, array, body) => {
@@ -399,11 +394,10 @@ impl<'a> Executor<'a> {
                     "split" => return self.builtin_split(args),
                     "jpath" if args.len() >= 3 => return self.builtin_jpath_extract(args),
                     "length" if args.len() == 1 => {
-                        if let Expr::Var(var_name) = &args[0] {
-                            if self.rt.arrays.contains_key(var_name.as_str()) {
+                        if let Expr::Var(var_name) = &args[0]
+                            && self.rt.arrays.contains_key(var_name.as_str()) {
                                 return format_number(self.rt.array_len(var_name) as f64);
                             }
-                        }
                     }
                     "fflush" => return self.builtin_fflush(args),
                     "system" => return self.builtin_system(args),
