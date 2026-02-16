@@ -329,13 +329,14 @@ impl<'a> Executor<'a> {
                     "match" => return self.builtin_match(args),
                     "split" => return self.builtin_split(args),
                     "length" if args.len() == 1 => {
-                        // length(array) returns element count if arg is an array
                         if let Expr::Var(var_name) = &args[0] {
                             if self.rt.arrays.contains_key(var_name.as_str()) {
                                 return format_number(self.rt.array_len(var_name) as f64);
                             }
                         }
                     }
+                    "fflush" => return self.builtin_fflush(args),
+                    "system" => return self.builtin_system(args),
                     _ => {}
                 }
                 let evaled: Vec<String> = args.iter().map(|e| self.eval_expr(e)).collect();
@@ -404,27 +405,34 @@ impl<'a> Executor<'a> {
             None => {
                 print!("{}", text);
             }
-            Some(Redirect::Overwrite(target_expr)) => {
+            Some(Redirect::Overwrite(target_expr)) | Some(Redirect::Append(target_expr)) => {
                 let path = self.eval_expr(target_expr);
+                // Handle special device paths
+                if path == "/dev/stderr" {
+                    eprint!("{}", text);
+                    return;
+                }
+                if path == "/dev/stdout" {
+                    print!("{}", text);
+                    return;
+                }
+                let is_append = matches!(redir, Some(Redirect::Append(_)));
                 let file = self.output_files.entry(path.clone()).or_insert_with(|| {
-                    File::create(&path).unwrap_or_else(|e| {
-                        eprintln!("fk: cannot open '{}': {}", path, e);
-                        File::create("/dev/null").unwrap()
-                    })
-                });
-                let _ = file.write_all(text.as_bytes());
-            }
-            Some(Redirect::Append(target_expr)) => {
-                let path = self.eval_expr(target_expr);
-                let file = self.output_files.entry(path.clone()).or_insert_with(|| {
-                    OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(&path)
-                        .unwrap_or_else(|e| {
+                    if is_append {
+                        OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open(&path)
+                            .unwrap_or_else(|e| {
+                                eprintln!("fk: cannot open '{}': {}", path, e);
+                                File::create("/dev/null").unwrap()
+                            })
+                    } else {
+                        File::create(&path).unwrap_or_else(|e| {
                             eprintln!("fk: cannot open '{}': {}", path, e);
                             File::create("/dev/null").unwrap()
                         })
+                    }
                 });
                 let _ = file.write_all(text.as_bytes());
             }
@@ -545,6 +553,36 @@ impl<'a> Executor<'a> {
             self.rt.set_array(&array_name, &format!("{}", i + 1), part);
         }
         format_number(parts.len() as f64)
+    }
+
+    /// fflush([file]) — flush stdout or a named output file. Returns 0 on success.
+    fn builtin_fflush(&mut self, args: &[Expr]) -> String {
+        use std::io::Write as _;
+        if args.is_empty() {
+            let _ = std::io::stdout().flush();
+        } else {
+            let path = self.eval_expr(&args[0]);
+            if path.is_empty() {
+                let _ = std::io::stdout().flush();
+            } else if let Some(file) = self.output_files.get_mut(&path) {
+                let _ = file.flush();
+            }
+        }
+        "0".to_string()
+    }
+
+    /// system(cmd) — run a shell command, return its exit status.
+    fn builtin_system(&mut self, args: &[Expr]) -> String {
+        if args.is_empty() {
+            return "-1".to_string();
+        }
+        // Flush stdout before spawning (awk semantics)
+        let _ = std::io::stdout().flush();
+        let cmd = self.eval_expr(&args[0]);
+        match Command::new("sh").arg("-c").arg(&cmd).status() {
+            Ok(status) => format_number(status.code().unwrap_or(-1) as f64),
+            Err(_) => "-1".to_string(),
+        }
     }
 
     fn exec_getline(&mut self, var: Option<&str>, source: Option<&Expr>) -> String {

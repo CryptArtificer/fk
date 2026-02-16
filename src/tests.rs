@@ -650,3 +650,23 @@ fn negative_field_beyond_start_gives_whole_record() {
     let rt = eval("{ result = $-99 }", &["a b c"]);
     assert_eq!(rt.get_var("result"), "a b c");
 }
+
+// ── IO builtins ──────────────────────────────────────────────────
+
+#[test]
+fn system_returns_exit_status() {
+    let rt = eval("{ result = system(\"true\") }", &["x"]);
+    assert_eq!(rt.get_var("result"), "0");
+}
+
+#[test]
+fn system_returns_nonzero_on_failure() {
+    let rt = eval("{ result = system(\"false\") }", &["x"]);
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+#[test]
+fn fflush_returns_zero() {
+    let rt = eval("{ result = fflush() }", &["x"]);
+    assert_eq!(rt.get_var("result"), "0");
+}
