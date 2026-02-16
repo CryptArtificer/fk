@@ -109,12 +109,12 @@ src/
 - [x] REPL / interactive mode (`--repl`)
 
 #### Phase 4 — Benchmarks
-- [ ] Create `benches/` directory with criterion-based benchmarks
-- [ ] Field splitting throughput (whitespace, single-char, multi-char FS)
-- [ ] Lexer + parser throughput on realistic programs
-- [ ] Record processing throughput (simple print, field access, pattern match)
-- [ ] Comparison harness: `fk` vs `awk` vs `gawk` vs `mawk` on common tasks
-- [ ] Large-file benchmark (1M+ lines, CSV-like data)
+- [x] Create `benches/` directory with criterion-based benchmarks
+- [x] Field splitting throughput (whitespace, single-char, multi-char FS)
+- [x] Lexer + parser throughput on realistic programs
+- [x] Record processing throughput (simple print, field access, pattern match)
+- [x] Comparison harness: `fk` vs `awk` vs `gawk` vs `mawk` on common tasks
+- [x] Large-file benchmark (1M+ lines, CSV-like data)
 
 #### Phase 5 — Tutorial & showcase
 - [x] `examples/` directory with annotated scripts
