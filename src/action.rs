@@ -1,6 +1,10 @@
 use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io::Write;
+use std::io::BufRead;
+use std::process::{Child, Command, Stdio};
 
-use crate::parser::{BinOp, Block, Expr, FuncDef, Pattern, Program, Statement};
+use crate::parser::{BinOp, Block, Expr, FuncDef, Pattern, Program, Redirect, Statement};
 use crate::runtime::Runtime;
 
 /// Sentinel used to propagate early return from user-defined functions.
@@ -11,6 +15,9 @@ pub struct Executor<'a> {
     program: &'a Program,
     rt: &'a mut Runtime,
     functions: HashMap<String, FuncDef>,
+    range_active: Vec<bool>,
+    output_files: HashMap<String, File>,
+    output_pipes: HashMap<String, Child>,
 }
 
 impl<'a> Executor<'a> {
@@ -19,7 +26,12 @@ impl<'a> Executor<'a> {
         for f in &program.functions {
             functions.insert(f.name.clone(), f.clone());
         }
-        Executor { program, rt, functions }
+        let range_active = vec![false; program.rules.len()];
+        Executor {
+            program, rt, functions, range_active,
+            output_files: HashMap::new(),
+            output_pipes: HashMap::new(),
+        }
     }
 
     pub fn run_begin(&mut self) {
@@ -32,29 +44,75 @@ impl<'a> Executor<'a> {
         if let Some(ref block) = self.program.end {
             self.exec_block(block);
         }
+        self.close_outputs();
+    }
+
+    /// Flush files and close pipe processes.
+    fn close_outputs(&mut self) {
+        for (_, file) in self.output_files.drain() {
+            drop(file);
+        }
+        for (_, mut child) in self.output_pipes.drain() {
+            // Drop stdin to signal EOF, then wait
+            drop(child.stdin.take());
+            let _ = child.wait();
+        }
     }
 
     pub fn run_record(&mut self, line: &str) {
         self.rt.increment_nr();
         self.rt.set_record(line);
 
-        for rule in &self.program.rules {
-            if self.match_pattern(&rule.pattern, line) {
-                self.exec_block(&rule.action);
+        for i in 0..self.program.rules.len() {
+            let matched = self.match_rule(i, line);
+            if matched {
+                let action = &self.program.rules[i].action as *const Block;
+                // Safety: we only read the action block, executor mutations are to rt
+                self.exec_block(unsafe { &*action });
             }
         }
     }
 
-    fn match_pattern(&mut self, pattern: &Option<Pattern>, line: &str) -> bool {
+    fn match_rule(&mut self, rule_idx: usize, line: &str) -> bool {
+        let pattern = &self.program.rules[rule_idx].pattern;
         match pattern {
             None => true,
             Some(Pattern::Regex(pat)) => {
                 line.contains(pat.as_str())
             }
             Some(Pattern::Expression(expr)) => {
+                let expr = expr.clone();
+                let val = self.eval_expr(&expr);
+                is_truthy(&val)
+            }
+            Some(Pattern::Range(start, end)) => {
+                if self.range_active[rule_idx] {
+                    // Currently in range — check if end matches
+                    if self.match_single_pattern(end, line) {
+                        self.range_active[rule_idx] = false;
+                    }
+                    true
+                } else {
+                    // Not in range — check if start matches
+                    if self.match_single_pattern(start, line) {
+                        self.range_active[rule_idx] = true;
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
+        }
+    }
+
+    fn match_single_pattern(&mut self, pattern: &Pattern, line: &str) -> bool {
+        match pattern {
+            Pattern::Regex(pat) => line.contains(pat.as_str()),
+            Pattern::Expression(expr) => {
                 let val = self.eval_expr(expr);
                 is_truthy(&val)
             }
+            Pattern::Range(_, _) => false, // nested ranges not supported
         }
     }
 
@@ -69,19 +127,20 @@ impl<'a> Executor<'a> {
 
     fn exec_stmt(&mut self, stmt: &Statement) -> Option<ReturnValue> {
         match stmt {
-            Statement::Print(exprs) => {
+            Statement::Print(exprs, redir) => {
                 let ofs = self.rt.get_var("OFS");
                 let ors = self.rt.get_var("ORS");
                 let parts: Vec<String> = exprs.iter().map(|e| self.eval_expr(e)).collect();
-                print!("{}{}", parts.join(&ofs), ors);
+                let output = format!("{}{}", parts.join(&ofs), ors);
+                self.write_output(&output, redir);
             }
-            Statement::Printf(exprs) => {
+            Statement::Printf(exprs, redir) => {
                 if exprs.is_empty() {
                     return None;
                 }
                 let args: Vec<String> = exprs.iter().map(|e| self.eval_expr(e)).collect();
-                let result = format_printf(&args[0], &args[1..]);
-                print!("{}", result);
+                let output = format_printf(&args[0], &args[1..]);
+                self.write_output(&output, redir);
             }
             Statement::If(cond, then_block, else_block) => {
                 let val = self.eval_expr(cond);
@@ -265,12 +324,27 @@ impl<'a> Executor<'a> {
                 }
             }
             Expr::FuncCall(name, args) => {
+                // Builtins that need runtime access (they modify vars/arrays)
+                match name.as_str() {
+                    "sub" => return self.builtin_sub(args, false),
+                    "gsub" => return self.builtin_sub(args, true),
+                    "match" => return self.builtin_match(args),
+                    "split" => return self.builtin_split(args),
+                    _ => {}
+                }
                 let evaled: Vec<String> = args.iter().map(|e| self.eval_expr(e)).collect();
                 if let Some(func) = self.functions.get(name).cloned() {
                     self.call_user_func(&func, &evaled)
                 } else {
                     call_builtin(name, &evaled)
                 }
+            }
+            Expr::Getline(var, source) => {
+                self.exec_getline(var.as_deref(), source.as_deref())
+            }
+            Expr::GetlinePipe(cmd_expr, var) => {
+                let cmd = self.eval_expr(cmd_expr);
+                self.exec_getline_pipe(&cmd, var.as_deref())
             }
         }
     }
@@ -307,6 +381,57 @@ impl<'a> Executor<'a> {
         }
     }
 
+    fn write_output(&mut self, text: &str, redir: &Option<Redirect>) {
+        match redir {
+            None => {
+                print!("{}", text);
+            }
+            Some(Redirect::Overwrite(target_expr)) => {
+                let path = self.eval_expr(target_expr);
+                // Open file (truncate on first use, then append for same path)
+                let file = self.output_files.entry(path.clone()).or_insert_with(|| {
+                    File::create(&path).unwrap_or_else(|e| {
+                        eprintln!("fk: cannot open '{}': {}", path, e);
+                        File::create("/dev/null").unwrap()
+                    })
+                });
+                let _ = file.write_all(text.as_bytes());
+            }
+            Some(Redirect::Append(target_expr)) => {
+                let path = self.eval_expr(target_expr);
+                let file = self.output_files.entry(path.clone()).or_insert_with(|| {
+                    OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&path)
+                        .unwrap_or_else(|e| {
+                            eprintln!("fk: cannot open '{}': {}", path, e);
+                            File::create("/dev/null").unwrap()
+                        })
+                });
+                let _ = file.write_all(text.as_bytes());
+            }
+            Some(Redirect::Pipe(cmd_expr)) => {
+                let cmd = self.eval_expr(cmd_expr);
+                let child = self.output_pipes.entry(cmd.clone()).or_insert_with(|| {
+                    Command::new("sh")
+                        .arg("-c")
+                        .arg(&cmd)
+                        .stdin(Stdio::piped())
+                        .spawn()
+                        .unwrap_or_else(|e| {
+                            eprintln!("fk: cannot run '{}': {}", cmd, e);
+                            // Fallback: spawn cat to /dev/null
+                            Command::new("cat").stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap()
+                        })
+                });
+                if let Some(ref mut stdin) = child.stdin {
+                    let _ = stdin.write_all(text.as_bytes());
+                }
+            }
+        }
+    }
+
     /// Call a user-defined function: save caller's locals, bind params, run body,
     /// restore caller's locals.
     fn call_user_func(&mut self, func: &FuncDef, args: &[String]) -> String {
@@ -339,19 +464,247 @@ impl<'a> Executor<'a> {
 
         result
     }
+
+    /// sub(regex, replacement [, target]) / gsub(regex, replacement [, target])
+    /// Replaces first (sub) or all (gsub) occurrences of pattern in target.
+    /// If target is omitted, uses $0. Returns number of replacements made.
+    fn builtin_sub(&mut self, args: &[Expr], global: bool) -> String {
+        if args.len() < 2 {
+            eprintln!("fk: sub/gsub requires at least 2 arguments");
+            return "0".to_string();
+        }
+        let pattern = self.eval_expr(&args[0]);
+        let replacement = self.eval_expr(&args[1]);
+
+        // Determine target: if 3rd arg given it must be an lvalue, otherwise $0
+        let target_expr = if args.len() >= 3 {
+            args[2].clone()
+        } else {
+            Expr::Field(Box::new(Expr::NumberLit(0.0)))
+        };
+
+        let target_val = self.eval_lvalue(&target_expr);
+        let (new_val, count) = string_replace(&target_val, &pattern, &replacement, global);
+        self.assign_to(&target_expr, &new_val);
+
+        format_number(count as f64)
+    }
+
+    /// match(string, regex) — sets RSTART and RLENGTH, returns RSTART.
+    fn builtin_match(&mut self, args: &[Expr]) -> String {
+        if args.len() < 2 {
+            eprintln!("fk: match requires 2 arguments");
+            return "0".to_string();
+        }
+        let s = self.eval_expr(&args[0]);
+        let pattern = self.eval_expr(&args[1]);
+
+        if let Some(pos) = s.find(&pattern) {
+            let rstart = (pos + 1) as f64; // awk is 1-indexed
+            let rlength = pattern.len() as f64;
+            self.rt.set_var("RSTART", &format_number(rstart));
+            self.rt.set_var("RLENGTH", &format_number(rlength));
+            format_number(rstart)
+        } else {
+            self.rt.set_var("RSTART", "0");
+            self.rt.set_var("RLENGTH", "-1");
+            "0".to_string()
+        }
+    }
+
+    /// split(string, array [, separator]) — splits string into array, returns count.
+    fn builtin_split(&mut self, args: &[Expr]) -> String {
+        if args.len() < 2 {
+            eprintln!("fk: split requires at least 2 arguments");
+            return "0".to_string();
+        }
+        let s = self.eval_expr(&args[0]);
+        let array_name = match &args[1] {
+            Expr::Var(name) => name.clone(),
+            _ => {
+                eprintln!("fk: split: second argument must be an array name");
+                return "0".to_string();
+            }
+        };
+        let fs = if args.len() >= 3 {
+            self.eval_expr(&args[2])
+        } else {
+            self.rt.get_var("FS")
+        };
+
+        let parts = crate::field::split(&s, &fs);
+        // Clear existing array
+        self.rt.arrays.remove(&array_name);
+        for (i, part) in parts.iter().enumerate() {
+            self.rt.set_array(&array_name, &format!("{}", i + 1), part);
+        }
+        format_number(parts.len() as f64)
+    }
+
+    /// getline [var] [< file]
+    /// No source: reads next line from stdin.
+    /// With source: reads from file.
+    /// Returns "1" on success, "0" on EOF, "-1" on error.
+    fn exec_getline(&mut self, var: Option<&str>, source: Option<&Expr>) -> String {
+        let line = if let Some(src_expr) = source {
+            let path = self.eval_expr(src_expr);
+            match std::fs::File::open(&path) {
+                Ok(file) => {
+                    // Read one line — for repeated getline from same file,
+                    // full caching would be needed. Simple version for now.
+                    let mut reader = std::io::BufReader::new(file);
+                    let mut line = String::new();
+                    match reader.read_line(&mut line) {
+                        Ok(0) => return "0".to_string(),
+                        Ok(_) => {
+                            if line.ends_with('\n') { line.pop(); }
+                            if line.ends_with('\r') { line.pop(); }
+                            line
+                        }
+                        Err(_) => return "-1".to_string(),
+                    }
+                }
+                Err(_) => return "-1".to_string(),
+            }
+        } else {
+            // Read from stdin
+            let mut line = String::new();
+            match std::io::stdin().read_line(&mut line) {
+                Ok(0) => return "0".to_string(),
+                Ok(_) => {
+                    if line.ends_with('\n') { line.pop(); }
+                    if line.ends_with('\r') { line.pop(); }
+                    line
+                }
+                Err(_) => return "-1".to_string(),
+            }
+        };
+
+        match var {
+            Some(name) => {
+                self.rt.set_var(name, &line);
+            }
+            None => {
+                self.rt.set_record(&line);
+            }
+        }
+        self.rt.increment_nr();
+        "1".to_string()
+    }
+
+    /// "cmd" | getline [var]
+    fn exec_getline_pipe(&mut self, cmd: &str, var: Option<&str>) -> String {
+        match Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .stdout(Stdio::piped())
+            .spawn()
+        {
+            Ok(child) => {
+                let output = child.wait_with_output();
+                match output {
+                    Ok(out) => {
+                        let text = String::from_utf8_lossy(&out.stdout);
+                        let line = text.lines().next().unwrap_or("").to_string();
+                        match var {
+                            Some(name) => self.rt.set_var(name, &line),
+                            None => self.rt.set_record(&line),
+                        }
+                        self.rt.increment_nr();
+                        "1".to_string()
+                    }
+                    Err(_) => "-1".to_string(),
+                }
+            }
+            Err(_) => "-1".to_string(),
+        }
+    }
 }
 
 // --- helper functions ---
 
+/// Replace first or all occurrences of a pattern in a string.
+/// Returns (new_string, replacement_count).
+fn string_replace(s: &str, pattern: &str, replacement: &str, global: bool) -> (String, usize) {
+    if pattern.is_empty() {
+        return (s.to_string(), 0);
+    }
+    if global {
+        let count = s.matches(pattern).count();
+        (s.replace(pattern, replacement), count)
+    } else {
+        if let Some(pos) = s.find(pattern) {
+            let mut result = String::with_capacity(s.len());
+            result.push_str(&s[..pos]);
+            result.push_str(replacement);
+            result.push_str(&s[pos + pattern.len()..]);
+            (result, 1)
+        } else {
+            (s.to_string(), 0)
+        }
+    }
+}
+
+/// Coerce a string to a number (awk semantics: leading numeric prefix is parsed,
+/// non-numeric strings become 0).
 fn to_number(s: &str) -> f64 {
-    s.parse::<f64>().unwrap_or(0.0)
+    let s = s.trim();
+    if s.is_empty() {
+        return 0.0;
+    }
+    // Try full parse first
+    if let Ok(n) = s.parse::<f64>() {
+        return n;
+    }
+    // Try leading numeric prefix (awk parses "123abc" as 123)
+    let mut end = 0;
+    let bytes = s.as_bytes();
+    if end < bytes.len() && (bytes[end] == b'+' || bytes[end] == b'-') {
+        end += 1;
+    }
+    let mut has_digit = false;
+    while end < bytes.len() && bytes[end].is_ascii_digit() {
+        end += 1;
+        has_digit = true;
+    }
+    if end < bytes.len() && bytes[end] == b'.' {
+        end += 1;
+        while end < bytes.len() && bytes[end].is_ascii_digit() {
+            end += 1;
+            has_digit = true;
+        }
+    }
+    if has_digit {
+        s[..end].parse::<f64>().unwrap_or(0.0)
+    } else {
+        0.0
+    }
+}
+
+/// Returns true if a string looks like a number (for comparison coercion).
+fn looks_numeric(s: &str) -> bool {
+    let s = s.trim();
+    if s.is_empty() {
+        return false;
+    }
+    s.parse::<f64>().is_ok()
 }
 
 fn format_number(n: f64) -> String {
+    if n.is_nan() {
+        return "nan".to_string();
+    }
+    if n.is_infinite() {
+        return if n > 0.0 { "inf".to_string() } else { "-inf".to_string() };
+    }
     if n == (n as i64) as f64 {
         format!("{}", n as i64)
     } else {
-        format!("{:.6}", n)
+        // Use OFMT-style: up to 6 decimal places, trimming trailing zeros
+        let s = format!("{:.6}", n);
+        let s = s.trim_end_matches('0');
+        let s = s.trim_end_matches('.');
+        s.to_string()
     }
 }
 
@@ -361,6 +714,19 @@ fn is_truthy(s: &str) -> bool {
 
 fn bool_str(b: bool) -> String {
     if b { "1".to_string() } else { "0".to_string() }
+}
+
+/// Compare two values using awk coercion rules:
+/// - If both look numeric, compare as numbers.
+/// - Otherwise compare as strings.
+fn compare(left: &str, right: &str) -> std::cmp::Ordering {
+    if looks_numeric(left) && looks_numeric(right) {
+        let l = to_number(left);
+        let r = to_number(right);
+        l.partial_cmp(&r).unwrap_or(std::cmp::Ordering::Equal)
+    } else {
+        left.cmp(right)
+    }
 }
 
 fn eval_binop(left: &str, op: &BinOp, right: &str) -> String {
@@ -386,12 +752,24 @@ fn eval_binop(left: &str, op: &BinOp, right: &str) -> String {
                 format_number(to_number(left) % r)
             }
         }
-        BinOp::Eq => bool_str(left == right || to_number(left) == to_number(right)),
-        BinOp::Ne => bool_str(left != right && to_number(left) != to_number(right)),
-        BinOp::Lt => bool_str(to_number(left) < to_number(right)),
-        BinOp::Le => bool_str(to_number(left) <= to_number(right)),
-        BinOp::Gt => bool_str(to_number(left) > to_number(right)),
-        BinOp::Ge => bool_str(to_number(left) >= to_number(right)),
+        BinOp::Eq => {
+            if looks_numeric(left) && looks_numeric(right) {
+                bool_str(to_number(left) == to_number(right))
+            } else {
+                bool_str(left == right)
+            }
+        }
+        BinOp::Ne => {
+            if looks_numeric(left) && looks_numeric(right) {
+                bool_str(to_number(left) != to_number(right))
+            } else {
+                bool_str(left != right)
+            }
+        }
+        BinOp::Lt => bool_str(compare(left, right) == std::cmp::Ordering::Less),
+        BinOp::Le => bool_str(compare(left, right) != std::cmp::Ordering::Greater),
+        BinOp::Gt => bool_str(compare(left, right) == std::cmp::Ordering::Greater),
+        BinOp::Ge => bool_str(compare(left, right) != std::cmp::Ordering::Less),
     }
 }
 

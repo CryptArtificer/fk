@@ -31,12 +31,20 @@ pub type Block = Vec<Statement>;
 pub enum Pattern {
     Regex(String),
     Expression(Expr),
+    Range(Box<Pattern>, Box<Pattern>),
+}
+
+#[derive(Debug, Clone)]
+pub enum Redirect {
+    Overwrite(Expr),  // > file
+    Append(Expr),     // >> file
+    Pipe(Expr),       // | command
 }
 
 #[derive(Debug, Clone)]
 pub enum Statement {
-    Print(Vec<Expr>),
-    Printf(Vec<Expr>),
+    Print(Vec<Expr>, Option<Redirect>),
+    Printf(Vec<Expr>, Option<Redirect>),
     If(Expr, Block, Option<Block>),
     While(Expr, Block),
     For(Option<Box<Statement>>, Option<Expr>, Option<Box<Statement>>, Block),
@@ -67,10 +75,13 @@ pub enum Expr {
     Decrement(Box<Expr>, bool),
     UnaryMinus(Box<Expr>),
     Concat(Box<Expr>, Box<Expr>),
-    #[allow(dead_code)]
     Ternary(Box<Expr>, Box<Expr>, Box<Expr>),
     Sprintf(Vec<Expr>),
     FuncCall(String, Vec<Expr>),
+    /// getline [var] [< file]. Fields: optional var name, optional source file expr.
+    Getline(Option<String>, Option<Box<Expr>>),
+    /// "cmd" | getline [var]. Fields: command expr, optional var name.
+    GetlinePipe(Box<Expr>, Option<String>),
 }
 
 #[derive(Debug, Clone)]
@@ -178,7 +189,7 @@ impl Parser {
             if self.check(&Token::LBrace) {
                 action = self.parse_brace_block()?;
             } else {
-                action = vec![Statement::Print(vec![Expr::Field(Box::new(Expr::NumberLit(0.0)))])];
+                action = vec![Statement::Print(vec![Expr::Field(Box::new(Expr::NumberLit(0.0)))], None)];
             }
         }
 
@@ -186,16 +197,35 @@ impl Parser {
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern, String> {
-        match self.current() {
+        let first = match self.current() {
             Token::Regex(s) => {
                 let pat = Pattern::Regex(s.clone());
                 self.advance();
-                Ok(pat)
+                pat
             }
             _ => {
                 let expr = self.parse_expr()?;
-                Ok(Pattern::Expression(expr))
+                Pattern::Expression(expr)
             }
+        };
+
+        // Check for range pattern: pat1, pat2
+        if self.check(&Token::Comma) {
+            self.advance();
+            let second = match self.current() {
+                Token::Regex(s) => {
+                    let pat = Pattern::Regex(s.clone());
+                    self.advance();
+                    pat
+                }
+                _ => {
+                    let expr = self.parse_expr()?;
+                    Pattern::Expression(expr)
+                }
+            };
+            Ok(Pattern::Range(Box::new(first), Box::new(second)))
+        } else {
+            Ok(first)
         }
     }
 
@@ -237,33 +267,62 @@ impl Parser {
     fn parse_print(&mut self) -> Result<Statement, String> {
         self.advance(); // consume 'print'
         let mut args = Vec::new();
-        if !self.is_terminator() && !self.check(&Token::RBrace) {
-            args.push(self.parse_expr()?);
+        if !self.is_terminator() && !self.check(&Token::RBrace)
+            && !self.check(&Token::Gt) && !self.check(&Token::Append) && !self.check(&Token::Pipe)
+        {
+            args.push(self.parse_non_redirect_expr()?);
             while self.check(&Token::Comma) {
                 self.advance();
-                args.push(self.parse_expr()?);
+                args.push(self.parse_non_redirect_expr()?);
             }
         }
         if args.is_empty() {
             args.push(Expr::Field(Box::new(Expr::NumberLit(0.0))));
         }
-        Ok(Statement::Print(args))
+        let redir = self.parse_redirect()?;
+        Ok(Statement::Print(args, redir))
     }
 
     fn parse_printf(&mut self) -> Result<Statement, String> {
         self.advance(); // consume 'printf'
         let mut args = Vec::new();
         if !self.is_terminator() && !self.check(&Token::RBrace) {
-            args.push(self.parse_expr()?);
+            args.push(self.parse_non_redirect_expr()?);
             while self.check(&Token::Comma) {
                 self.advance();
-                args.push(self.parse_expr()?);
+                args.push(self.parse_non_redirect_expr()?);
             }
         }
         if args.is_empty() {
             return Err("printf requires a format string".to_string());
         }
-        Ok(Statement::Printf(args))
+        let redir = self.parse_redirect()?;
+        Ok(Statement::Printf(args, redir))
+    }
+
+    /// Parse an expression for print/printf arguments. Parses up to but not
+    /// including `>`, `>>`, or `|` at the top level, so they are consumed as
+    /// redirection operators. Comparisons work inside parens: `print ($0 > 5)`.
+    fn parse_non_redirect_expr(&mut self) -> Result<Expr, String> {
+        self.parse_concatenation()
+    }
+
+    fn parse_redirect(&mut self) -> Result<Option<Redirect>, String> {
+        if self.check(&Token::Gt) {
+            self.advance();
+            let target = self.parse_primary()?;
+            Ok(Some(Redirect::Overwrite(target)))
+        } else if self.check(&Token::Append) {
+            self.advance();
+            let target = self.parse_primary()?;
+            Ok(Some(Redirect::Append(target)))
+        } else if self.check(&Token::Pipe) {
+            self.advance();
+            let target = self.parse_primary()?;
+            Ok(Some(Redirect::Pipe(target)))
+        } else {
+            Ok(None)
+        }
     }
 
     fn parse_return(&mut self) -> Result<Statement, String> {
@@ -455,8 +514,17 @@ impl Parser {
     }
 
     fn parse_ternary(&mut self) -> Result<Expr, String> {
-        // Not implementing ternary (?:) in this phase, placeholder
-        self.parse_logical_or()
+        let expr = self.parse_logical_or()?;
+
+        if self.check(&Token::Question) {
+            self.advance();
+            let then_expr = self.parse_expr()?;
+            self.expect(&Token::Colon)?;
+            let else_expr = self.parse_expr()?;
+            Ok(Expr::Ternary(Box::new(expr), Box::new(then_expr), Box::new(else_expr)))
+        } else {
+            Ok(expr)
+        }
     }
 
     fn parse_logical_or(&mut self) -> Result<Expr, String> {
@@ -485,6 +553,24 @@ impl Parser {
 
     fn parse_match_expr(&mut self) -> Result<Expr, String> {
         let left = self.parse_comparison()?;
+
+        // "cmd" | getline [var]
+        if self.check(&Token::Pipe) {
+            let saved = self.pos;
+            self.advance();
+            if self.check(&Token::Getline) {
+                self.advance();
+                let var = if let Token::Ident(name) = self.current().clone() {
+                    self.advance();
+                    Some(name)
+                } else {
+                    None
+                };
+                return Ok(Expr::GetlinePipe(Box::new(left), var));
+            }
+            // Not a getline pipe, backtrack
+            self.pos = saved;
+        }
 
         if self.check(&Token::Match) {
             self.advance();
@@ -696,6 +782,34 @@ impl Parser {
                 }
 
                 Ok(Expr::Var(name))
+            }
+            Token::Getline => {
+                self.advance();
+                // getline [var] [< file]
+                let var = if let Token::Ident(name) = self.current().clone() {
+                    // Peek to see if this is really a var (not followed by something
+                    // that makes it look like a different expression)
+                    let saved = self.pos;
+                    self.advance();
+                    if self.check(&Token::Lt) || self.is_terminator()
+                        || self.check(&Token::RBrace) || self.check(&Token::Semicolon)
+                        || self.check(&Token::RParen) || self.at_eof()
+                    {
+                        Some(name)
+                    } else {
+                        self.pos = saved;
+                        None
+                    }
+                } else {
+                    None
+                };
+                let source = if self.check(&Token::Lt) {
+                    self.advance();
+                    Some(Box::new(self.parse_primary()?))
+                } else {
+                    None
+                };
+                Ok(Expr::Getline(var, source))
             }
             Token::LParen => {
                 self.advance();

@@ -185,3 +185,331 @@ fn multiple_functions_defined() {
     assert_eq!(rt.get_var("s"), "9");
     assert_eq!(rt.get_var("c"), "27");
 }
+
+// ── Ternary operator ─────────────────────────────────────────────
+
+#[test]
+fn ternary_selects_true_branch() {
+    let rt = eval("{ result = (1 > 0) ? \"yes\" : \"no\" }", &["x"]);
+    assert_eq!(rt.get_var("result"), "yes");
+}
+
+#[test]
+fn ternary_selects_false_branch() {
+    let rt = eval("{ result = (0 > 1) ? \"yes\" : \"no\" }", &["x"]);
+    assert_eq!(rt.get_var("result"), "no");
+}
+
+#[test]
+fn ternary_with_field_values() {
+    let rt = eval("{ result = ($1 > 10) ? \"big\" : \"small\" }", &["25"]);
+    assert_eq!(rt.get_var("result"), "big");
+}
+
+#[test]
+fn ternary_nested() {
+    let rt = eval(
+        "{ result = ($1 > 0) ? \"pos\" : ($1 == 0) ? \"zero\" : \"neg\" }",
+        &["-5"],
+    );
+    assert_eq!(rt.get_var("result"), "neg");
+}
+
+#[test]
+fn ternary_as_function_argument() {
+    let rt = eval(
+        "function f(x) { return x } { result = f($1 > 0 ? 1 : -1) }",
+        &["42"],
+    );
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+// ── Coercion rules ───────────────────────────────────────────────
+
+#[test]
+fn uninitialized_var_is_zero_in_arithmetic() {
+    let rt = eval("{ result = x + 5 }", &["ignored"]);
+    assert_eq!(rt.get_var("result"), "5");
+}
+
+#[test]
+fn uninitialized_var_is_empty_string_in_print_context() {
+    let rt = eval("{ result = x }", &["ignored"]);
+    assert_eq!(rt.get_var("result"), "");
+}
+
+#[test]
+fn numeric_strings_compared_as_numbers() {
+    // "10" > "9" numerically (but "10" < "9" lexicographically)
+    let rt = eval("{ result = (\"10\" > \"9\") }", &["x"]);
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+#[test]
+fn non_numeric_strings_compared_lexicographically() {
+    let rt = eval("{ result = (\"banana\" > \"apple\") }", &["x"]);
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+#[test]
+fn mixed_comparison_is_string_based() {
+    // "abc" is not numeric, so compare as strings
+    let rt = eval("{ result = (\"abc\" > \"10\") }", &["x"]);
+    assert_eq!(rt.get_var("result"), "1"); // "abc" > "10" lexicographically
+}
+
+#[test]
+fn string_coerces_to_zero_in_arithmetic() {
+    let rt = eval("{ result = \"hello\" + 5 }", &["x"]);
+    assert_eq!(rt.get_var("result"), "5");
+}
+
+#[test]
+fn leading_number_prefix_parsed() {
+    let rt = eval("{ result = \"123abc\" + 0 }", &["x"]);
+    assert_eq!(rt.get_var("result"), "123");
+}
+
+#[test]
+fn equality_of_same_numeric_different_format() {
+    // "1.0" == "1" should be true (both numeric)
+    let rt = eval("{ result = (\"1.0\" == \"1\") }", &["x"]);
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+#[test]
+fn inequality_of_different_strings() {
+    let rt = eval("{ result = (\"foo\" != \"bar\") }", &["x"]);
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+#[test]
+fn empty_string_is_falsy() {
+    let rt = eval("{ result = (\"\" ? \"truthy\" : \"falsy\") }", &["x"]);
+    assert_eq!(rt.get_var("result"), "falsy");
+}
+
+#[test]
+fn zero_string_is_falsy() {
+    let rt = eval("{ result = (\"0\" ? \"truthy\" : \"falsy\") }", &["x"]);
+    assert_eq!(rt.get_var("result"), "falsy");
+}
+
+#[test]
+fn nonzero_number_string_is_truthy() {
+    let rt = eval("{ result = (\"1\" ? \"truthy\" : \"falsy\") }", &["x"]);
+    assert_eq!(rt.get_var("result"), "truthy");
+}
+
+// ── Built-in functions: split ────────────────────────────────────
+
+#[test]
+fn split_basic_whitespace() {
+    let rt = eval(
+        "{ n = split($0, a); result = n; first = a[1]; second = a[2] }",
+        &["hello world"],
+    );
+    assert_eq!(rt.get_var("result"), "2");
+    assert_eq!(rt.get_array("a", "1"), "hello");
+    assert_eq!(rt.get_array("a", "2"), "world");
+}
+
+#[test]
+fn split_with_custom_separator() {
+    let rt = eval(
+        "{ n = split($0, a, \":\"); result = n; second = a[2] }",
+        &["one:two:three"],
+    );
+    assert_eq!(rt.get_var("result"), "3");
+    assert_eq!(rt.get_array("a", "1"), "one");
+    assert_eq!(rt.get_array("a", "2"), "two");
+    assert_eq!(rt.get_array("a", "3"), "three");
+}
+
+#[test]
+fn split_clears_previous_array_contents() {
+    let rt = eval(
+        "{ split(\"a:b:c\", arr, \":\"); split(\"x:y\", arr, \":\"); result = arr[3] }",
+        &["x"],
+    );
+    // After second split, arr[3] should be empty (cleared)
+    assert_eq!(rt.get_var("result"), "");
+}
+
+// ── Built-in functions: sub / gsub ───────────────────────────────
+
+#[test]
+fn sub_replaces_first_occurrence_in_dollar_zero() {
+    let rt = eval("{ sub(\"world\", \"earth\"); result = $0 }", &["hello world world"]);
+    assert_eq!(rt.get_var("result"), "hello earth world");
+}
+
+#[test]
+fn gsub_replaces_all_occurrences_in_dollar_zero() {
+    let rt = eval("{ gsub(\"o\", \"0\"); result = $0 }", &["foo boo"]);
+    assert_eq!(rt.get_var("result"), "f00 b00");
+}
+
+#[test]
+fn sub_on_named_variable() {
+    let rt = eval("{ x = \"aabbcc\"; sub(\"bb\", \"BB\", x); result = x }", &["z"]);
+    assert_eq!(rt.get_var("result"), "aaBBcc");
+}
+
+#[test]
+fn gsub_returns_replacement_count() {
+    let rt = eval("{ n = gsub(\"a\", \"x\"); result = n }", &["banana"]);
+    assert_eq!(rt.get_var("result"), "3");
+}
+
+#[test]
+fn sub_no_match_returns_zero() {
+    let rt = eval("{ n = sub(\"xyz\", \"!\"); result = n }", &["hello"]);
+    assert_eq!(rt.get_var("result"), "0");
+}
+
+// ── Built-in functions: match ────────────────────────────────────
+
+#[test]
+fn match_finds_pattern_sets_rstart_rlength() {
+    let rt = eval("{ match($0, \"wor\"); rs = RSTART; rl = RLENGTH }", &["hello world"]);
+    assert_eq!(rt.get_var("rs"), "7");
+    assert_eq!(rt.get_var("rl"), "3");
+}
+
+#[test]
+fn match_no_match_returns_zero() {
+    let rt = eval("{ result = match($0, \"xyz\"); rl = RLENGTH }", &["hello"]);
+    assert_eq!(rt.get_var("result"), "0");
+    assert_eq!(rt.get_var("rl"), "-1");
+}
+
+#[test]
+fn match_at_start_of_string() {
+    let rt = eval("{ result = match($0, \"hel\") }", &["hello"]);
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+// ── Pattern ranges ───────────────────────────────────────────────
+
+#[test]
+fn range_pattern_includes_start_and_stop_lines() {
+    let rt = eval(
+        "/START/,/STOP/ { count++ }",
+        &["before", "START", "middle", "STOP", "after"],
+    );
+    assert_eq!(rt.get_var("count"), "3"); // START, middle, STOP
+}
+
+#[test]
+fn range_pattern_not_active_before_start() {
+    let rt = eval(
+        "/BEGIN_RANGE/,/END_RANGE/ { count++ }",
+        &["nothing", "here", "BEGIN_RANGE", "inside", "END_RANGE", "outside"],
+    );
+    assert_eq!(rt.get_var("count"), "3"); // BEGIN_RANGE, inside, END_RANGE
+}
+
+#[test]
+fn range_pattern_can_reactivate() {
+    let rt = eval(
+        "/ON/,/OFF/ { count++ }",
+        &["x", "ON", "a", "OFF", "x", "ON", "b", "OFF", "x"],
+    );
+    assert_eq!(rt.get_var("count"), "6"); // ON,a,OFF + ON,b,OFF
+}
+
+#[test]
+fn range_stays_active_if_stop_never_seen() {
+    let rt = eval(
+        "/START/,/STOP/ { count++ }",
+        &["START", "a", "b", "c"],
+    );
+    assert_eq!(rt.get_var("count"), "4"); // all lines from START onward
+}
+
+// ── Output redirection: parsing ──────────────────────────────────
+
+#[test]
+fn parse_print_with_overwrite_redirect() {
+    let mut lex = lexer::Lexer::new("{ print $0 > \"out.txt\" }");
+    let tokens = lex.tokenize().unwrap();
+    let mut par = parser::Parser::new(tokens);
+    let prog = par.parse().unwrap();
+    assert_eq!(prog.rules.len(), 1);
+    // Just verify it parses without error
+}
+
+#[test]
+fn parse_print_with_append_redirect() {
+    let mut lex = lexer::Lexer::new("{ print $0 >> \"out.txt\" }");
+    let tokens = lex.tokenize().unwrap();
+    let mut par = parser::Parser::new(tokens);
+    let prog = par.parse().unwrap();
+    assert_eq!(prog.rules.len(), 1);
+}
+
+#[test]
+fn parse_print_with_pipe_redirect() {
+    let mut lex = lexer::Lexer::new("{ print $0 | \"sort\" }");
+    let tokens = lex.tokenize().unwrap();
+    let mut par = parser::Parser::new(tokens);
+    let prog = par.parse().unwrap();
+    assert_eq!(prog.rules.len(), 1);
+}
+
+#[test]
+fn parse_printf_with_redirect() {
+    let mut lex = lexer::Lexer::new("{ printf \"%s\\n\", $1 > \"out.txt\" }");
+    let tokens = lex.tokenize().unwrap();
+    let mut par = parser::Parser::new(tokens);
+    let prog = par.parse().unwrap();
+    assert_eq!(prog.rules.len(), 1);
+}
+
+// ── Getline: parsing ─────────────────────────────────────────────
+
+#[test]
+fn parse_getline_simple() {
+    let mut lex = lexer::Lexer::new("{ getline }");
+    let tokens = lex.tokenize().unwrap();
+    let mut par = parser::Parser::new(tokens);
+    let prog = par.parse().unwrap();
+    assert_eq!(prog.rules.len(), 1);
+}
+
+#[test]
+fn parse_getline_into_var() {
+    let mut lex = lexer::Lexer::new("{ getline line }");
+    let tokens = lex.tokenize().unwrap();
+    let mut par = parser::Parser::new(tokens);
+    let prog = par.parse().unwrap();
+    assert_eq!(prog.rules.len(), 1);
+}
+
+#[test]
+fn parse_getline_from_file() {
+    let mut lex = lexer::Lexer::new("{ getline < \"data.txt\" }");
+    let tokens = lex.tokenize().unwrap();
+    let mut par = parser::Parser::new(tokens);
+    let prog = par.parse().unwrap();
+    assert_eq!(prog.rules.len(), 1);
+}
+
+#[test]
+fn parse_getline_var_from_file() {
+    let mut lex = lexer::Lexer::new("{ getline line < \"data.txt\" }");
+    let tokens = lex.tokenize().unwrap();
+    let mut par = parser::Parser::new(tokens);
+    let prog = par.parse().unwrap();
+    assert_eq!(prog.rules.len(), 1);
+}
+
+#[test]
+fn parse_cmd_pipe_getline() {
+    let mut lex = lexer::Lexer::new("{ \"date\" | getline d }");
+    let tokens = lex.tokenize().unwrap();
+    let mut par = parser::Parser::new(tokens);
+    let prog = par.parse().unwrap();
+    assert_eq!(prog.rules.len(), 1);
+}

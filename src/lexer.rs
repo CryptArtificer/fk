@@ -24,6 +24,7 @@ pub enum Token {
     Delete,
     Function,
     Return,
+    Getline,
 
     // Operators
     Plus,
@@ -50,6 +51,10 @@ pub enum Token {
     Not,         // !
     And,         // &&
     Or,          // ||
+    Question,    // ?
+    Colon,       // :
+    Append,      // >>
+    Pipe,        // | (single, for output redirection)
 
     // Delimiters
     LBrace,
@@ -196,7 +201,10 @@ impl Lexer {
                 }
                 '>' => {
                     self.pos += 1;
-                    if self.peek() == Some('=') {
+                    if self.peek() == Some('>') {
+                        self.pos += 1;
+                        Token::Append
+                    } else if self.peek() == Some('=') {
                         self.pos += 1;
                         Token::Ge
                     } else {
@@ -204,6 +212,8 @@ impl Lexer {
                     }
                 }
                 '~' => { self.pos += 1; Token::Match }
+                '?' => { self.pos += 1; Token::Question }
+                ':' => { self.pos += 1; Token::Colon }
                 '&' => {
                     self.pos += 1;
                     if self.peek() == Some('&') {
@@ -219,7 +229,7 @@ impl Lexer {
                         self.pos += 1;
                         Token::Or
                     } else {
-                        return Err(format!("unexpected character '|' at position {}", self.pos - 1));
+                        Token::Pipe
                     }
                 }
                 '"' => self.read_string()?,
@@ -376,6 +386,7 @@ impl Lexer {
             "delete" => Token::Delete,
             "function" => Token::Function,
             "return" => Token::Return,
+            "getline" => Token::Getline,
             _ => Token::Ident(s),
         }
     }

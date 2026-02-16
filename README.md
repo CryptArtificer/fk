@@ -53,14 +53,13 @@ src/
 - [x] Built-in functions: `length`, `substr`, `index`, `tolower`, `toupper`, `int`, `sqrt`, `sin`, `cos`, `log`, `exp`
 
 ### Phase 2 — Full awk compatibility
-- [ ] User-defined functions
-- [ ] Getline variants
-- [ ] Output redirection (`>`, `>>`, `|`)
-- [ ] Remaining POSIX builtins (`split`, `sub`, `gsub`, `match`, `sprintf` width `*`, …)
-- [ ] Pattern ranges (`/start/,/stop/`)
-- [ ] Uninitialized variable semantics (0 / "")
-- [ ] Coercion rules (string ↔ number)
-- [ ] Ternary operator (`?:`)
+- [x] User-defined functions (`function name(params) { ... }`, `return`)
+- [x] Getline variants (`getline`, `getline var`, `getline < file`, `"cmd" | getline`)
+- [x] Output redirection (`>`, `>>`, `|` with persistent pipes)
+- [x] Remaining POSIX builtins (`split`, `sub`, `gsub`, `match`)
+- [x] Pattern ranges (`/start/,/stop/`)
+- [x] Coercion rules (numeric string comparison, leading-prefix parsing, uninitialized → 0/"")
+- [x] Ternary operator (`?:`)
 
 ### Phase 3 — Modernisation & extensions
 - [ ] Better error messages with source locations
