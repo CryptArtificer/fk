@@ -55,6 +55,11 @@ impl<'a> Executor<'a> {
         self.set_header(&fields);
     }
 
+    /// Read a runtime variable (e.g. RS after BEGIN has run).
+    pub fn get_var(&self, name: &str) -> String {
+        self.rt.get_var(name)
+    }
+
     pub fn run_begin(&mut self) {
         if let Some(ref block) = self.program.begin {
             self.exec_block(block);

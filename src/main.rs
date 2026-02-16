@@ -56,18 +56,32 @@ fn main() {
         return;
     }
 
-    // Select record reader based on input mode
-    let reader: Box<dyn input::RecordReader> = match args.input_mode {
-        cli::InputMode::Csv  => Box::new(input::csv::CsvReader::comma()),
-        cli::InputMode::Tsv  => Box::new(input::csv::CsvReader::tab()),
-        cli::InputMode::Json => Box::new(input::json::JsonReader),
-        cli::InputMode::Line => Box::new(input::line::LineReader),
-    };
-
     // Execute
     let mut exec = action::Executor::new(&program, &mut rt);
 
     exec.run_begin();
+
+    // Select record reader based on input mode and RS (which may be set in BEGIN)
+    let reader: Box<dyn input::RecordReader> = {
+        let rs = exec.get_var("RS");
+        if args.input_mode == cli::InputMode::Line && rs.len() > 1 {
+            // Multi-char RS: treat as regex
+            match input::regex_rs::RegexReader::new(&rs) {
+                Ok(r) => Box::new(r),
+                Err(e) => {
+                    eprintln!("fk: {}", e);
+                    process::exit(2);
+                }
+            }
+        } else {
+            match args.input_mode {
+                cli::InputMode::Csv  => Box::new(input::csv::CsvReader::comma()),
+                cli::InputMode::Tsv  => Box::new(input::csv::CsvReader::tab()),
+                cli::InputMode::Json => Box::new(input::json::JsonReader),
+                cli::InputMode::Line => Box::new(input::line::LineReader),
+            }
+        }
+    };
 
     let mut inp = input::Input::with_reader(&args.files, reader);
     let mut first_record = true;

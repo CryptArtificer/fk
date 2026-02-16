@@ -1,6 +1,7 @@
 pub mod csv;
 pub mod json;
 pub mod line;
+pub mod regex_rs;
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};
