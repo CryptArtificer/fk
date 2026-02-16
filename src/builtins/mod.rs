@@ -1,6 +1,7 @@
 pub mod math;
 pub mod printf;
 pub mod string;
+pub mod time;
 
 pub use self::printf::format_printf;
 pub use self::string::string_replace;
@@ -63,6 +64,7 @@ pub fn call_builtin(name: &str, args: &[String]) -> String {
     match name {
         "length" | "substr" | "index" | "tolower" | "toupper" => string::call(name, args),
         "int" | "sin" | "cos" | "sqrt" | "log" | "exp" => math::call(name, args),
+        "systime" | "strftime" | "mktime" => time::call(name, args),
         _ => {
             eprintln!("fk: unknown function: {}", name);
             String::new()

@@ -670,3 +670,60 @@ fn fflush_returns_zero() {
     let rt = eval("{ result = fflush() }", &["x"]);
     assert_eq!(rt.get_var("result"), "0");
 }
+
+// ── Time functions ───────────────────────────────────────────────
+
+#[test]
+fn systime_returns_positive_integer() {
+    let rt = eval("{ result = systime() }", &["x"]);
+    let ts: f64 = rt.get_var("result").parse().unwrap();
+    assert!(ts > 1_000_000_000.0); // after 2001
+}
+
+#[test]
+fn strftime_formats_known_epoch() {
+    // Epoch 0 = 1970-01-01 00:00:00 UTC
+    let rt = eval(
+        r#"{ result = strftime("%Y-%m-%d %H:%M:%S", 0) }"#,
+        &["x"],
+    );
+    assert_eq!(rt.get_var("result"), "1970-01-01 00:00:00");
+}
+
+#[test]
+fn strftime_formats_known_date() {
+    // 1234567890 = 2009-02-13 23:31:30 UTC
+    let rt = eval(
+        r#"{ result = strftime("%Y-%m-%d", 1234567890) }"#,
+        &["x"],
+    );
+    assert_eq!(rt.get_var("result"), "2009-02-13");
+}
+
+#[test]
+fn strftime_weekday_and_month_names() {
+    // Epoch 0 = Thursday, January
+    let rt = eval(
+        r#"{ result = strftime("%A %B", 0) }"#,
+        &["x"],
+    );
+    assert_eq!(rt.get_var("result"), "Thursday January");
+}
+
+#[test]
+fn mktime_converts_to_epoch() {
+    let rt = eval(
+        r#"{ result = mktime("1970 1 1 0 0 0") }"#,
+        &["x"],
+    );
+    assert_eq!(rt.get_var("result"), "0");
+}
+
+#[test]
+fn mktime_roundtrips_with_strftime() {
+    let rt = eval(
+        r#"{ ts = mktime("2009 2 13 23 31 30"); result = strftime("%Y-%m-%d %H:%M:%S", ts) }"#,
+        &["x"],
+    );
+    assert_eq!(rt.get_var("result"), "2009-02-13 23:31:30");
+}

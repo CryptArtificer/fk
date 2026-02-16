@@ -23,21 +23,21 @@ src/
   action.rs        – executor core: pattern matching, statements, expressions
   runtime.rs       – runtime state (variables, fields, arrays)
   field.rs         – field splitting (FS / OFS semantics)
-  error.rs         – source-location-aware diagnostics        (Phase 3)
+  error.rs         – source-location-aware diagnostics (Span type)
   unicode.rs       – char-aware field/string operations       (Phase 3)
   repl.rs          – interactive mode                         (Phase 3)
   input/
-    mod.rs         – InputFormat trait, record reader
+    mod.rs         – RecordReader trait, source orchestration
     line.rs        – default line-oriented input (current behaviour)
     csv.rs         – RFC 4180 CSV/TSV parser                  (Phase 3)
     json.rs        – line-delimited JSON (NDJSON) parser      (Phase 3)
     header.rs      – first-line header → named-field mapping  (Phase 3)
   builtins/
-    mod.rs         – dispatch table
+    mod.rs         – dispatch table, coercion helpers
     string.rs      – length, substr, index, sub, gsub, …
     math.rs        – sin, cos, sqrt, int, **, …
-    time.rs        – systime, strftime, mktime                (Phase 3)
-    io.rs          – fflush, system, /dev/stderr              (Phase 3)
+    time.rs        – systime, strftime, mktime
+    printf.rs      – format_printf and spec helpers
 ```
 
 ## Progress
@@ -78,10 +78,10 @@ src/
 ### Phase 3 — Modernisation & extensions
 
 #### 3a — Refactor into modules (no new features, just structure)
-- [ ] Extract builtins from `action.rs` into `builtins/` (string, math, io)
-- [ ] Extract input logic into `input/` with `InputFormat` trait
-- [ ] Add `Span` (line/col) to tokens; thread through parser for error locations
-- [ ] Add `error.rs` with formatted diagnostics
+- [x] Extract builtins from `action.rs` into `builtins/` (string, math, printf)
+- [x] Extract input logic into `input/` with `RecordReader` trait
+- [x] Add `Span` (line/col) to tokens; thread through parser for error locations
+- [x] Add `error.rs` with formatted diagnostics
 
 #### 3b — Structured input formats
 - [ ] CSV input mode (`-i csv`, RFC 4180 compliant: quoted fields, embedded commas/newlines)
@@ -91,20 +91,29 @@ src/
 - [ ] RS as regex (multi-char / pattern record separator)
 
 #### 3c — Language additions
-- [ ] `**` exponentiation operator
-- [ ] Hex numeric literals (`0x1F`) and `\x` / `\u` escape sequences
+- [x] `**` exponentiation operator
+- [x] Hex numeric literals (`0x1F`) and `\x` / `\u` escape sequences
 - [ ] `nextfile` statement
-- [ ] `delete array` (delete entire array, not just one key)
-- [ ] `length(array)` (return number of elements)
-- [ ] Negative field indexes (`$-1` = last field, `$-2` = second-to-last)
-- [ ] `/dev/stderr` special file for error output
-- [ ] `fflush()` and `system()` builtins
-- [ ] Time functions: `systime()`, `strftime()`, `mktime()`
+- [x] `delete array` (delete entire array, not just one key)
+- [x] `length(array)` (return number of elements)
+- [x] Negative field indexes (`$-1` = last field, `$-2` = second-to-last)
+- [x] `/dev/stderr` and `/dev/stdout` special files for output redirection
+- [x] `fflush()` and `system()` builtins
+- [x] Time functions: `systime()`, `strftime()`, `mktime()`
 
 #### 3d — Quality of life
-- [ ] Better error messages with source locations and context
+- [x] Error messages with source locations (`line:col`)
 - [ ] Unicode-aware `length()`, `substr()`, field splitting
 - [ ] REPL / interactive mode
+
+#### 4 - Add dedicated benchmarks
+- [ ] ...
+
+#### 5 - Add a tutorial/showcase script
+- [ ] ...
+
+#### 6 - Additional improvements optimizations
+- [ ] ...
 
 ## Usage (goal)
 
