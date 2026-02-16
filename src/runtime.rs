@@ -1,11 +1,113 @@
 use std::collections::HashMap;
 
+use crate::builtins;
 use crate::field;
+
+// --- Value type: dual string/number representation with lazy conversion ---
+
+const STR_VALID: u8 = 1;
+const NUM_VALID: u8 = 2;
+
+#[derive(Clone, Debug)]
+pub struct Value {
+    s: String,
+    n: f64,
+    flags: u8,
+}
+
+impl Default for Value {
+    fn default() -> Self {
+        Value { s: String::new(), n: 0.0, flags: STR_VALID | NUM_VALID }
+    }
+}
+
+impl Value {
+    pub fn from_string(s: String) -> Self {
+        Value { s, n: 0.0, flags: STR_VALID }
+    }
+
+    pub fn from_str_ref(s: &str) -> Self {
+        Value { s: s.to_string(), n: 0.0, flags: STR_VALID }
+    }
+
+    pub fn from_number(n: f64) -> Self {
+        Value { s: String::new(), n, flags: NUM_VALID }
+    }
+
+    /// Get numeric value (fast path if number is already cached).
+    pub fn to_number(&self) -> f64 {
+        if self.flags & NUM_VALID != 0 {
+            self.n
+        } else {
+            builtins::to_number(&self.s)
+        }
+    }
+
+    /// Consume the value and return its string representation.
+    pub fn into_string(self) -> String {
+        if self.flags & STR_VALID != 0 {
+            self.s
+        } else {
+            builtins::format_number(self.n)
+        }
+    }
+
+    /// Clone the string representation (allocates if number-only).
+    pub fn to_string_val(&self) -> String {
+        if self.flags & STR_VALID != 0 {
+            self.s.clone()
+        } else {
+            builtins::format_number(self.n)
+        }
+    }
+
+    /// Write string representation directly to a writer.
+    pub fn write_to(&self, w: &mut impl std::io::Write) {
+        if self.flags & STR_VALID != 0 {
+            let _ = w.write_all(self.s.as_bytes());
+        } else {
+            let s = builtins::format_number(self.n);
+            let _ = w.write_all(s.as_bytes());
+        }
+    }
+
+    /// Append string representation to an existing String.
+    pub fn write_to_string(&self, buf: &mut String) {
+        if self.flags & STR_VALID != 0 {
+            buf.push_str(&self.s);
+        } else {
+            buf.push_str(&builtins::format_number(self.n));
+        }
+    }
+
+    pub fn is_truthy(&self) -> bool {
+        if self.flags & NUM_VALID != 0 {
+            self.n != 0.0
+        } else {
+            !self.s.is_empty() && self.s != "0"
+        }
+    }
+
+    pub fn is_numeric(&self) -> bool {
+        self.flags & NUM_VALID != 0
+    }
+
+    /// Check if this value looks numeric (for comparison semantics).
+    pub fn looks_numeric(&self) -> bool {
+        if self.flags & NUM_VALID != 0 { return true; }
+        if self.flags & STR_VALID != 0 {
+            let s = self.s.trim();
+            !s.is_empty() && s.parse::<f64>().is_ok()
+        } else {
+            false
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Runtime {
-    pub variables: HashMap<String, String>,
-    pub arrays: HashMap<String, HashMap<String, String>>,
+    pub variables: HashMap<String, Value>,
+    pub arrays: HashMap<String, HashMap<String, Value>>,
     pub fields: Vec<String>,
     nr: u64,
     nf: usize,
@@ -49,36 +151,48 @@ impl Runtime {
         }
     }
 
-    pub fn get_var(&self, name: &str) -> String {
+    /// Get a variable as a Value (fast path — no string formatting for numbers).
+    pub fn get_value(&self, name: &str) -> Value {
         match name {
-            "NR" => self.nr.to_string(),
-            "NF" => self.nf.to_string(),
-            "FNR" => self.fnr.to_string(),
-            "FS" => self.fs.clone(),
-            "OFS" => self.ofs.clone(),
-            "RS" => self.rs.clone(),
-            "ORS" => self.ors.clone(),
-            "SUBSEP" => self.subsep.clone(),
-            "OFMT" => self.ofmt.clone(),
-            "FILENAME" => self.filename.clone(),
+            "NR" => Value::from_number(self.nr as f64),
+            "NF" => Value::from_number(self.nf as f64),
+            "FNR" => Value::from_number(self.fnr as f64),
+            "FS" => Value::from_str_ref(&self.fs),
+            "OFS" => Value::from_str_ref(&self.ofs),
+            "RS" => Value::from_str_ref(&self.rs),
+            "ORS" => Value::from_str_ref(&self.ors),
+            "SUBSEP" => Value::from_str_ref(&self.subsep),
+            "OFMT" => Value::from_str_ref(&self.ofmt),
+            "FILENAME" => Value::from_str_ref(&self.filename),
             _ => self.variables.get(name).cloned().unwrap_or_default(),
         }
     }
 
-    pub fn set_var(&mut self, name: &str, value: &str) {
+    /// Set a variable from a Value (fast path — no string parsing for numbers).
+    pub fn set_value(&mut self, name: &str, val: Value) {
         match name {
-            "NR" => self.nr = value.parse().unwrap_or(0),
-            "NF" => self.nf = value.parse().unwrap_or(0),
-            "FNR" => self.fnr = value.parse().unwrap_or(0),
-            "FS" => self.fs = value.to_string(),
-            "OFS" => self.ofs = value.to_string(),
-            "RS" => self.rs = value.to_string(),
-            "ORS" => self.ors = value.to_string(),
-            "SUBSEP" => self.subsep = value.to_string(),
-            "OFMT" => self.ofmt = value.to_string(),
-            "FILENAME" => self.filename = value.to_string(),
-            _ => { self.variables.insert(name.to_string(), value.to_string()); }
+            "NR" => self.nr = val.to_number() as u64,
+            "NF" => self.nf = val.to_number() as usize,
+            "FNR" => self.fnr = val.to_number() as u64,
+            "FS" => self.fs = val.into_string(),
+            "OFS" => self.ofs = val.into_string(),
+            "RS" => self.rs = val.into_string(),
+            "ORS" => self.ors = val.into_string(),
+            "SUBSEP" => self.subsep = val.into_string(),
+            "OFMT" => self.ofmt = val.into_string(),
+            "FILENAME" => self.filename = val.into_string(),
+            _ => { self.variables.insert(name.to_string(), val); }
         }
+    }
+
+    /// Convenience: get variable as String (for backward-compatible callers).
+    pub fn get_var(&self, name: &str) -> String {
+        self.get_value(name).into_string()
+    }
+
+    /// Convenience: set variable from &str (for backward-compatible callers).
+    pub fn set_var(&mut self, name: &str, value: &str) {
+        self.set_value(name, Value::from_str_ref(value));
     }
 
     /// Check whether a variable exists (interned vars always exist).
@@ -173,7 +287,7 @@ impl Runtime {
 
     // --- array operations ---
 
-    pub fn get_array(&self, name: &str, key: &str) -> String {
+    pub fn get_array_value(&self, name: &str, key: &str) -> Value {
         self.arrays
             .get(name)
             .and_then(|a| a.get(key))
@@ -181,11 +295,19 @@ impl Runtime {
             .unwrap_or_default()
     }
 
-    pub fn set_array(&mut self, name: &str, key: &str, value: &str) {
+    pub fn get_array(&self, name: &str, key: &str) -> String {
+        self.get_array_value(name, key).into_string()
+    }
+
+    pub fn set_array_value(&mut self, name: &str, key: &str, val: Value) {
         self.arrays
             .entry(name.to_string())
             .or_default()
-            .insert(key.to_string(), value.to_string());
+            .insert(key.to_string(), val);
+    }
+
+    pub fn set_array(&mut self, name: &str, key: &str, value: &str) {
+        self.set_array_value(name, key, Value::from_str_ref(value));
     }
 
     pub fn delete_array(&mut self, name: &str, key: &str) {

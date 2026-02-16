@@ -36,6 +36,25 @@ function clamp(x, lo, hi) {
 BEGIN { print max(abs(-5), clamp(10, 0, 7)) }
 "#;
 
+const PHASE7_CONTROL: &str = r#"
+BEGIN { FS = "," }
+{
+    i = 1
+    do {
+        if ($i ~ /^[0-9]+$/ && $i + 0 > 500) {
+            a[$i]++
+            if ($i + 0 > 9000) break
+        }
+        i++
+    } while (i <= NF)
+}
+/^quit/ { exit 0 }
+END {
+    for (k in a) { n++; total += k }
+    printf "keys=%d total=%d\n", n, total
+}
+"#;
+
 fn bench_lex(c: &mut Criterion) {
     let mut group = c.benchmark_group("lexer");
     for (name, src) in [
@@ -43,6 +62,7 @@ fn bench_lex(c: &mut Criterion) {
         ("field_math", FIELD_MATH),
         ("realistic", REALISTIC),
         ("functions", FUNCTIONS),
+        ("phase7_control", PHASE7_CONTROL),
     ] {
         group.bench_function(name, |b| {
             b.iter(|| {
@@ -61,6 +81,7 @@ fn bench_parse(c: &mut Criterion) {
         ("field_math", FIELD_MATH),
         ("realistic", REALISTIC),
         ("functions", FUNCTIONS),
+        ("phase7_control", PHASE7_CONTROL),
     ] {
         let mut lex = Lexer::new(src);
         let tokens = lex.tokenize().unwrap();
@@ -81,6 +102,7 @@ fn bench_lex_and_parse(c: &mut Criterion) {
         ("field_math", FIELD_MATH),
         ("realistic", REALISTIC),
         ("functions", FUNCTIONS),
+        ("phase7_control", PHASE7_CONTROL),
     ] {
         group.bench_function(name, |b| {
             b.iter(|| {

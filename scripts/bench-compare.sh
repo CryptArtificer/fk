@@ -34,6 +34,8 @@ tasks=(
     "/active/ count|-F, /active/ { c++ } END { print c }"
     "field arithmetic|-F, { x = \$1 + \$3 }"
     "associative array|-F, { a[\$2]++ } END { for (k in a) n++; print n }"
+    "computed regex|-F, BEGIN{p=\"user_4[0-9]{2}\"} \$2~p{c++} END{print c}"
+    "tight loop (3x)|-F, { for(i=1;i<=3;i++) s+=\$3 } END { print s }"
 )
 
 for task_spec in "${tasks[@]}"; do
