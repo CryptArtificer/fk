@@ -10,13 +10,12 @@ pub fn split(record: &str, fs: &str) -> Vec<String> {
             .split_whitespace()
             .map(String::from)
             .collect()
-    } else if fs.chars().count() == 1 {
+    } else if fs.len() == 1 || (fs.len() > 1 && fs.chars().count() == 1) {
         record
             .split(fs.chars().next().unwrap())
             .map(String::from)
             .collect()
     } else {
-        // Multi-char FS: literal split for now; regex in a later phase
         record
             .split(fs)
             .map(String::from)

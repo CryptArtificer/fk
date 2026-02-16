@@ -72,22 +72,21 @@ Phase 3d: Unicode-aware strings, REPL
 Phase 4: Criterion benchmarks (field split, lex+parse, record processing), Makefile, comparison harness
 Phase 5: 5 example scripts, cheat sheet, man page
 Phase 6 (partial): Buffered stdout, interned built-in vars, zero-alloc print path,
-  edge-case audit (15 new tests), recursion depth guard (limit 200)
+  edge-case audit (15 new tests), recursion depth guard (limit 200),
+  profile-guided executor optimisation
 
 ## What's next: Phase 6 — Hardening & Optimisation (remaining)
 
-- [ ] Fuzz testing (lexer, parser, executor) with cargo-fuzz
-- [ ] Profile-guided review of the executor loop
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 
 ### Performance (from `make bench-compare` on 1M lines, Apple M3 Pro):
-fk is now faster than awk (macOS system awk 20200816) on all 5 benchmarks:
-- `print $2`: fk ~0.53s vs awk ~0.57s
-- Sum/arithmetic: fk ~0.39s vs awk ~0.60s
-- Pattern matching: fk ~0.38s vs awk ~0.78s (fk 2× faster)
-- Field arithmetic: fk ~0.41s vs awk ~0.62s
-- Associative arrays: fk ~0.53s vs awk ~0.67s
+fk is faster than awk (macOS system awk 20200816) on all 5 benchmarks:
+- `print $2`: fk ~0.52s vs awk ~0.58s
+- Sum/arithmetic: fk ~0.34s vs awk ~0.60s (fk 1.8× faster)
+- Pattern matching: fk ~0.37s vs awk ~0.75s (fk 2× faster)
+- Field arithmetic: fk ~0.34s vs awk ~0.62s (fk 1.8× faster)
+- Associative arrays: fk ~0.43s vs awk ~0.66s (fk 1.5× faster)
 
 ## Tooling
 

@@ -51,7 +51,7 @@ pub fn format_number(n: f64) -> String {
         return if n > 0.0 { "inf".to_string() } else { "-inf".to_string() };
     }
     if n == (n as i64) as f64 {
-        format!("{}", n as i64)
+        (n as i64).to_string()
     } else {
         let s = format!("{:.6}", n);
         let s = s.trim_end_matches('0');

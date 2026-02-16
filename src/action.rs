@@ -289,8 +289,12 @@ impl<'a> Executor<'a> {
             Expr::StringLit(s) => s.clone(),
             Expr::Var(name) => self.rt.get_var(name),
             Expr::Field(idx_expr) => {
-                let idx_str = self.eval_expr(idx_expr);
-                let n = idx_str.parse::<f64>().unwrap_or(0.0);
+                let n = if let Expr::NumberLit(n) = idx_expr.as_ref() {
+                    *n
+                } else {
+                    let idx_str = self.eval_expr(idx_expr);
+                    idx_str.parse::<f64>().unwrap_or(0.0)
+                };
                 self.rt.get_field(self.resolve_field_idx(n))
             }
             Expr::ArrayRef(name, key_expr) => {
@@ -335,9 +339,10 @@ impl<'a> Executor<'a> {
                 bool_str(!val.contains(pat.as_str()))
             }
             Expr::Concat(left, right) => {
-                let l = self.eval_expr(left);
+                let mut l = self.eval_expr(left);
                 let r = self.eval_expr(right);
-                format!("{}{}", l, r)
+                l.push_str(&r);
+                l
             }
             Expr::Assign(target, value) => {
                 let val = self.eval_expr(value);
@@ -441,8 +446,12 @@ impl<'a> Executor<'a> {
                 self.rt.get_array(name, &key)
             }
             Expr::Field(idx_expr) => {
-                let idx_str = self.eval_expr(idx_expr);
-                let n = idx_str.parse::<f64>().unwrap_or(0.0);
+                let n = if let Expr::NumberLit(n) = idx_expr.as_ref() {
+                    *n
+                } else {
+                    let idx_str = self.eval_expr(idx_expr);
+                    idx_str.parse::<f64>().unwrap_or(0.0)
+                };
                 self.rt.get_field(self.resolve_field_idx(n))
             }
             _ => String::new(),
@@ -457,8 +466,12 @@ impl<'a> Executor<'a> {
                 self.rt.set_array(name, &key, value);
             }
             Expr::Field(idx_expr) => {
-                let idx_str = self.eval_expr(idx_expr);
-                let n = idx_str.parse::<f64>().unwrap_or(0.0);
+                let n = if let Expr::NumberLit(n) = idx_expr.as_ref() {
+                    *n
+                } else {
+                    let idx_str = self.eval_expr(idx_expr);
+                    idx_str.parse::<f64>().unwrap_or(0.0)
+                };
                 self.rt.set_field(self.resolve_field_idx(n), value);
             }
             _ => {}

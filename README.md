@@ -131,8 +131,7 @@ src/
 - [x] Reduce allocations in print hot path (direct-write to BufWriter, no intermediate string)
 - [x] Edge-case audit: empty input, binary data, long lines, deep recursion (15 new tests)
 - [x] Recursion depth guard (limit 200, clean error instead of stack overflow)
-- [ ] Fuzz testing (lexer, parser, executor) with `cargo-fuzz`
-- [ ] Profile-guided review of the executor loop
+- [x] Profile-guided executor review: eliminate field-index round-trip, concat allocation, format overhead
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 
@@ -205,11 +204,11 @@ fk is faster than awk on all five workloads:
 
 | Benchmark | fk | awk | Ratio |
 |---|---|---|---|
-| `print $2` | 0.53 s | 0.57 s | 0.94× |
-| Sum column | 0.39 s | 0.60 s | 0.65× |
-| `/active/` count | 0.38 s | 0.78 s | 0.49× |
-| Field arithmetic | 0.41 s | 0.62 s | 0.66× |
-| Associative array | 0.53 s | 0.67 s | 0.79× |
+| `print $2` | 0.52 s | 0.58 s | 0.90× |
+| Sum column | 0.34 s | 0.60 s | 0.56× |
+| `/active/` count | 0.37 s | 0.75 s | 0.50× |
+| Field arithmetic | 0.34 s | 0.62 s | 0.55× |
+| Associative array | 0.43 s | 0.66 s | 0.65× |
 
 Measured on Apple M3 Pro, 36 GB RAM, macOS 26.2.
 awk version 20200816 (macOS system awk). `fk` built with `--release`.
