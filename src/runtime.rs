@@ -57,10 +57,12 @@ impl Runtime {
         self.set_var("NR", &nr.to_string());
     }
 
+    #[allow(dead_code)]
     pub fn nr(&self) -> u64 {
         self.get_var("NR").parse().unwrap_or(0)
     }
 
+    #[allow(dead_code)]
     pub fn nf(&self) -> usize {
         self.get_var("NF").parse().unwrap_or(0)
     }

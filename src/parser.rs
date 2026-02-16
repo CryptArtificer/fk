@@ -54,6 +54,7 @@ pub enum BinOp {
     Le,
     Gt,
     Ge,
+    #[allow(dead_code)]
     Concat,
 }
 
