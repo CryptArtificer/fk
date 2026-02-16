@@ -2,6 +2,8 @@ pub mod csv;
 pub mod json;
 pub mod line;
 pub mod regex_rs;
+#[cfg(feature = "parquet")]
+pub mod parquet_reader;
 
 use std::fs::File;
 use std::io::{self, BufRead, BufReader};

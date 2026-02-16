@@ -16,28 +16,29 @@ A modernized, modular awk clone built in Rust.
 
 ```
 src/
-  main.rs          – entry point, orchestration
-  cli.rs           – command-line argument parsing
-  lexer.rs         – tokeniser
-  parser.rs        – recursive-descent parser (tokens → AST)
-  action.rs        – executor core: pattern matching, statements, expressions
-  runtime.rs       – runtime state (variables, fields, arrays)
-  field.rs         – field splitting (FS / OFS semantics)
-  error.rs         – source-location-aware diagnostics (Span type)
-  repl.rs          – interactive REPL mode
+  main.rs              – entry point, orchestration
+  cli.rs               – command-line argument parsing
+  lexer.rs             – tokeniser
+  parser.rs            – recursive-descent parser (tokens → AST)
+  action.rs            – executor core: pattern matching, statements, expressions
+  runtime.rs           – runtime state (variables, fields, arrays, Value type)
+  field.rs             – field splitting (FS / OFS semantics)
+  error.rs             – source-location-aware diagnostics (Span type)
+  repl.rs              – interactive REPL mode
   input/
-    mod.rs         – Record struct, RecordReader trait, source orchestration
-    line.rs        – default line-oriented reader
-    csv.rs         – RFC 4180 CSV/TSV reader (quoted fields, multi-line)
-    json.rs        – JSON Lines (NDJSON) reader
-    regex_rs.rs    – regex-based record separator reader
+    mod.rs             – Record struct, RecordReader trait, source orchestration
+    line.rs            – default line-oriented reader
+    csv.rs             – RFC 4180 CSV/TSV reader (quoted fields, multi-line)
+    json.rs            – JSON Lines (NDJSON) reader
+    regex_rs.rs        – regex-based record separator reader
+    parquet_reader.rs  – Apache Parquet reader (optional feature)
   builtins/
-    mod.rs         – dispatch table, coercion helpers
-    string.rs      – length, substr, index, sub, gsub, …
-    math.rs        – sin, cos, sqrt, int, **, …
-    time.rs        – systime, strftime, mktime
-    printf.rs      – format_printf and spec helpers
-    json.rs        – jpath() JSON path access (jq-light)
+    mod.rs             – dispatch table, coercion helpers
+    string.rs          – length, substr, index, trim, reverse, chr, ord, …
+    math.rs            – sin, cos, sqrt, abs, ceil, floor, rand, min, max, …
+    time.rs            – systime, strftime, mktime, parsedate
+    printf.rs          – format_printf and spec helpers
+    json.rs            – jpath() JSON path access (jq-light)
 ```
 
 ## Progress
@@ -152,6 +153,19 @@ src/
 - [x] `next` statement (skip to next record)
 - [x] Proper regex semantics for `/pattern/` and `~`/`!~` (use `regex::Regex`)
 
+#### Phase 8 — Signature features & function library
+- [x] Header names as field accessors (`$name` in `-H` / parquet mode)
+- [x] Apache Parquet input (`-i parquet`, optional `--features parquet`)
+- [x] `match()` with capture groups (3rd argument: array)
+- [x] `asort(arr)` / `asorti(arr)` — sort arrays by value / key
+- [x] `join(arr, sep)` — join array values into string
+- [x] `typeof(x)` — return `"number"`, `"string"`, `"array"`, or `"uninitialized"`
+- [x] Bitwise: `and()`, `or()`, `xor()`, `lshift()`, `rshift()`, `compl()`
+- [x] Math: `rand()`, `srand()`, `atan2()`, `abs()`, `ceil()`, `floor()`, `round()`, `min()`, `max()`, `log2()`, `log10()`
+- [x] String: `trim()`, `ltrim()`, `rtrim()`, `startswith()`, `endswith()`, `repeat()`, `reverse()`, `chr()`, `ord()`, `hex()`
+- [x] Date: `parsedate(str, fmt)` — parse dates back to epoch
+- [x] Richer `strftime()` specifiers (`%j %u %w %e %C %y %p %I`)
+
 ## Usage
 
 ```sh
@@ -243,20 +257,54 @@ echo "" | fk 'BEGIN { a[1,2]="x"; a[3,4]="y"; for (k in a) print k, a[k] }'
 # 42
 # fk> :vars
 # fk> :q
+
+# ── Phase 8: Signature features ──
+
+# Parquet files — query by column name
+fk -i parquet '$age > 30 { print $name, $city }' data.parquet
+
+# CSV with named columns (header mode)
+echo -e 'name,age,city\nAlice,30,NYC\nBob,25,LA' | fk -F, -H '$age > 28 { print $name }'
+
+# match() with capture groups
+echo "2025-01-15" | fk '{ match($0, "([0-9]+)-([0-9]+)-([0-9]+)", cap); print cap[1], cap[2], cap[3] }'
+
+# Sort array values and join
+echo -e 'c\na\nb' | fk '{ a[NR]=$0 } END { asort(a); print join(a, ",") }'
+
+# typeof() introspection
+echo "" | fk 'BEGIN { x=42; y="hi"; z[1]=1; print typeof(x), typeof(y), typeof(z), typeof(w) }'
+
+# Bitwise operations
+echo "" | fk 'BEGIN { print and(0xFF, 0x0F), lshift(1, 8) }'
+
+# Math: rand, abs, ceil, floor, round, min, max
+echo "" | fk 'BEGIN { srand(42); print rand(), abs(-5), ceil(2.3), floor(2.7), min(3,7), max(3,7) }'
+
+# String: trim, reverse, chr, ord, hex
+echo "  hello  " | fk '{ print trim($0), reverse("abc"), chr(65), ord("A"), hex(255) }'
+
+# parsedate — parse date string to epoch
+echo "" | fk 'BEGIN { print parsedate("2025-01-15 10:30:00", "%Y-%m-%d %H:%M:%S") }'
 ```
 
 ## Performance
 
 `make bench-compare` runs fk and awk head-to-head on a 1M-line CSV.
-fk is faster than awk on all five workloads:
+fk is faster than awk on most workloads (1.5–2× on compute-heavy tasks):
 
 | Benchmark | fk | awk | Ratio |
 |---|---|---|---|
-| `print $2` | 0.52 s | 0.58 s | 0.90× |
-| Sum column | 0.34 s | 0.60 s | 0.56× |
-| `/active/` count | 0.37 s | 0.75 s | 0.50× |
-| Field arithmetic | 0.34 s | 0.62 s | 0.55× |
-| Associative array | 0.43 s | 0.66 s | 0.65× |
+| `print $2` | 0.80 s | 0.59 s | 1.36× |
+| Sum column | 0.32 s | 0.60 s | 0.53× |
+| `/active/` count | 0.37 s | 0.78 s | 0.47× |
+| Field arithmetic | 0.33 s | 0.64 s | 0.52× |
+| Associative array | 0.38 s | 0.68 s | 0.56× |
+| Computed regex | 0.43 s | 0.65 s | 0.66× |
+| Tight loop (3×) | 0.79 s | 0.75 s | 1.05× |
+
+Parquet support reads 1M rows, auto-extracts column names, and runs
+pattern-action programs with named field access — no other awk can do this.
 
 Measured on Apple M3 Pro, 36 GB RAM, macOS 26.2.
 awk version 20200816 (macOS system awk). `fk` built with `--release`.
@@ -264,7 +312,12 @@ awk version 20200816 (macOS system awk). `fk` built with `--release`.
 ## Building
 
 ```sh
+# Default build (lightweight, no optional deps)
 cargo build --release
+
+# With Parquet support (adds arrow + parquet crates)
+cargo build --release --features parquet
+
 # binary: target/release/fk
 ```
 

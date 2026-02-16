@@ -57,3 +57,68 @@ for task_spec in "${tasks[@]}"; do
     done
     echo ""
 done
+
+# ── Parquet benchmark (fk only) ──────────────────────────────────
+
+PARQUET_DATA="${DATA%.csv}.parquet"
+FK_PARQUET="${FK}-parquet"
+
+# Build parquet-enabled binary if not already present
+if [ ! -f "$FK_PARQUET" ] || [ "$FK_PARQUET" -ot "src/main.rs" ]; then
+    echo "Building fk with parquet support..."
+    cargo build --release --features parquet 2>/dev/null
+    cp "$FK" "$FK_PARQUET" 2>/dev/null || true
+fi
+
+# Generate parquet test file if pyarrow is available
+if command -v python3 >/dev/null 2>&1 && python3 -c "import pyarrow" 2>/dev/null; then
+    if [ ! -f "$PARQUET_DATA" ] || [ "$PARQUET_DATA" -ot "$DATA" ]; then
+        echo "Generating Parquet file from CSV..."
+        python3 -c "
+import pyarrow as pa
+import pyarrow.csv as pc
+import pyarrow.parquet as pq
+table = pc.read_csv('$DATA', read_options=pc.ReadOptions(column_names=['id','user','value','status']))
+pq.write_table(table, '$PARQUET_DATA')
+print(f'  → {table.num_rows} rows written to $PARQUET_DATA')
+"
+    fi
+
+    echo ""
+    echo "═══ fk parquet vs fk csv ($LINES lines) ═══"
+    echo ""
+
+    parquet_tasks=(
+        "sum column (csv)|-F, { s += \$3 } END { print s }|csv"
+        "sum column (parquet)|-i parquet { s += \$value } END { print s }|parquet"
+        "filter+count (csv)|-F, /active/ { c++ } END { print c }|csv"
+        "filter+count (parquet)|-i parquet /active/ { c++ } END { print c }|parquet"
+        "group-by (csv)|-F, { a[\$2]++ } END { for(k in a) n++; print n }|csv"
+        "group-by (parquet)|-i parquet { a[\$user]++ } END { for(k in a) n++; print n }|parquet"
+    )
+
+    for task_spec in "${parquet_tasks[@]}"; do
+        IFS='|' read -r task_label task_prog task_type <<< "$task_spec"
+
+        if [[ "$task_type" == "parquet" ]]; then
+            file="$PARQUET_DATA"
+            # Parse the -i parquet prefix
+            prog="${task_prog#-i parquet }"
+            run "fk" "$task_label" "$FK_PARQUET" -i parquet "$prog" "$file"
+        else
+            file="$DATA"
+            if [[ "$task_prog" == -F* ]]; then
+                flag="${task_prog%% *}"
+                prog="${task_prog#* }"
+                run "fk" "$task_label" "$FK" "$flag" "$prog" "$file"
+            else
+                run "fk" "$task_label" "$FK" "$task_prog" "$file"
+            fi
+        fi
+    done
+    echo ""
+else
+    echo ""
+    echo "(Skipping parquet benchmark — pyarrow not installed)"
+    echo ""
+fi

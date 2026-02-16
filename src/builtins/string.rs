@@ -41,6 +41,49 @@ pub fn call(name: &str, args: &[String]) -> String {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             s.to_uppercase()
         }
+        "trim" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            s.trim().to_string()
+        }
+        "ltrim" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            s.trim_start().to_string()
+        }
+        "rtrim" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            s.trim_end().to_string()
+        }
+        "startswith" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            let prefix = args.get(1).map(|s| s.as_str()).unwrap_or("");
+            format_number(if s.starts_with(prefix) { 1.0 } else { 0.0 })
+        }
+        "endswith" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            let suffix = args.get(1).map(|s| s.as_str()).unwrap_or("");
+            format_number(if s.ends_with(suffix) { 1.0 } else { 0.0 })
+        }
+        "repeat" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            let n = args.get(1).map(|s| to_number(s) as usize).unwrap_or(0);
+            s.repeat(n)
+        }
+        "reverse" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            s.chars().rev().collect()
+        }
+        "chr" => {
+            let n = args.first().map(|s| to_number(s) as u32).unwrap_or(0);
+            char::from_u32(n).map(|c| c.to_string()).unwrap_or_default()
+        }
+        "ord" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            format_number(s.chars().next().map(|c| c as u32 as f64).unwrap_or(0.0))
+        }
+        "hex" => {
+            let n = args.first().map(|s| to_number(s) as i64).unwrap_or(0);
+            format!("{:#x}", n)
+        }
         _ => String::new(),
     }
 }

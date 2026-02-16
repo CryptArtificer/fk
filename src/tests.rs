@@ -20,6 +20,31 @@ fn eval(program_text: &str, input_lines: &[&str]) -> runtime::Runtime {
     rt
 }
 
+/// Helper: parse and run with header mode (-H). First line is header.
+fn eval_with_header(program_text: &str, fs: &str, input_lines: &[&str]) -> runtime::Runtime {
+    let mut lex = lexer::Lexer::new(program_text);
+    let tokens = lex.tokenize().expect("lexer error");
+    let mut par = parser::Parser::new(tokens);
+    let program = par.parse().expect("parse error");
+
+    let mut rt = runtime::Runtime::new();
+    rt.set_var("FS", fs);
+    let mut exec = action::Executor::new(&program, &mut rt);
+
+    exec.run_begin();
+    let mut lines = input_lines.iter();
+    if let Some(header) = lines.next() {
+        exec.set_header_from_text(header);
+    }
+    for line in lines {
+        let rec = input::Record { text: line.to_string(), fields: None };
+        exec.run_record(&rec);
+    }
+    exec.run_end();
+
+    rt
+}
+
 // ── User-defined functions: parsing ──────────────────────────────
 
 #[test]
@@ -1378,4 +1403,231 @@ fn regex_caret_anchors() {
         &["hello", "hello world", "say hello"],
     );
     assert_eq!(rt.get_var("x"), "1");
+}
+
+// ── Header name field access ────────────────────────────────────
+
+#[test]
+fn header_names_as_field_accessors() {
+    let rt = eval_with_header(
+        r#"{ result = $name " is " $age }"#,
+        ",",
+        &["name,age,city", "Alice,30,NYC", "Bob,25,LA"],
+    );
+    assert_eq!(rt.get_var("result"), "Bob is 25");
+}
+
+#[test]
+fn header_names_with_filter() {
+    let rt = eval_with_header(
+        r#"$age > 28 { count++ }"#,
+        ",",
+        &["name,age,city", "Alice,30,NYC", "Bob,25,LA", "Carol,35,Chicago"],
+    );
+    assert_eq!(rt.get_var("count"), "2");
+}
+
+// ── Math builtins ───────────────────────────────────────────────
+
+#[test]
+fn math_abs() {
+    let rt = eval(r#"BEGIN { x = abs(-5.5) }"#, &[]);
+    assert_eq!(rt.get_var("x"), "5.5");
+}
+
+#[test]
+fn math_ceil_floor_round() {
+    let rt = eval(r#"BEGIN { a = ceil(2.3); b = floor(2.7); c = round(2.5) }"#, &[]);
+    assert_eq!(rt.get_var("a"), "3");
+    assert_eq!(rt.get_var("b"), "2");
+    assert_eq!(rt.get_var("c"), "3");
+}
+
+#[test]
+fn math_min_max() {
+    let rt = eval(r#"BEGIN { a = min(3, 7); b = max(3, 7) }"#, &[]);
+    assert_eq!(rt.get_var("a"), "3");
+    assert_eq!(rt.get_var("b"), "7");
+}
+
+#[test]
+fn math_atan2() {
+    let rt = eval(r#"BEGIN { x = atan2(1, 1) }"#, &[]);
+    assert_eq!(rt.get_var("x"), "0.785398");
+}
+
+#[test]
+fn math_log2_log10() {
+    let rt = eval(r#"BEGIN { a = log2(8); b = log10(1000) }"#, &[]);
+    assert_eq!(rt.get_var("a"), "3.000000");
+    assert_eq!(rt.get_var("b"), "3.000000");
+}
+
+#[test]
+fn math_rand_returns_0_to_1() {
+    let rt = eval(r#"BEGIN { srand(42); x = rand() }"#, &[]);
+    let x: f64 = rt.get_var("x").parse().unwrap();
+    assert!(x >= 0.0 && x < 1.0);
+}
+
+#[test]
+fn math_srand_makes_deterministic() {
+    let rt1 = eval(r#"BEGIN { srand(42); x = rand() }"#, &[]);
+    let rt2 = eval(r#"BEGIN { srand(42); x = rand() }"#, &[]);
+    assert_eq!(rt1.get_var("x"), rt2.get_var("x"));
+}
+
+// ── String builtins ─────────────────────────────────────────────
+
+#[test]
+fn string_trim() {
+    let rt = eval(r#"BEGIN { x = trim("  hello  ") }"#, &[]);
+    assert_eq!(rt.get_var("x"), "hello");
+}
+
+#[test]
+fn string_ltrim_rtrim() {
+    let rt = eval(r#"BEGIN { a = ltrim("  hi"); b = rtrim("hi  ") }"#, &[]);
+    assert_eq!(rt.get_var("a"), "hi");
+    assert_eq!(rt.get_var("b"), "hi");
+}
+
+#[test]
+fn string_startswith_endswith() {
+    let rt = eval(r#"BEGIN { a = startswith("hello", "hel"); b = endswith("hello", "lo"); c = startswith("hello", "xyz") }"#, &[]);
+    assert_eq!(rt.get_var("a"), "1");
+    assert_eq!(rt.get_var("b"), "1");
+    assert_eq!(rt.get_var("c"), "0");
+}
+
+#[test]
+fn string_repeat() {
+    let rt = eval(r#"BEGIN { x = repeat("ab", 3) }"#, &[]);
+    assert_eq!(rt.get_var("x"), "ababab");
+}
+
+#[test]
+fn string_reverse() {
+    let rt = eval(r#"BEGIN { x = reverse("hello") }"#, &[]);
+    assert_eq!(rt.get_var("x"), "olleh");
+}
+
+#[test]
+fn string_chr_ord() {
+    let rt = eval(r#"BEGIN { a = chr(65); b = ord("A") }"#, &[]);
+    assert_eq!(rt.get_var("a"), "A");
+    assert_eq!(rt.get_var("b"), "65");
+}
+
+#[test]
+fn string_hex() {
+    let rt = eval(r#"BEGIN { x = hex(255) }"#, &[]);
+    assert_eq!(rt.get_var("x"), "0xff");
+}
+
+// ── Date builtins ───────────────────────────────────────────────
+
+#[test]
+fn date_parsedate_basic() {
+    let rt = eval(r#"BEGIN { x = parsedate("2025-01-15 10:30:00", "%Y-%m-%d %H:%M:%S") }"#, &[]);
+    assert_eq!(rt.get_var("x"), "1736937000");
+}
+
+#[test]
+fn date_parsedate_roundtrip() {
+    let rt = eval(
+        r#"BEGIN { ts = mktime("2024 06 15 12 30 45"); s = strftime("%Y-%m-%d %H:%M:%S", ts); ts2 = parsedate(s, "%Y-%m-%d %H:%M:%S"); x = (ts == ts2) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "1");
+}
+
+// ── Bitwise operations ──────────────────────────────────────────
+
+#[test]
+fn bitwise_and_or_xor() {
+    let rt = eval(r#"BEGIN { a = and(12, 10); b = or(12, 10); c = xor(12, 10) }"#, &[]);
+    assert_eq!(rt.get_var("a"), "8");
+    assert_eq!(rt.get_var("b"), "14");
+    assert_eq!(rt.get_var("c"), "6");
+}
+
+#[test]
+fn bitwise_shift() {
+    let rt = eval(r#"BEGIN { a = lshift(1, 8); b = rshift(256, 4) }"#, &[]);
+    assert_eq!(rt.get_var("a"), "256");
+    assert_eq!(rt.get_var("b"), "16");
+}
+
+#[test]
+fn bitwise_compl() {
+    let rt = eval(r#"BEGIN { x = and(compl(0), 0xFF) }"#, &[]);
+    assert_eq!(rt.get_var("x"), "255");
+}
+
+// ── join, typeof ────────────────────────────────────────────────
+
+#[test]
+fn join_array() {
+    let rt = eval(
+        r#"BEGIN { a[1]="x"; a[2]="y"; a[3]="z"; x = join(a, ",") }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "x,y,z");
+}
+
+#[test]
+fn typeof_values() {
+    let rt = eval(
+        r#"BEGIN { a = 42; b = "hi"; c[1]=1; ta = typeof(a); tb = typeof(b); tc = typeof(c); tu = typeof(unknown) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("ta"), "number");
+    assert_eq!(rt.get_var("tb"), "string");
+    assert_eq!(rt.get_var("tc"), "array");
+    assert_eq!(rt.get_var("tu"), "uninitialized");
+}
+
+// ── asort / asorti ──────────────────────────────────────────────
+
+#[test]
+fn asort_by_values() {
+    let rt = eval(
+        r#"BEGIN { a["x"]="3"; a["y"]="1"; a["z"]="2"; n = asort(a); r = a[1] "," a[2] "," a[3] }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("n"), "3");
+    assert_eq!(rt.get_var("r"), "1,2,3");
+}
+
+#[test]
+fn asorti_by_keys() {
+    let rt = eval(
+        r#"BEGIN { a["c"]=1; a["a"]=2; a["b"]=3; n = asorti(a); r = a[1] "," a[2] "," a[3] }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("n"), "3");
+    assert_eq!(rt.get_var("r"), "a,b,c");
+}
+
+// ── match with captures ─────────────────────────────────────────
+
+#[test]
+fn match_with_capture_groups() {
+    let rt = eval(
+        r#"BEGIN { s = "2025-01-15"; match(s, "([0-9]+)-([0-9]+)-([0-9]+)", cap); y = cap[1]; m = cap[2]; d = cap[3] }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("y"), "2025");
+    assert_eq!(rt.get_var("m"), "01");
+    assert_eq!(rt.get_var("d"), "15");
+}
+
+#[test]
+fn match_captures_full_match() {
+    let rt = eval(
+        r#"BEGIN { match("hello world", "(hell)o (w)", cap); x = cap[0] }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "hello w");
 }

@@ -13,10 +13,10 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~6,200 lines of Rust** across 22 source files
-- **194 tests**, zero warnings, clippy clean
-- **Phases 0–7 complete**
-- Single dependency: `regex` crate
+- **~7,000 lines of Rust** across 23 source files
+- **221 tests**, zero warnings, clippy clean
+- **Phases 0–8 complete**
+- Dependencies: `regex` crate; optional `parquet` + `arrow` (behind `--features parquet`)
 - Dev dependency: `criterion` (benchmarks)
 
 ## Architecture (read src/lib.rs for module list)
@@ -35,13 +35,14 @@ input/mod.rs   — Record struct, RecordReader trait, multi-source orchestration
 input/line.rs  — default newline reader
 input/csv.rs   — RFC 4180 CSV/TSV reader
 input/json.rs  — JSON Lines reader
-input/regex_rs.rs — regex-based RS reader
-builtins/mod.rs   — dispatch + coercion helpers (to_number, format_number)
-builtins/string.rs — length, substr, index, tolower, toupper (unicode-aware)
-builtins/math.rs   — int, sqrt, sin, cos, log, exp
-builtins/printf.rs — format_printf
-builtins/time.rs   — systime, strftime, mktime (pure UTC, no libc)
-builtins/json.rs   — jpath() with JSON parser, path evaluator, iteration
+input/regex_rs.rs    — regex-based RS reader
+input/parquet_reader.rs — Apache Parquet reader (optional feature)
+builtins/mod.rs      — dispatch + coercion helpers (to_number, format_number)
+builtins/string.rs   — length, substr, index, trim, reverse, chr, ord, hex, ...
+builtins/math.rs     — int, sqrt, abs, ceil, floor, rand, min, max, ...
+builtins/printf.rs   — format_printf
+builtins/time.rs     — systime, strftime, mktime, parsedate (pure UTC, no libc)
+builtins/json.rs     — jpath() with JSON parser, path evaluator, iteration
 ```
 
 ## Key design decisions
@@ -60,7 +61,7 @@ builtins/json.rs   — jpath() with JSON parser, path evaluator, iteration
 - All string builtins are unicode-aware (chars, not bytes)
 - jpath() supports multi-value navigation: .key[], .arr.key (implicit iteration)
 
-## What's done (Phases 0–6)
+## What's done (Phases 0–8)
 
 Phase 0: CLI, I/O, field splitting, print, patterns, BEGIN/END, built-in vars
 Phase 1: Expressions, assignment, control flow, arrays, printf, operators
@@ -73,37 +74,30 @@ Phase 4: Criterion benchmarks (field split, lex+parse, record processing), Makef
 Phase 5: 5 example scripts, cheat sheet, man page
 Phase 6: Buffered stdout, interned built-in vars, zero-alloc print path,
   edge-case audit (15 new tests), recursion depth guard (limit 200),
-  profile-guided executor optimisation, clippy clean
-Phase 7: See dedicated section below
-
-## What's done (Phase 7)
-
+  profile-guided executor optimisation, clippy clean, Value type (dual string/number)
 Phase 7: break/continue, do-while, next, exit/exit(code), -f flag, FILENAME,
   FNR, close(), ENVIRON, ARGC/ARGV, SUBSEP + multi-dim arrays, OFMT,
   computed regex, gensub(), proper regex::Regex for patterns and ~/!~
+Phase 8: Header names as field accessors ($name in -H mode), Parquet input
+  (-i parquet, optional feature), match() with capture groups,
+  asort/asorti, join, typeof, bitwise ops (and/or/xor/lshift/rshift/compl),
+  math (rand, srand, atan2, abs, ceil, floor, round, min, max, log2, log10),
+  string (trim, ltrim, rtrim, startswith, endswith, repeat, reverse, chr, ord, hex),
+  date (parsedate), richer strftime specifiers
 
-Key design decisions in Phase 7:
-- Executor uses `Signal` enum (Return, Break, Continue, Exit) instead of
-  `ReturnValue` struct — propagates through exec_block/exec_stmt/call_user_func
-- `exit_code: Option<i32>` on Executor; checked by run_begin/run_record;
-  END block still runs; main.rs propagates to process::exit()
-- `next_record` flag (like `next_file`) — stops remaining rules for current record
-- Regex patterns (`/pat/`, `~`, `!~`) use `regex::Regex` (not str::contains)
-- Lexer preserves backslashes in regex literals for the regex engine
-- FILENAME/FNR tracked in main.rs after next_record() (not before)
-- `-f` flag: if both -f and inline program given, inline becomes file operand
-
-### Remaining from Phase 6
+### Remaining
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 
 ### Performance (from `make bench-compare` on 1M lines, Apple M3 Pro):
-fk is faster than awk (macOS system awk 20200816) on all 5 benchmarks:
-- `print $2`: fk ~0.52s vs awk ~0.58s
-- Sum/arithmetic: fk ~0.34s vs awk ~0.60s (fk 1.8× faster)
-- Pattern matching: fk ~0.37s vs awk ~0.75s (fk 2× faster)
-- Field arithmetic: fk ~0.34s vs awk ~0.62s (fk 1.8× faster)
-- Associative arrays: fk ~0.43s vs awk ~0.66s (fk 1.5× faster)
+fk is faster than awk (macOS system awk 20200816) on most workloads:
+- `print $2`: fk ~0.80s vs awk ~0.59s
+- Sum column: fk ~0.32s vs awk ~0.60s (fk 1.9× faster)
+- Pattern matching: fk ~0.37s vs awk ~0.78s (fk 2.1× faster)
+- Field arithmetic: fk ~0.33s vs awk ~0.64s (fk 1.9× faster)
+- Associative arrays: fk ~0.38s vs awk ~0.68s (fk 1.8× faster)
+- Computed regex: fk ~0.43s vs awk ~0.65s (fk 1.5× faster)
+- Tight loop (3x): fk ~0.79s vs awk ~0.75s (parity)
 
 ## Tooling
 

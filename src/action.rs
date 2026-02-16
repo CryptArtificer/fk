@@ -74,18 +74,18 @@ impl<'a> Executor<'a> {
         self.ensure_regex(pattern) && self.regex_cache[pattern].is_match(text)
     }
 
-    /// Find first match of a cached regex in text.
-    fn regex_find(&mut self, pattern: &str, text: &str) -> Option<(usize, usize)> {
-        if !self.ensure_regex(pattern) { return None; }
-        self.regex_cache[pattern].find(text).map(|m| (m.start(), m.end()))
-    }
-
     /// Populate the HDR array from a header record (used with `-H`).
+    /// Also sets each header name as a variable equal to its column index,
+    /// so `$name` naturally resolves to the right field.
     pub fn set_header(&mut self, fields: &[String]) {
         for (i, name) in fields.iter().enumerate() {
-            let key = (i + 1).to_string();
+            let idx = i + 1;
+            let key = idx.to_string();
             self.rt.set_array("HDR", &key, name);
             self.rt.set_array("HDR", name, &key);
+            if is_valid_ident(name) && !is_builtin_var(name) {
+                self.rt.set_value(name, Value::from_number(idx as f64));
+            }
         }
         self.rt.increment_nr();
     }
@@ -504,6 +504,13 @@ impl<'a> Executor<'a> {
                     "gensub" => return self.builtin_gensub(args),
                     "fflush" => return self.builtin_fflush(args),
                     "system" => return self.builtin_system(args),
+                    "join" => return self.builtin_join(args),
+                    "typeof" => return self.builtin_typeof(args),
+                    "asort" => return self.builtin_asort(args, false),
+                    "asorti" => return self.builtin_asort(args, true),
+                    "and" | "or" | "xor" | "lshift" | "rshift" | "compl" => {
+                        return self.builtin_bitwise(name, args);
+                    }
                     _ => {}
                 }
                 let evaled: Vec<String> = args.iter().map(|e| self.eval_string(e)).collect();
@@ -696,24 +703,58 @@ impl<'a> Executor<'a> {
     }
 
     /// match(string, regex) — sets RSTART and RLENGTH.
+    /// match(string, regex [, arr]) — find regex in string, optionally capture groups.
+    /// Sets RSTART, RLENGTH. If arr is given, arr[0] = full match, arr[1..] = capture groups.
     fn builtin_match(&mut self, args: &[Expr]) -> Value {
         if args.len() < 2 {
-            eprintln!("fk: match requires 2 arguments");
+            eprintln!("fk: match requires at least 2 arguments");
             return Value::from_number(0.0);
         }
         let s = self.eval_string(&args[0]);
         let pattern = self.eval_string(&args[1]);
 
-        let matched = self.regex_find(&pattern, &s);
-        if let Some((start, end)) = matched {
-            let rstart = s[..start].chars().count() as f64 + 1.0;
-            let rlength = s[start..end].chars().count() as f64;
+        let capture_arr = if args.len() >= 3 {
+            match &args[2] {
+                Expr::Var(name) => Some(name.clone()),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        if !self.ensure_regex(&pattern) {
+            self.rt.set_value("RSTART", Value::from_number(0.0));
+            self.rt.set_value("RLENGTH", Value::from_number(-1.0));
+            return Value::from_number(0.0);
+        }
+
+        let re = &self.regex_cache[&pattern];
+        if let Some(caps) = re.captures(&s) {
+            let full = caps.get(0).unwrap();
+            let rstart = s[..full.start()].chars().count() as f64 + 1.0;
+            let rlength = full.as_str().chars().count() as f64;
             self.rt.set_value("RSTART", Value::from_number(rstart));
             self.rt.set_value("RLENGTH", Value::from_number(rlength));
+
+            if let Some(arr_name) = capture_arr {
+                self.rt.arrays.remove(&arr_name);
+                self.rt.set_array(&arr_name, "0", full.as_str());
+                for i in 1..caps.len() {
+                    if let Some(m) = caps.get(i) {
+                        self.rt.set_array(&arr_name, &i.to_string(), m.as_str());
+                    } else {
+                        self.rt.set_array(&arr_name, &i.to_string(), "");
+                    }
+                }
+            }
+
             Value::from_number(rstart)
         } else {
             self.rt.set_value("RSTART", Value::from_number(0.0));
             self.rt.set_value("RLENGTH", Value::from_number(-1.0));
+            if let Some(arr_name) = capture_arr {
+                self.rt.arrays.remove(&arr_name);
+            }
             Value::from_number(0.0)
         }
     }
@@ -855,6 +896,139 @@ impl<'a> Executor<'a> {
         }
     }
 
+    /// join(arr, sep) — join array values into a string.
+    fn builtin_join(&mut self, args: &[Expr]) -> Value {
+        if args.len() < 2 {
+            eprintln!("fk: join requires 2 arguments (array, separator)");
+            return Value::default();
+        }
+        let array_name = match &args[0] {
+            Expr::Var(name) => name.clone(),
+            _ => {
+                eprintln!("fk: join: first argument must be an array name");
+                return Value::default();
+            }
+        };
+        let sep = self.eval_string(&args[1]);
+        let mut keys: Vec<String> = self.rt.array_keys(&array_name);
+        keys.sort_by(|a, b| {
+            a.parse::<f64>().unwrap_or(f64::MAX)
+                .partial_cmp(&b.parse::<f64>().unwrap_or(f64::MAX))
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.cmp(b))
+        });
+        let parts: Vec<String> = keys.iter()
+            .map(|k| self.rt.get_array(&array_name, k))
+            .collect();
+        Value::from_string(parts.join(&sep))
+    }
+
+    /// typeof(x) — return type name of a variable.
+    fn builtin_typeof(&mut self, args: &[Expr]) -> Value {
+        if args.is_empty() {
+            return Value::from_string("uninitialized".to_string());
+        }
+        match &args[0] {
+            Expr::Var(name) => {
+                if self.rt.arrays.contains_key(name.as_str()) {
+                    Value::from_string("array".to_string())
+                } else if !self.rt.has_var(name) {
+                    Value::from_string("uninitialized".to_string())
+                } else {
+                    let val = self.rt.get_value(name);
+                    if val.is_numeric() {
+                        Value::from_string("number".to_string())
+                    } else {
+                        Value::from_string("string".to_string())
+                    }
+                }
+            }
+            Expr::NumberLit(_) => Value::from_string("number".to_string()),
+            Expr::StringLit(_) => Value::from_string("string".to_string()),
+            _ => {
+                let val = self.eval_expr(&args[0]);
+                if val.is_numeric() {
+                    Value::from_string("number".to_string())
+                } else {
+                    Value::from_string("string".to_string())
+                }
+            }
+        }
+    }
+
+    /// Bitwise operations: and, or, xor, lshift, rshift, compl.
+    fn builtin_bitwise(&mut self, name: &str, args: &[Expr]) -> Value {
+        if name == "compl" {
+            let n = if args.is_empty() { 0i64 } else { self.eval_expr(&args[0]).to_number() as i64 };
+            return Value::from_number(!n as f64);
+        }
+        if args.len() < 2 {
+            eprintln!("fk: {} requires 2 arguments", name);
+            return Value::from_number(0.0);
+        }
+        let a = self.eval_expr(&args[0]).to_number() as i64;
+        let b = self.eval_expr(&args[1]).to_number() as i64;
+        let result = match name {
+            "and" => a & b,
+            "or" => a | b,
+            "xor" => a ^ b,
+            "lshift" => a << (b as u32 & 63),
+            "rshift" => ((a as u64) >> (b as u32 & 63)) as i64,
+            _ => 0,
+        };
+        Value::from_number(result as f64)
+    }
+
+    /// asort(arr) — sort array by values, re-key with 1..N.
+    /// asorti(arr) — sort array by keys, store sorted keys as values with 1..N.
+    fn builtin_asort(&mut self, args: &[Expr], by_index: bool) -> Value {
+        if args.is_empty() {
+            eprintln!("fk: asort/asorti requires at least 1 argument");
+            return Value::from_number(0.0);
+        }
+        let array_name = match &args[0] {
+            Expr::Var(name) => name.clone(),
+            _ => {
+                eprintln!("fk: asort/asorti: argument must be an array name");
+                return Value::from_number(0.0);
+            }
+        };
+
+        let mut items: Vec<(String, String)> = self.rt.array_keys(&array_name)
+            .into_iter()
+            .map(|k| {
+                let v = self.rt.get_array(&array_name, &k);
+                (k, v)
+            })
+            .collect();
+
+        if by_index {
+            items.sort_by(|a, b| a.0.cmp(&b.0));
+        } else {
+            items.sort_by(|a, b| {
+                let na = crate::builtins::to_number(&a.1);
+                let nb = crate::builtins::to_number(&b.1);
+                if na != 0.0 || a.1.is_empty() || nb != 0.0 || b.1.is_empty() {
+                    na.partial_cmp(&nb).unwrap_or(std::cmp::Ordering::Equal)
+                } else {
+                    a.1.cmp(&b.1)
+                }
+            });
+        }
+
+        let count = items.len();
+        self.rt.arrays.remove(&array_name);
+        for (i, (key, val)) in items.into_iter().enumerate() {
+            let new_key = (i + 1).to_string();
+            if by_index {
+                self.rt.set_array(&array_name, &new_key, &key);
+            } else {
+                self.rt.set_array(&array_name, &new_key, &val);
+            }
+        }
+        Value::from_number(count as f64)
+    }
+
     fn exec_getline(&mut self, var: Option<&str>, source: Option<&Expr>) -> Value {
         let line = if let Some(src_expr) = source {
             let path = self.eval_string(src_expr);
@@ -989,4 +1163,21 @@ fn eval_binop(left: Value, op: &BinOp, right: Value) -> Value {
         BinOp::Gt => bool_val(compare_values(&left, &right) == std::cmp::Ordering::Greater),
         BinOp::Ge => bool_val(compare_values(&left, &right) != std::cmp::Ordering::Less),
     }
+}
+
+fn is_valid_ident(s: &str) -> bool {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+fn is_builtin_var(name: &str) -> bool {
+    matches!(name,
+        "NR" | "NF" | "FNR" | "FS" | "OFS" | "RS" | "ORS" | "SUBSEP" |
+        "OFMT" | "FILENAME" | "RSTART" | "RLENGTH" | "ARGC" | "ARGV" |
+        "ENVIRON" | "BEGIN" | "END" | "HDR"
+    )
 }

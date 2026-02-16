@@ -16,7 +16,8 @@ fk --repl                          # interactive mode
 | `-i csv` | CSV input mode (RFC 4180) |
 | `-i tsv` | TSV input mode |
 | `-i json` | JSON lines input mode |
-| `-H` | Header mode (first line → `HDR` array) |
+| `-i parquet` | Apache Parquet input (needs `--features parquet`) |
+| `-H` | Header mode (first line → `HDR` array + named columns) |
 | `--repl` | Interactive REPL |
 
 ## Program structure
@@ -112,8 +113,17 @@ print ... > "/dev/stderr"   # write to stderr
 | `tolower(s)` / `toupper(s)` | Case conversion |
 | `sub(pat, repl [, target])` | Replace first match |
 | `gsub(pat, repl [, target])` | Replace all matches |
-| `match(s, pat)` | Regex match, sets RSTART/RLENGTH |
+| `match(s, pat [, arr])` | Regex match, sets RSTART/RLENGTH. With `arr`: capture groups |
 | `split(s, arr [, sep])` | Split into array, return count |
+| `gensub(re, repl, how [, target])` | Like gsub but returns result (doesn't modify target) |
+| `trim(s)` | Strip leading and trailing whitespace |
+| `ltrim(s)` / `rtrim(s)` | Strip leading / trailing whitespace |
+| `startswith(s, prefix)` | Returns 1 if s starts with prefix |
+| `endswith(s, suffix)` | Returns 1 if s ends with suffix |
+| `repeat(s, n)` | Repeat string n times |
+| `reverse(s)` | Reverse a string (unicode-aware) |
+| `chr(n)` / `ord(s)` | Character ↔ codepoint |
+| `hex(n)` | Format number as hexadecimal |
 
 ### Math
 | Function | Description |
@@ -122,6 +132,13 @@ print ... > "/dev/stderr"   # write to stderr
 | `sqrt(x)` | Square root |
 | `sin(x)` / `cos(x)` | Trigonometry |
 | `log(x)` / `exp(x)` | Natural log / e^x |
+| `atan2(y, x)` | Arc tangent |
+| `abs(x)` | Absolute value |
+| `ceil(x)` / `floor(x)` / `round(x)` | Rounding |
+| `min(a, b)` / `max(a, b)` | Minimum / maximum |
+| `log2(x)` / `log10(x)` | Base-2 / base-10 logarithm |
+| `rand()` | Random number 0..1 |
+| `srand([seed])` | Seed the RNG |
 
 ### Time (fk extensions)
 | Function | Description |
@@ -129,6 +146,7 @@ print ... > "/dev/stderr"   # write to stderr
 | `systime()` | Current epoch (seconds) |
 | `strftime(fmt, epoch)` | Format epoch as string |
 | `mktime("Y M D H M S")` | Date string → epoch |
+| `parsedate(str, fmt)` | Parse date string → epoch |
 
 ### I/O
 | Function | Description |
@@ -136,7 +154,25 @@ print ... > "/dev/stderr"   # write to stderr
 | `system(cmd)` | Run shell command, return exit status |
 | `fflush()` | Flush stdout |
 | `close(name)` | Close an output file or pipe |
-| `gensub(re, repl, how [, target])` | Like gsub but returns result (doesn't modify target) |
+
+### Arrays (fk extensions)
+| Function | Description |
+|----------|-------------|
+| `asort(arr)` | Sort by values, re-key 1..N |
+| `asorti(arr)` | Sort by keys, store as values 1..N |
+| `join(arr, sep)` | Join array values into string |
+
+### Utility (fk extensions)
+| Function | Description |
+|----------|-------------|
+| `typeof(x)` | `"number"`, `"string"`, `"array"`, or `"uninitialized"` |
+
+### Bitwise (fk extensions)
+| Function | Description |
+|----------|-------------|
+| `and(a, b)` / `or(a, b)` / `xor(a, b)` | Bitwise AND, OR, XOR |
+| `lshift(a, n)` / `rshift(a, n)` | Bit shift |
+| `compl(a)` | Bitwise complement |
 
 ### JSON (fk extensions)
 | Function | Description |
@@ -237,6 +273,31 @@ fk '{ if ($0 == "STOP") exit(1); print }' file
 
 # Two-file join using FNR == NR
 fk 'NR==FNR { a[$1]=$2; next } ($1 in a) { print $1, a[$1], $2 }' ref.txt data.txt
+
+# ── Parquet and named columns ──
+
+# Query parquet by column name
+fk -i parquet '$age > 30 { print $name }' users.parquet
+
+# Aggregate parquet data
+fk -i parquet '{ dept[$department] += $revenue } END { for (d in dept) print d, dept[d] }' sales.parquet
+
+# CSV with named columns
+fk -F, -H '$status == "active" { print $email }' users.csv
+
+# ── Phase 8 signatures ──
+
+# Capture groups
+echo "2025-01-15" | fk '{ match($0, "([0-9]+)-([0-9]+)-([0-9]+)", c); print c[1] }'
+
+# Sort + join
+fk '{ a[NR]=$1 } END { asort(a); print join(a, ",") }' file
+
+# Bitwise flags
+fk '{ if (and($1, 0x04)) print "flag set:", $0 }' file
+
+# Parse dates
+fk -F, -H '{ ts = parsedate($created, "%Y-%m-%d"); if (ts > 1700000000) print $name }' data.csv
 ```
 
 ## REPL commands

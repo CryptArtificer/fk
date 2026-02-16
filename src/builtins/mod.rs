@@ -63,9 +63,13 @@ pub fn format_number(n: f64) -> String {
 /// Dispatch pure built-in function calls (those that don't need runtime access).
 pub fn call_builtin(name: &str, args: &[String]) -> String {
     match name {
-        "length" | "substr" | "index" | "tolower" | "toupper" => string::call(name, args),
-        "int" | "sin" | "cos" | "sqrt" | "log" | "exp" => math::call(name, args),
-        "systime" | "strftime" | "mktime" => time::call(name, args),
+        "length" | "substr" | "index" | "tolower" | "toupper" |
+        "trim" | "ltrim" | "rtrim" | "startswith" | "endswith" |
+        "repeat" | "reverse" | "chr" | "ord" | "hex" => string::call(name, args),
+        "int" | "sin" | "cos" | "sqrt" | "log" | "exp" |
+        "atan2" | "abs" | "ceil" | "floor" | "round" | "log2" | "log10" |
+        "min" | "max" | "rand" | "srand" => math::call(name, args),
+        "systime" | "strftime" | "mktime" | "parsedate" => time::call(name, args),
         "jpath" => json::call(args),
         _ => {
             eprintln!("fk: unknown function: {}", name);

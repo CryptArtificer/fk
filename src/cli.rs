@@ -7,6 +7,7 @@ pub enum InputMode {
     Csv,
     Tsv,
     Json,
+    Parquet,
 }
 
 #[derive(Debug)]
@@ -91,28 +92,12 @@ pub fn parse_args() -> Args {
         } else if arg == "-i" {
             i += 1;
             if i >= args.len() {
-                eprintln!("fk: -i requires an argument (csv, tsv, json)");
+                eprintln!("fk: -i requires an argument (csv, tsv, json, parquet)");
                 process::exit(1);
             }
-            input_mode = match args[i].as_str() {
-                "csv" => InputMode::Csv,
-                "tsv" => InputMode::Tsv,
-                "json" => InputMode::Json,
-                other => {
-                    eprintln!("fk: unknown input mode: {}", other);
-                    process::exit(1);
-                }
-            };
+            input_mode = parse_input_mode(&args[i]);
         } else if arg.starts_with("-i") && arg.len() > 2 {
-            input_mode = match &arg[2..] {
-                "csv" => InputMode::Csv,
-                "tsv" => InputMode::Tsv,
-                "json" => InputMode::Json,
-                other => {
-                    eprintln!("fk: unknown input mode: {}", other);
-                    process::exit(1);
-                }
-            };
+            input_mode = parse_input_mode(&arg[2..]);
         } else if arg.starts_with('-') && arg.len() > 1 {
             eprintln!("fk: unknown option: {}", arg);
             process::exit(1);
@@ -158,6 +143,19 @@ pub fn parse_args() -> Args {
         input_mode,
         header_mode,
         program_file,
+    }
+}
+
+fn parse_input_mode(s: &str) -> InputMode {
+    match s {
+        "csv" => InputMode::Csv,
+        "tsv" => InputMode::Tsv,
+        "json" => InputMode::Json,
+        "parquet" => InputMode::Parquet,
+        other => {
+            eprintln!("fk: unknown input mode: {}", other);
+            process::exit(1);
+        }
     }
 }
 

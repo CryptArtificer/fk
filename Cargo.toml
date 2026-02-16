@@ -3,8 +3,14 @@ name = "fk"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+parquet = ["dep:parquet", "dep:arrow"]
+
 [dependencies]
 regex = "1.12.3"
+parquet = { version = "54", optional = true, default-features = false, features = ["arrow", "snap", "zstd", "lz4"] }
+arrow = { version = "54", optional = true, default-features = false, features = ["prettyprint"] }
 
 [dev-dependencies]
 criterion = "0.8.2"

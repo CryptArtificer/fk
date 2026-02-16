@@ -9,7 +9,7 @@ fk \(em filter-kernel: a modern awk for humans
 .RB [ \-F\~\fIsep\fR ]
 .RB [ \-f\~\fIprogfile\fR ]
 .RB [ \-v\~\fIvar\fR = \fIval\fR ]
-.RB [ \-i\~\fIcsv\fR | \fItsv\fR | \fIjson\fR ]
+.RB [ \-i\~\fIcsv\fR | \fItsv\fR | \fIjson\fR | \fIparquet\fR ]
 .RB [ \-H ]
 .IR program\~
 .RI [ file\~ .\|.\|.]
@@ -95,13 +95,19 @@ Input format.
 \fBcsv\fR reads RFC\ 4180 CSV (quoted fields, embedded commas and newlines).
 \fBtsv\fR reads tab-delimited (with quoting).
 \fBjson\fR reads one JSON object per line; top-level values become fields.
+\fBparquet\fR reads Apache Parquet files (columnar binary format).
+Requires building with \fB\-\-features parquet\fR.
+Column names become headers automatically.
 .
 .TP
 \fB\-H\fR
 Header mode.
 The first record is consumed as column names and stored in the
 \fBHDR\fR array (both \fBHDR[1]\fR=\fIname\fR and \fBHDR["name"]\fR=\fI1\fR).
+Additionally, each column name is set as a variable equal to its
+column index, so \fB$name\fR resolves to the right field.
 Subsequent records are numbered from 1.
+Parquet mode (\fB\-i parquet\fR) enables header mode automatically.
 .
 .TP
 \fB\-\-repl\fR
@@ -265,14 +271,34 @@ Default target is \fB$0\fR.
 \fBgsub(\fIpat\fB,\fR \fIrepl\fR [\fB,\fR \fItarget\fR]\fB)\fR
 Replace all matches. Returns replacement count.
 .TP
-\fBmatch(\fIs\fB,\fR \fIpat\fB)\fR
+\fBmatch(\fIs\fB,\fR \fIpat\fR [\fB,\fR \fIarr\fR]\fB)\fR
 Test \fIs\fR against \fIpat\fR.
 Sets \fBRSTART\fR and \fBRLENGTH\fR.
 Returns the start position, or 0.
+If \fIarr\fR is given, \fIarr\fR[0] = full match,
+\fIarr\fR[1], \fIarr\fR[2], ... = capture groups. \fI[fk extension]\fR
 .TP
 \fBsplit(\fIs\fB,\fR \fIarr\fR [\fB,\fR \fIsep\fR]\fB)\fR
 Split \fIs\fR into \fIarr\fR[1], \fIarr\fR[2], etc.
 Returns the element count.
+.TP
+\fBtrim(\fIs\fB)\fR / \fBltrim(\fIs\fB)\fR / \fBrtrim(\fIs\fB)\fR
+Strip leading/trailing whitespace. \fI[fk]\fR
+.TP
+\fBstartswith(\fIs\fB,\fR \fIprefix\fB)\fR / \fBendswith(\fIs\fB,\fR \fIsuffix\fB)\fR
+Returns 1 if \fIs\fR starts/ends with the given string, 0 otherwise. \fI[fk]\fR
+.TP
+\fBrepeat(\fIs\fB,\fR \fIn\fB)\fR
+Repeat string \fIs\fR \fIn\fR times. \fI[fk]\fR
+.TP
+\fBreverse(\fIs\fB)\fR
+Reverse a string (unicode-aware). \fI[fk]\fR
+.TP
+\fBchr(\fIn\fB)\fR / \fBord(\fIs\fB)\fR
+Convert between character and codepoint. \fI[fk]\fR
+.TP
+\fBhex(\fIn\fB)\fR
+Format a number as hexadecimal (e.g. \fB0xff\fR). \fI[fk]\fR
 .
 .SS Math
 .TP
@@ -281,6 +307,27 @@ Truncate to integer.
 .TP
 \fBsqrt(\fIx\fB)\fR, \fBsin(\fIx\fB)\fR, \fBcos(\fIx\fB)\fR, \fBlog(\fIx\fB)\fR, \fBexp(\fIx\fB)\fR
 The usual suspects.
+.TP
+\fBabs(\fIx\fB)\fR
+Absolute value. \fI[fk]\fR
+.TP
+\fBceil(\fIx\fB)\fR / \fBfloor(\fIx\fB)\fR / \fBround(\fIx\fB)\fR
+Rounding. \fI[fk]\fR
+.TP
+\fBmin(\fIa\fB,\fR \fIb\fB)\fR / \fBmax(\fIa\fB,\fR \fIb\fB)\fR
+Minimum / maximum of two values. \fI[fk]\fR
+.TP
+\fBatan2(\fIy\fB,\fR \fIx\fB)\fR
+Arc tangent of \fIy\fR/\fIx\fR.
+.TP
+\fBlog2(\fIx\fB)\fR / \fBlog10(\fIx\fB)\fR
+Base-2 and base-10 logarithm. \fI[fk]\fR
+.TP
+\fBrand()\fR
+Random number between 0 and 1.
+.TP
+\fBsrand(\fR[\fIseed\fR]\fB)\fR
+Seed the RNG. Returns previous seed.
 .
 .SS Time \fI[fk extensions]\fR
 .TP
@@ -289,10 +336,14 @@ Current time as seconds since epoch.
 .TP
 \fBstrftime(\fIfmt\fB,\fR \fIepoch\fB)\fR
 Format an epoch timestamp.
-Supports \fB%Y %m %d %H %M %S %A %B %a %b\fR and more.
+Supports \fB%Y %m %d %H %M %S %A %B %a %b %j %u %w %e %C %y %p %I\fR.
 .TP
 \fBmktime("\fIY M D H M S\fB")\fR
 Convert a date string back to epoch.
+.TP
+\fBparsedate(\fIstr\fB,\fR \fIfmt\fB)\fR
+Parse a date string using the same \fB%Y %m %d %H %M %S\fR specifiers
+as strftime. Returns epoch seconds. \fI[fk]\fR
 .
 .SS I/O
 .TP
@@ -313,6 +364,34 @@ Like \fBgsub\fR but returns the modified string without changing the target.
 \fIhow\fR can be \fB"g"\fR for global, or a number \fIN\fR to replace the
 \fIN\fRth occurrence.
 Default target is \fB$0\fR.
+.
+.SS Arrays \fI[fk extensions]\fR
+.TP
+\fBasort(\fIarr\fB)\fR
+Sort array by values, re-key with 1..N. Returns element count.
+.TP
+\fBasorti(\fIarr\fB)\fR
+Sort array by keys, store sorted keys as values with 1..N.
+.TP
+\fBjoin(\fIarr\fB,\fR \fIsep\fB)\fR
+Join array values into a string, separated by \fIsep\fR.
+Numeric keys are joined in order.
+.
+.SS Utility \fI[fk extensions]\fR
+.TP
+\fBtypeof(\fIx\fB)\fR
+Returns \fB"number"\fR, \fB"string"\fR, \fB"array"\fR, or \fB"uninitialized"\fR.
+.
+.SS Bitwise \fI[fk extensions]\fR
+.TP
+\fBand(\fIa\fB,\fR \fIb\fB)\fR / \fBor(\fIa\fB,\fR \fIb\fB)\fR / \fBxor(\fIa\fB,\fR \fIb\fB)\fR
+Bitwise AND, OR, XOR.
+.TP
+\fBlshift(\fIa\fB,\fR \fIn\fB)\fR / \fBrshift(\fIa\fB,\fR \fIn\fB)\fR
+Bit shift left / right.
+.TP
+\fBcompl(\fIa\fB)\fR
+Bitwise complement.
 .
 .SS JSON \fI[fk extensions]\fR
 .TP
@@ -470,6 +549,28 @@ These are meant to be stolen.
 \fBfk '{ n=jpath($0,".items",a); for(i=1;i<=n;i++) print a[i] }' data.json\fR
 .fi
 .
+.SS Parquet and named columns \fI[fk only]\fR
+.nf
+# Query a parquet file by column names
+\fBfk -i parquet '$age > 30 { print $name, $city }' data.parquet\fR
+
+# CSV with header names (same idea)
+\fBfk -i csv -H '$status == "active" { print $email }' users.csv\fR
+
+# Aggregate parquet data
+\fBfk -i parquet '{ dept[$department] += $revenue }
+END { for (d in dept) print d, dept[d] }' sales.parquet\fR
+
+# Regex match with capture groups
+\fBfk '{ match($0, "([0-9]+)-([A-Z]+)", cap); print cap[1], cap[2] }' file\fR
+
+# Sort array values
+\fBfk '{ a[$1]++ } END { asort(a); for (i=1; i in a; i++) print a[i] }' file\fR
+
+# Join array into string
+\fBfk 'BEGIN { a[1]="x"; a[2]="y"; a[3]="z"; print join(a, ",") }'\fR
+.fi
+.
 .SS fk-only tricks
 .nf
 # Exponentiation
@@ -503,11 +604,23 @@ Notably:
 .IP \(bu 2
 \fBdelete arr\fR (whole array) and \fBlength(arr)\fR
 .IP \(bu 2
-\fBsystime()\fR, \fBstrftime()\fR, \fBmktime()\fR
+\fBsystime()\fR, \fBstrftime()\fR, \fBmktime()\fR, \fBparsedate()\fR
 .IP \(bu 2
 \fBjpath()\fR for JSON navigation
 .IP \(bu 2
-\fB\-i csv/tsv/json\fR, \fB\-H\fR header mode
+\fB\-i csv/tsv/json/parquet\fR, \fB\-H\fR header mode with named columns
+.IP \(bu 2
+\fBmatch()\fR with capture groups (3rd argument)
+.IP \(bu 2
+\fBasort()\fR, \fBasorti()\fR, \fBjoin()\fR, \fBtypeof()\fR
+.IP \(bu 2
+\fBtrim()\fR, \fBltrim()\fR, \fBrtrim()\fR, \fBstartswith()\fR, \fBendswith()\fR, \fBrepeat()\fR, \fBreverse()\fR
+.IP \(bu 2
+\fBabs()\fR, \fBceil()\fR, \fBfloor()\fR, \fBround()\fR, \fBmin()\fR, \fBmax()\fR, \fBlog2()\fR, \fBlog10()\fR
+.IP \(bu 2
+\fBchr()\fR, \fBord()\fR, \fBhex()\fR
+.IP \(bu 2
+Bitwise: \fBand()\fR, \fBor()\fR, \fBxor()\fR, \fBlshift()\fR, \fBrshift()\fR, \fBcompl()\fR
 .IP \(bu 2
 \fB\-\-repl\fR interactive mode
 .IP \(bu 2

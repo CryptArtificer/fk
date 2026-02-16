@@ -15,6 +15,11 @@ pub fn call(name: &str, args: &[String]) -> String {
             let spec = args.first().map(|s| s.as_str()).unwrap_or("");
             mktime(spec)
         }
+        "parsedate" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            let fmt = args.get(1).map(|s| s.as_str()).unwrap_or("%Y-%m-%d %H:%M:%S");
+            parsedate(s, fmt)
+        }
         _ => String::new(),
     }
 }
@@ -60,6 +65,22 @@ fn strftime(fmt: &str, timestamp: Option<i64>) -> String {
                 'B' => result.push_str(month_name(parts.month)),
                 'b' => result.push_str(&month_name(parts.month)[..3]),
                 'Z' => result.push_str("UTC"),
+                'j' => {
+                    let yday = day_of_year(parts.year, parts.month, parts.day);
+                    result.push_str(&format!("{:03}", yday));
+                }
+                'u' => result.push_str(&format!("{}", if parts.weekday == 0 { 7 } else { parts.weekday })),
+                'w' => result.push_str(&format!("{}", parts.weekday)),
+                'e' => result.push_str(&format!("{:2}", parts.day)),
+                'C' => result.push_str(&format!("{:02}", parts.year / 100)),
+                'y' => result.push_str(&format!("{:02}", parts.year % 100)),
+                'p' => result.push_str(if parts.hour < 12 { "AM" } else { "PM" }),
+                'I' => {
+                    let h = if parts.hour == 0 { 12 } else if parts.hour > 12 { parts.hour - 12 } else { parts.hour };
+                    result.push_str(&format!("{:02}", h));
+                }
+                'n' => result.push('\n'),
+                't' => result.push('\t'),
                 _ => {
                     result.push('%');
                     result.push(chars[i]);
@@ -184,4 +205,64 @@ fn month_name(m: i64) -> &'static str {
         9 => "September", 10 => "October", 11 => "November", 12 => "December",
         _ => "Unknown",
     }
+}
+
+fn day_of_year(year: i64, month: i64, day: i64) -> i64 {
+    let mut yday = 0;
+    for m in 1..month {
+        yday += days_in_month(year, m);
+    }
+    yday + day
+}
+
+/// Parse a date string using strftime-style format specifiers.
+/// Returns epoch seconds, or -1 on failure.
+fn parsedate(s: &str, fmt: &str) -> String {
+    let mut year: i64 = 1970;
+    let mut month: i64 = 1;
+    let mut day: i64 = 1;
+    let mut hour: i64 = 0;
+    let mut minute: i64 = 0;
+    let mut second: i64 = 0;
+
+    let schars: Vec<char> = s.chars().collect();
+    let fchars: Vec<char> = fmt.chars().collect();
+    let mut si = 0;
+    let mut fi = 0;
+
+    while fi < fchars.len() && si < schars.len() {
+        if fchars[fi] == '%' && fi + 1 < fchars.len() {
+            fi += 1;
+            let (val, consumed) = parse_int(&schars, si);
+            match fchars[fi] {
+                'Y' => { year = val; si += consumed; }
+                'm' => { month = val; si += consumed; }
+                'd' => { day = val; si += consumed; }
+                'H' => { hour = val; si += consumed; }
+                'M' => { minute = val; si += consumed; }
+                'S' => { second = val; si += consumed; }
+                'y' => { year = 2000 + val; si += consumed; }
+                _ => { si += consumed; }
+            }
+        } else if si < schars.len() {
+            si += 1;
+        }
+        fi += 1;
+    }
+
+    let epoch = parts_to_epoch(year, month, day, hour, minute, second);
+    format!("{}", epoch)
+}
+
+fn parse_int(chars: &[char], start: usize) -> (i64, usize) {
+    let mut i = start;
+    while i < chars.len() && !chars[i].is_ascii_digit() {
+        i += 1;
+    }
+    let begin = i;
+    while i < chars.len() && chars[i].is_ascii_digit() {
+        i += 1;
+    }
+    let val: i64 = chars[begin..i].iter().collect::<String>().parse().unwrap_or(0);
+    (val, i - start)
 }
