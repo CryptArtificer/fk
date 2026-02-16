@@ -117,12 +117,13 @@ src/
 - [ ] Large-file benchmark (1M+ lines, CSV-like data)
 
 #### Phase 5 — Tutorial & showcase
-- [ ] `examples/` directory with annotated scripts
-- [ ] Basics: field extraction, filtering, summing columns
-- [ ] Text transforms: CSV wrangling, log parsing, frequency counting
-- [ ] Advanced: user-defined functions, associative arrays, multi-file processing
-- [ ] Showcase fk-only features: `**`, `$-1`, hex literals, `\u` escapes, time functions
-- [ ] One-liner cheat sheet in README or separate doc
+- [x] `examples/` directory with annotated scripts
+- [x] Basics: field extraction, filtering, summing columns (`01-basics.sh`)
+- [x] Text transforms: CSV wrangling, log parsing, frequency counting (`02-text-transforms.sh`)
+- [x] Advanced: user-defined functions, associative arrays, multi-file processing (`03-advanced.sh`)
+- [x] Showcase fk-only features: `**`, `$-1`, hex literals, `\u` escapes, time functions (`04-fk-features.sh`)
+- [x] Structured input showcase: CSV, TSV, JSON, jpath (`05-json-and-csv.sh`)
+- [x] One-liner cheat sheet (`docs/cheatsheet.md`)
 
 #### Phase 6 — Hardening & optimisation
 - [ ] Fuzz testing (lexer, parser, executor) with `cargo-fuzz`
