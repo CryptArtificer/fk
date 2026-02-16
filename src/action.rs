@@ -3,15 +3,21 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, BufWriter, Write, BufRead};
 use std::process::{Child, Command, Stdio};
 
+use regex::Regex;
+
 use crate::builtins::{self, format_number, format_printf, string_replace, to_number};
 use crate::input::Record;
 use crate::parser::{BinOp, Block, Expr, FuncDef, Pattern, Program, Redirect, Statement};
 use crate::runtime::Runtime;
 
-/// Sentinel used to propagate early return from user-defined functions.
-struct ReturnValue(String);
+/// Signal used to propagate control flow out of blocks.
+enum Signal {
+    Return(String),
+    Break,
+    Continue,
+    Exit(i32),
+}
 
-/// Execute a parsed program against the runtime.
 const MAX_CALL_DEPTH: usize = 200;
 
 pub struct Executor<'a> {
@@ -24,6 +30,7 @@ pub struct Executor<'a> {
     stdout: BufWriter<io::Stdout>,
     call_depth: usize,
     next_file: bool,
+    exit_code: Option<i32>,
 }
 
 impl<'a> Executor<'a> {
@@ -40,6 +47,7 @@ impl<'a> Executor<'a> {
             stdout: BufWriter::new(io::stdout()),
             call_depth: 0,
             next_file: false,
+            exit_code: None,
         }
     }
 
@@ -66,9 +74,10 @@ impl<'a> Executor<'a> {
     }
 
     pub fn run_begin(&mut self) {
-        if let Some(ref block) = self.program.begin {
-            self.exec_block(block);
-        }
+        if let Some(ref block) = self.program.begin
+            && let Some(Signal::Exit(code)) = self.exec_block(block) {
+                self.exit_code = Some(code);
+            }
     }
 
     pub fn run_end(&mut self) {
@@ -77,6 +86,11 @@ impl<'a> Executor<'a> {
         }
         let _ = self.stdout.flush();
         self.close_outputs();
+    }
+
+    /// Returns the exit code if `exit` was called, or None.
+    pub fn should_exit(&self) -> Option<i32> {
+        self.exit_code
     }
 
     fn close_outputs(&mut self) {
@@ -97,6 +111,7 @@ impl<'a> Executor<'a> {
     }
 
     pub fn run_record(&mut self, record: &Record) {
+        if self.exit_code.is_some() { return; }
         self.rt.increment_nr();
         match &record.fields {
             Some(fields) => self.rt.set_record_fields(&record.text, fields.clone()),
@@ -104,11 +119,14 @@ impl<'a> Executor<'a> {
         }
 
         for i in 0..self.program.rules.len() {
-            if self.next_file { break; }
+            if self.next_file || self.exit_code.is_some() { break; }
             let matched = self.match_rule(i, &record.text);
             if matched {
                 let action = &self.program.rules[i].action as *const Block;
-                self.exec_block(unsafe { &*action });
+                if let Some(Signal::Exit(code)) = self.exec_block(unsafe { &*action }) {
+                    self.exit_code = Some(code);
+                    break;
+                }
             }
         }
     }
@@ -118,7 +136,13 @@ impl<'a> Executor<'a> {
         match pattern {
             None => true,
             Some(Pattern::Regex(pat)) => {
-                line.contains(pat.as_str())
+                match Regex::new(pat) {
+                    Ok(re) => re.is_match(line),
+                    Err(_) => {
+                        eprintln!("fk: invalid regex: {}", pat);
+                        false
+                    }
+                }
             }
             Some(Pattern::Expression(expr)) => {
                 let expr = expr.clone();
@@ -143,7 +167,9 @@ impl<'a> Executor<'a> {
 
     fn match_single_pattern(&mut self, pattern: &Pattern, line: &str) -> bool {
         match pattern {
-            Pattern::Regex(pat) => line.contains(pat.as_str()),
+            Pattern::Regex(pat) => {
+                Regex::new(pat).is_ok_and(|re| re.is_match(line))
+            }
             Pattern::Expression(expr) => {
                 let val = self.eval_expr(expr);
                 is_truthy(&val)
@@ -152,16 +178,16 @@ impl<'a> Executor<'a> {
         }
     }
 
-    fn exec_block(&mut self, block: &Block) -> Option<ReturnValue> {
+    fn exec_block(&mut self, block: &Block) -> Option<Signal> {
         for stmt in block {
-            if let Some(rv) = self.exec_stmt(stmt) {
-                return Some(rv);
+            if let Some(signal) = self.exec_stmt(stmt) {
+                return Some(signal);
             }
         }
         None
     }
 
-    fn exec_stmt(&mut self, stmt: &Statement) -> Option<ReturnValue> {
+    fn exec_stmt(&mut self, stmt: &Statement) -> Option<Signal> {
         match stmt {
             Statement::Print(exprs, redir) => {
                 if redir.is_none() {
@@ -199,12 +225,12 @@ impl<'a> Executor<'a> {
             Statement::If(cond, then_block, else_block) => {
                 let val = self.eval_expr(cond);
                 if is_truthy(&val) {
-                    if let Some(rv) = self.exec_block(then_block) {
-                        return Some(rv);
+                    if let Some(signal) = self.exec_block(then_block) {
+                        return Some(signal);
                     }
                 } else if let Some(eb) = else_block
-                    && let Some(rv) = self.exec_block(eb) {
-                        return Some(rv);
+                    && let Some(signal) = self.exec_block(eb) {
+                        return Some(signal);
                     }
             }
             Statement::While(cond, body) => {
@@ -213,15 +239,35 @@ impl<'a> Executor<'a> {
                     if !is_truthy(&val) {
                         break;
                     }
-                    if let Some(rv) = self.exec_block(body) {
-                        return Some(rv);
+                    match self.exec_block(body) {
+                        Some(Signal::Break) => break,
+                        Some(Signal::Continue) => continue,
+                        Some(signal) => return Some(signal),
+                        None => {}
+                    }
+                }
+            }
+            Statement::DoWhile(body, cond) => {
+                loop {
+                    match self.exec_block(body) {
+                        Some(Signal::Break) => break,
+                        Some(Signal::Continue) => {}
+                        Some(signal) => return Some(signal),
+                        None => {}
+                    }
+                    let val = self.eval_expr(cond);
+                    if !is_truthy(&val) {
+                        break;
                     }
                 }
             }
             Statement::For(init, cond, update, body) => {
                 if let Some(init_stmt) = init
-                    && let Some(rv) = self.exec_stmt(init_stmt) {
-                        return Some(rv);
+                    && let Some(signal) = self.exec_stmt(init_stmt) {
+                        match signal {
+                            Signal::Return(_) | Signal::Exit(_) => return Some(signal),
+                            _ => {}
+                        }
                     }
                 loop {
                     if let Some(cond_expr) = cond {
@@ -230,12 +276,18 @@ impl<'a> Executor<'a> {
                             break;
                         }
                     }
-                    if let Some(rv) = self.exec_block(body) {
-                        return Some(rv);
+                    match self.exec_block(body) {
+                        Some(Signal::Break) => break,
+                        Some(Signal::Continue) => {}
+                        Some(signal) => return Some(signal),
+                        None => {}
                     }
                     if let Some(update_stmt) = update
-                        && let Some(rv) = self.exec_stmt(update_stmt) {
-                            return Some(rv);
+                        && let Some(signal) = self.exec_stmt(update_stmt) {
+                            match signal {
+                                Signal::Return(_) | Signal::Exit(_) => return Some(signal),
+                                _ => {}
+                            }
                         }
                 }
             }
@@ -243,8 +295,11 @@ impl<'a> Executor<'a> {
                 let keys = self.rt.array_keys(array);
                 for key in keys {
                     self.rt.set_var(var, &key);
-                    if let Some(rv) = self.exec_block(body) {
-                        return Some(rv);
+                    match self.exec_block(body) {
+                        Some(Signal::Break) => break,
+                        Some(Signal::Continue) => continue,
+                        Some(signal) => return Some(signal),
+                        None => {}
                     }
                 }
             }
@@ -259,16 +314,25 @@ impl<'a> Executor<'a> {
                 self.next_file = true;
                 return None;
             }
+            Statement::Break => return Some(Signal::Break),
+            Statement::Continue => return Some(Signal::Continue),
+            Statement::Exit(expr) => {
+                let code = match expr {
+                    Some(e) => to_number(&self.eval_expr(e)) as i32,
+                    None => 0,
+                };
+                return Some(Signal::Exit(code));
+            }
             Statement::Return(expr) => {
                 let val = match expr {
                     Some(e) => self.eval_expr(e),
                     None => String::new(),
                 };
-                return Some(ReturnValue(val));
+                return Some(Signal::Return(val));
             }
             Statement::Block(block) => {
-                if let Some(rv) = self.exec_block(block) {
-                    return Some(rv);
+                if let Some(signal) = self.exec_block(block) {
+                    return Some(signal);
                 }
             }
             Statement::Expression(expr) => {
@@ -325,13 +389,27 @@ impl<'a> Executor<'a> {
                 let val = self.eval_expr(inner);
                 bool_str(!is_truthy(&val))
             }
-            Expr::Match(expr, pat) => {
+            Expr::Match(expr, pat_expr) => {
                 let val = self.eval_expr(expr);
-                bool_str(val.contains(pat.as_str()))
+                let pat = self.eval_expr(pat_expr);
+                match Regex::new(&pat) {
+                    Ok(re) => bool_str(re.is_match(&val)),
+                    Err(_) => {
+                        eprintln!("fk: invalid regex: {}", pat);
+                        "0".to_string()
+                    }
+                }
             }
-            Expr::NotMatch(expr, pat) => {
+            Expr::NotMatch(expr, pat_expr) => {
                 let val = self.eval_expr(expr);
-                bool_str(!val.contains(pat.as_str()))
+                let pat = self.eval_expr(pat_expr);
+                match Regex::new(&pat) {
+                    Ok(re) => bool_str(!re.is_match(&val)),
+                    Err(_) => {
+                        eprintln!("fk: invalid regex: {}", pat);
+                        "0".to_string()
+                    }
+                }
             }
             Expr::Concat(left, right) => {
                 let mut l = self.eval_expr(left);
@@ -399,6 +477,8 @@ impl<'a> Executor<'a> {
                                 return format_number(self.rt.array_len(var_name) as f64);
                             }
                     }
+                    "close" => return self.builtin_close(args),
+                    "gensub" => return self.builtin_gensub(args),
                     "fflush" => return self.builtin_fflush(args),
                     "system" => return self.builtin_system(args),
                     _ => {}
@@ -547,8 +627,12 @@ impl<'a> Executor<'a> {
         }
 
         let result = match self.exec_block(&func.body) {
-            Some(ReturnValue(v)) => v,
-            None => String::new(),
+            Some(Signal::Return(v)) => v,
+            Some(Signal::Exit(code)) => {
+                self.exit_code = Some(code);
+                String::new()
+            }
+            _ => String::new(),
         };
 
         for (name, existed, old_val) in saved {
@@ -681,6 +765,71 @@ impl<'a> Executor<'a> {
         match Command::new("sh").arg("-c").arg(&cmd).status() {
             Ok(status) => format_number(status.code().unwrap_or(-1) as f64),
             Err(_) => "-1".to_string(),
+        }
+    }
+
+    /// close(name) — close an output file or pipe by name.
+    fn builtin_close(&mut self, args: &[Expr]) -> String {
+        if args.is_empty() {
+            return "-1".to_string();
+        }
+        let name = self.eval_expr(&args[0]);
+        if let Some(file) = self.output_files.remove(&name) {
+            drop(file);
+            return "0".to_string();
+        }
+        if let Some(mut child) = self.output_pipes.remove(&name) {
+            drop(child.stdin.take());
+            let _ = child.wait();
+            return "0".to_string();
+        }
+        "-1".to_string()
+    }
+
+    /// gensub(regex, replacement, how [, target]) — like gsub but returns result.
+    fn builtin_gensub(&mut self, args: &[Expr]) -> String {
+        if args.len() < 3 {
+            eprintln!("fk: gensub requires at least 3 arguments");
+            return String::new();
+        }
+        let pattern = self.eval_expr(&args[0]);
+        let replacement = self.eval_expr(&args[1]);
+        let how = self.eval_expr(&args[2]);
+
+        let target = if args.len() >= 4 {
+            self.eval_expr(&args[3])
+        } else {
+            self.rt.get_field(0)
+        };
+
+        let re = match Regex::new(&pattern) {
+            Ok(re) => re,
+            Err(_) => {
+                eprintln!("fk: gensub: invalid regex: {}", pattern);
+                return target;
+            }
+        };
+
+        let global = how.starts_with('g') || how.starts_with('G');
+        if global {
+            re.replace_all(&target, replacement.as_str()).to_string()
+        } else {
+            let n: usize = how.parse().unwrap_or(1);
+            if n == 0 {
+                return target;
+            }
+            let mut count = 0usize;
+            for m in re.find_iter(&target) {
+                count += 1;
+                if count == n {
+                    let mut result = String::with_capacity(target.len());
+                    result.push_str(&target[..m.start()]);
+                    result.push_str(&replacement);
+                    result.push_str(&target[m.end()..]);
+                    return result;
+                }
+            }
+            target
         }
     }
 

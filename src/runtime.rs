@@ -26,8 +26,10 @@ impl Default for Runtime {
 
 impl Runtime {
     pub fn new() -> Self {
+        let mut variables = HashMap::new();
+        variables.insert("SUBSEP".to_string(), "\x1c".to_string());
         Runtime {
-            variables: HashMap::new(),
+            variables,
             arrays: HashMap::new(),
             fields: Vec::new(),
             nr: 0,

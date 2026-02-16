@@ -984,3 +984,249 @@ fn uninitialized_array_length_is_zero() {
     // length of non-existent array: should not crash
     assert_eq!(rt.get_var("x"), "0");
 }
+
+// ── break ────────────────────────────────────────────────────────
+
+#[test]
+fn break_in_while() {
+    let rt = eval("BEGIN { i=0; while (1) { i++; if (i==3) break } x=i }", &[]);
+    assert_eq!(rt.get_var("x"), "3");
+}
+
+#[test]
+fn break_in_for() {
+    let rt = eval("BEGIN { for (i=0; i<10; i++) { if (i==5) break } x=i }", &[]);
+    assert_eq!(rt.get_var("x"), "5");
+}
+
+#[test]
+fn break_in_for_in() {
+    let rt = eval(
+        "BEGIN { a[1]=1; a[2]=2; a[3]=3; for (k in a) { n++; break } x=n }",
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "1");
+}
+
+#[test]
+fn break_in_do_while() {
+    let rt = eval("BEGIN { i=0; do { i++; if (i==4) break } while (1); x=i }", &[]);
+    assert_eq!(rt.get_var("x"), "4");
+}
+
+// ── continue ─────────────────────────────────────────────────────
+
+#[test]
+fn continue_in_while() {
+    let rt = eval(
+        "BEGIN { i=0; while (i<5) { i++; if (i==3) continue; s+=i } x=s }",
+        &[],
+    );
+    // sum of 1+2+4+5 = 12
+    assert_eq!(rt.get_var("x"), "12");
+}
+
+#[test]
+fn continue_in_for() {
+    let rt = eval(
+        "BEGIN { for (i=1; i<=5; i++) { if (i==3) continue; s+=i } x=s }",
+        &[],
+    );
+    // sum of 1+2+4+5 = 12
+    assert_eq!(rt.get_var("x"), "12");
+}
+
+#[test]
+fn continue_in_for_in() {
+    // Count keys that are not "b"
+    let rt = eval(
+        r#"BEGIN { a["a"]=1; a["b"]=2; a["c"]=3; for (k in a) { if (k=="b") continue; n++ } x=n }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "2");
+}
+
+#[test]
+fn continue_in_do_while() {
+    let rt = eval(
+        "BEGIN { i=0; do { i++; if (i==3) continue; s+=i } while (i<5); x=s }",
+        &[],
+    );
+    // sum of 1+2+4+5 = 12
+    assert_eq!(rt.get_var("x"), "12");
+}
+
+// ── do-while ─────────────────────────────────────────────────────
+
+#[test]
+fn do_while_basic() {
+    let rt = eval("BEGIN { i=0; do { i++ } while (i<3); x=i }", &[]);
+    assert_eq!(rt.get_var("x"), "3");
+}
+
+#[test]
+fn do_while_runs_at_least_once() {
+    let rt = eval("BEGIN { i=0; do { i++ } while (0); x=i }", &[]);
+    assert_eq!(rt.get_var("x"), "1");
+}
+
+#[test]
+fn do_while_with_body_block() {
+    let rt = eval(
+        "BEGIN { s=0; i=1; do { s+=i; i++ } while (i<=5); x=s }",
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "15");
+}
+
+// ── exit ─────────────────────────────────────────────────────────
+
+#[test]
+fn exit_stops_processing_records() {
+    let rt = eval("{ n++; if (n==2) exit } END { x=n }", &["a", "b", "c", "d"]);
+    assert_eq!(rt.get_var("x"), "2");
+}
+
+#[test]
+fn exit_runs_end_block() {
+    let rt = eval("BEGIN { exit } END { x=42 }", &[]);
+    assert_eq!(rt.get_var("x"), "42");
+}
+
+#[test]
+fn exit_with_code() {
+    // We can't easily check the process exit code from the test helper,
+    // but we can verify that exit(code) stops processing and runs END.
+    let rt = eval("{ n++; exit(2) } END { x=n }", &["a", "b", "c"]);
+    assert_eq!(rt.get_var("x"), "1");
+}
+
+#[test]
+fn exit_from_begin() {
+    let rt = eval("BEGIN { x=1; exit } { x=99 } END { y=x }", &[]);
+    assert_eq!(rt.get_var("y"), "1");
+}
+
+// ── computed regex ───────────────────────────────────────────────
+
+#[test]
+fn computed_regex_match() {
+    let rt = eval(
+        r#"{ pat = "hel"; result = ($0 ~ pat) }"#,
+        &["hello"],
+    );
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+#[test]
+fn computed_regex_not_match() {
+    let rt = eval(
+        r#"{ pat = "xyz"; result = ($0 !~ pat) }"#,
+        &["hello"],
+    );
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+#[test]
+fn computed_regex_with_special_chars() {
+    let rt = eval(
+        r#"{ pat = "^[0-9]+$"; result = ($0 ~ pat) }"#,
+        &["12345"],
+    );
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+#[test]
+fn computed_regex_no_match() {
+    let rt = eval(
+        r#"{ pat = "^[0-9]+$"; result = ($0 ~ pat) }"#,
+        &["abc"],
+    );
+    assert_eq!(rt.get_var("result"), "0");
+}
+
+#[test]
+fn regex_pattern_uses_real_regex() {
+    // Verify that /regex/ patterns use real regex, not string contains
+    let rt = eval(r#"/^hello$/ { x = 1 }"#, &["hello", "hello world"]);
+    assert_eq!(rt.get_var("x"), "1");
+}
+
+// ── gensub ───────────────────────────────────────────────────────
+
+#[test]
+fn gensub_basic_first() {
+    let rt = eval(
+        r#"{ x = gensub("o", "0", 1) }"#,
+        &["foobar"],
+    );
+    assert_eq!(rt.get_var("x"), "f0obar");
+}
+
+#[test]
+fn gensub_global() {
+    let rt = eval(
+        r#"{ x = gensub("o", "0", "g") }"#,
+        &["foobar"],
+    );
+    assert_eq!(rt.get_var("x"), "f00bar");
+}
+
+#[test]
+fn gensub_nth_occurrence() {
+    let rt = eval(
+        r#"{ x = gensub("o", "0", 2) }"#,
+        &["foobar"],
+    );
+    assert_eq!(rt.get_var("x"), "fo0bar");
+}
+
+#[test]
+fn gensub_does_not_modify_original() {
+    let rt = eval(
+        r#"{ x = gensub("o", "0", "g"); y = $0 }"#,
+        &["foobar"],
+    );
+    assert_eq!(rt.get_var("x"), "f00bar");
+    assert_eq!(rt.get_var("y"), "foobar");
+}
+
+#[test]
+fn gensub_with_explicit_target() {
+    let rt = eval(
+        r#"{ s = "hello"; x = gensub("l", "L", "g", s) }"#,
+        &["ignored"],
+    );
+    assert_eq!(rt.get_var("x"), "heLLo");
+}
+
+#[test]
+fn gensub_regex_pattern() {
+    let rt = eval(
+        r#"{ x = gensub("[0-9]+", "NUM", "g") }"#,
+        &["abc123def456"],
+    );
+    assert_eq!(rt.get_var("x"), "abcNUMdefNUM");
+}
+
+// ── SUBSEP and multi-dimensional arrays ──────────────────────────
+
+#[test]
+fn subsep_multi_dim_array() {
+    let rt = eval(
+        r#"BEGIN { a[1,2] = "x"; a[3,4] = "y"; x = a[1,2]; y = a[3,4] }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "x");
+    assert_eq!(rt.get_var("y"), "y");
+}
+
+#[test]
+fn subsep_default_value() {
+    // SUBSEP defaults to \x1c (ASCII 28)
+    let rt = eval(
+        r#"BEGIN { a[1,2] = "v" ; for (k in a) x = k }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "1\x1c2");
+}
