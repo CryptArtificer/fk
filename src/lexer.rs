@@ -32,6 +32,7 @@ pub enum Token {
     Plus,
     Minus,
     Star,
+    Power,          // **
     Slash,
     Percent,
     Assign,
@@ -166,7 +167,10 @@ impl Lexer {
                 }
                 '*' => {
                     self.pos += 1;
-                    if self.peek() == Some('=') {
+                    if self.peek() == Some('*') {
+                        self.pos += 1;
+                        Token::Power
+                    } else if self.peek() == Some('=') {
                         self.pos += 1;
                         Token::StarAssign
                     } else {
@@ -339,17 +343,33 @@ impl Lexer {
                 self.pos += 1;
                 let escaped = self.input[self.pos];
                 match escaped {
-                    'n' => s.push('\n'),
-                    't' => s.push('\t'),
-                    '\\' => s.push('\\'),
-                    '"' => s.push('"'),
-                    '/' => s.push('/'),
+                    'n' => { s.push('\n'); self.pos += 1; }
+                    't' => { s.push('\t'); self.pos += 1; }
+                    '\\' => { s.push('\\'); self.pos += 1; }
+                    '"' => { s.push('"'); self.pos += 1; }
+                    '/' => { s.push('/'); self.pos += 1; }
+                    'x' => {
+                        self.pos += 1; // skip 'x'
+                        if let Some(ch) = self.read_hex_escape(2) {
+                            s.push(ch);
+                        } else {
+                            s.push_str("\\x");
+                        }
+                    }
+                    'u' => {
+                        self.pos += 1; // skip 'u'
+                        if let Some(ch) = self.read_hex_escape(4) {
+                            s.push(ch);
+                        } else {
+                            s.push_str("\\u");
+                        }
+                    }
                     _ => {
                         s.push('\\');
                         s.push(escaped);
+                        self.pos += 1;
                     }
                 }
-                self.pos += 1;
             } else {
                 s.push(ch);
                 self.pos += 1;
@@ -384,6 +404,26 @@ impl Lexer {
     fn read_number(&mut self) -> Result<Token, String> {
         let span = self.span_at(self.pos);
         let start = self.pos;
+
+        // Hex literal: 0x...
+        if self.input[self.pos] == '0'
+            && self.pos + 1 < self.input.len()
+            && (self.input[self.pos + 1] == 'x' || self.input[self.pos + 1] == 'X')
+        {
+            self.pos += 2; // skip "0x"
+            let hex_start = self.pos;
+            while self.pos < self.input.len() && self.input[self.pos].is_ascii_hexdigit() {
+                self.pos += 1;
+            }
+            if self.pos == hex_start {
+                return Err(format!("{}: expected hex digits after 0x", span));
+            }
+            let hex: String = self.input[hex_start..self.pos].iter().collect();
+            let num = u64::from_str_radix(&hex, 16)
+                .map_err(|_| format!("{}: invalid hex literal: 0x{}", span, hex))?;
+            return Ok(Token::Number(num as f64));
+        }
+
         let mut has_dot = false;
         while self.pos < self.input.len() {
             let ch = self.input[self.pos];
@@ -419,6 +459,27 @@ impl Lexer {
             "getline" => Token::Getline,
             _ => Token::Ident(s),
         }
+    }
+
+    /// Read exactly `count` hex digits and return the corresponding char.
+    /// Returns None if not enough hex digits are available.
+    fn read_hex_escape(&mut self, count: usize) -> Option<char> {
+        let start = self.pos;
+        let mut digits = 0;
+        while digits < count
+            && self.pos < self.input.len()
+            && self.input[self.pos].is_ascii_hexdigit()
+        {
+            self.pos += 1;
+            digits += 1;
+        }
+        if digits < count {
+            self.pos = start; // backtrack
+            return None;
+        }
+        let hex: String = self.input[start..self.pos].iter().collect();
+        let code = u32::from_str_radix(&hex, 16).ok()?;
+        char::from_u32(code)
     }
 
     fn read_ident_str(&mut self) -> String {

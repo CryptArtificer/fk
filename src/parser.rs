@@ -92,6 +92,7 @@ pub enum BinOp {
     Mul,
     Div,
     Mod,
+    Pow,
     Eq,
     Ne,
     Lt,
@@ -677,23 +678,23 @@ impl Parser {
     }
 
     fn parse_multiplication(&mut self) -> Result<Expr, String> {
-        let mut left = self.parse_unary()?;
+        let mut left = self.parse_exponentiation()?;
 
         loop {
             match self.current() {
                 Token::Star => {
                     self.advance();
-                    let right = self.parse_unary()?;
+                    let right = self.parse_exponentiation()?;
                     left = Expr::BinOp(Box::new(left), BinOp::Mul, Box::new(right));
                 }
                 Token::Slash => {
                     self.advance();
-                    let right = self.parse_unary()?;
+                    let right = self.parse_exponentiation()?;
                     left = Expr::BinOp(Box::new(left), BinOp::Div, Box::new(right));
                 }
                 Token::Percent => {
                     self.advance();
-                    let right = self.parse_unary()?;
+                    let right = self.parse_exponentiation()?;
                     left = Expr::BinOp(Box::new(left), BinOp::Mod, Box::new(right));
                 }
                 _ => break,
@@ -701,6 +702,19 @@ impl Parser {
         }
 
         Ok(left)
+    }
+
+    /// Exponentiation: right-associative, higher precedence than multiplication.
+    fn parse_exponentiation(&mut self) -> Result<Expr, String> {
+        let base = self.parse_unary()?;
+
+        if self.check(&Token::Power) {
+            self.advance();
+            let exp = self.parse_exponentiation()?; // right-associative
+            Ok(Expr::BinOp(Box::new(base), BinOp::Pow, Box::new(exp)))
+        } else {
+            Ok(base)
+        }
     }
 
     fn parse_unary(&mut self) -> Result<Expr, String> {

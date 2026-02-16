@@ -629,6 +629,7 @@ fn eval_binop(left: &str, op: &BinOp, right: &str) -> String {
         BinOp::Add => format_number(to_number(left) + to_number(right)),
         BinOp::Sub => format_number(to_number(left) - to_number(right)),
         BinOp::Mul => format_number(to_number(left) * to_number(right)),
+        BinOp::Pow => format_number(to_number(left).powf(to_number(right))),
         BinOp::Div => {
             let r = to_number(right);
             if r == 0.0 {

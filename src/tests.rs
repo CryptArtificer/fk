@@ -513,3 +513,72 @@ fn parse_cmd_pipe_getline() {
     let prog = par.parse().unwrap();
     assert_eq!(prog.rules.len(), 1);
 }
+
+// ── Exponentiation operator ──────────────────────────────────────
+
+#[test]
+fn exponentiation_basic() {
+    let rt = eval("{ result = 2 ** 10 }", &["x"]);
+    assert_eq!(rt.get_var("result"), "1024");
+}
+
+#[test]
+fn exponentiation_right_associative() {
+    // 2 ** 3 ** 2 should be 2 ** (3 ** 2) = 2 ** 9 = 512
+    let rt = eval("{ result = 2 ** 3 ** 2 }", &["x"]);
+    assert_eq!(rt.get_var("result"), "512");
+}
+
+#[test]
+fn exponentiation_higher_than_multiplication() {
+    // 3 * 2 ** 3 should be 3 * 8 = 24
+    let rt = eval("{ result = 3 * 2 ** 3 }", &["x"]);
+    assert_eq!(rt.get_var("result"), "24");
+}
+
+#[test]
+fn exponentiation_fractional() {
+    // 9 ** 0.5 = 3
+    let rt = eval("{ result = 9 ** 0.5 }", &["x"]);
+    assert_eq!(rt.get_var("result"), "3");
+}
+
+// ── Hex literals ─────────────────────────────────────────────────
+
+#[test]
+fn hex_literal_basic() {
+    let rt = eval("{ result = 0xFF }", &["x"]);
+    assert_eq!(rt.get_var("result"), "255");
+}
+
+#[test]
+fn hex_literal_in_arithmetic() {
+    let rt = eval("{ result = 0x10 + 1 }", &["x"]);
+    assert_eq!(rt.get_var("result"), "17");
+}
+
+#[test]
+fn hex_literal_uppercase_x() {
+    let rt = eval("{ result = 0X1F }", &["x"]);
+    assert_eq!(rt.get_var("result"), "31");
+}
+
+// ── String escape sequences ──────────────────────────────────────
+
+#[test]
+fn hex_escape_in_string() {
+    let rt = eval(r#"{ result = "\x41\x42\x43" }"#, &["x"]);
+    assert_eq!(rt.get_var("result"), "ABC");
+}
+
+#[test]
+fn unicode_escape_in_string() {
+    let rt = eval(r#"{ result = "\u00e9" }"#, &["x"]);
+    assert_eq!(rt.get_var("result"), "é");
+}
+
+#[test]
+fn unicode_escape_emoji() {
+    let rt = eval(r#"{ result = "\u2764" }"#, &["x"]);
+    assert_eq!(rt.get_var("result"), "❤");
+}
