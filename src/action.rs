@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::io::BufRead;
+use std::io::{self, BufWriter, Write, BufRead};
 use std::process::{Child, Command, Stdio};
 
 use crate::builtins::{self, format_number, format_printf, string_replace, to_number};
@@ -20,6 +19,7 @@ pub struct Executor<'a> {
     range_active: Vec<bool>,
     output_files: HashMap<String, File>,
     output_pipes: HashMap<String, Child>,
+    stdout: BufWriter<io::Stdout>,
     next_file: bool,
 }
 
@@ -34,6 +34,7 @@ impl<'a> Executor<'a> {
             program, rt, functions, range_active,
             output_files: HashMap::new(),
             output_pipes: HashMap::new(),
+            stdout: BufWriter::new(io::stdout()),
             next_file: false,
         }
     }
@@ -70,6 +71,7 @@ impl<'a> Executor<'a> {
         if let Some(ref block) = self.program.end {
             self.exec_block(block);
         }
+        let _ = self.stdout.flush();
         self.close_outputs();
     }
 
@@ -444,17 +446,16 @@ impl<'a> Executor<'a> {
     fn write_output(&mut self, text: &str, redir: &Option<Redirect>) {
         match redir {
             None => {
-                print!("{}", text);
+                let _ = self.stdout.write_all(text.as_bytes());
             }
             Some(Redirect::Overwrite(target_expr)) | Some(Redirect::Append(target_expr)) => {
                 let path = self.eval_expr(target_expr);
-                // Handle special device paths
                 if path == "/dev/stderr" {
                     eprint!("{}", text);
                     return;
                 }
                 if path == "/dev/stdout" {
-                    print!("{}", text);
+                    let _ = self.stdout.write_all(text.as_bytes());
                     return;
                 }
                 let is_append = matches!(redir, Some(Redirect::Append(_)));
@@ -619,13 +620,12 @@ impl<'a> Executor<'a> {
 
     /// fflush([file]) — flush stdout or a named output file. Returns 0 on success.
     fn builtin_fflush(&mut self, args: &[Expr]) -> String {
-        use std::io::Write as _;
         if args.is_empty() {
-            let _ = std::io::stdout().flush();
+            let _ = self.stdout.flush();
         } else {
             let path = self.eval_expr(&args[0]);
             if path.is_empty() {
-                let _ = std::io::stdout().flush();
+                let _ = self.stdout.flush();
             } else if let Some(file) = self.output_files.get_mut(&path) {
                 let _ = file.flush();
             }
@@ -638,8 +638,7 @@ impl<'a> Executor<'a> {
         if args.is_empty() {
             return "-1".to_string();
         }
-        // Flush stdout before spawning (awk semantics)
-        let _ = std::io::stdout().flush();
+        let _ = self.stdout.flush();
         let cmd = self.eval_expr(&args[0]);
         match Command::new("sh").arg("-c").arg(&cmd).status() {
             Ok(status) => format_number(status.code().unwrap_or(-1) as f64),
