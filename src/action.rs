@@ -368,6 +368,7 @@ impl<'a> Executor<'a> {
                     "gsub" => return self.builtin_sub(args, true),
                     "match" => return self.builtin_match(args),
                     "split" => return self.builtin_split(args),
+                    "jpath" if args.len() >= 3 => return self.builtin_jpath_extract(args),
                     "length" if args.len() == 1 => {
                         if let Expr::Var(var_name) = &args[0] {
                             if self.rt.arrays.contains_key(var_name.as_str()) {
@@ -565,6 +566,27 @@ impl<'a> Executor<'a> {
             self.rt.set_var("RLENGTH", "-1");
             "0".to_string()
         }
+    }
+
+    /// jpath(json, path, array) — extract JSON value into an awk array.
+    /// Arrays: arr[1], arr[2], ...   Objects: arr["key"], ...
+    /// Returns element count.
+    fn builtin_jpath_extract(&mut self, args: &[Expr]) -> String {
+        let json_str = self.eval_expr(&args[0]);
+        let path = self.eval_expr(&args[1]);
+        let array_name = match &args[2] {
+            Expr::Var(name) => name.clone(),
+            _ => {
+                eprintln!("fk: jpath: third argument must be an array name");
+                return "0".to_string();
+            }
+        };
+        let pairs = builtins::json::extract(&json_str, &path);
+        self.rt.arrays.remove(&array_name);
+        for (key, val) in &pairs {
+            self.rt.set_array(&array_name, key, val);
+        }
+        format_number(pairs.len() as f64)
     }
 
     /// split(string, array [, separator]) — returns element count.

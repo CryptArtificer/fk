@@ -1,3 +1,4 @@
+pub mod json;
 pub mod math;
 pub mod printf;
 pub mod string;
@@ -65,6 +66,7 @@ pub fn call_builtin(name: &str, args: &[String]) -> String {
         "length" | "substr" | "index" | "tolower" | "toupper" => string::call(name, args),
         "int" | "sin" | "cos" | "sqrt" | "log" | "exp" => math::call(name, args),
         "systime" | "strftime" | "mktime" => time::call(name, args),
+        "jpath" => json::call(args),
         _ => {
             eprintln!("fk: unknown function: {}", name);
             String::new()

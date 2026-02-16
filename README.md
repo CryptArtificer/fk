@@ -37,6 +37,7 @@ src/
     math.rs        – sin, cos, sqrt, int, **, …
     time.rs        – systime, strftime, mktime
     printf.rs      – format_printf and spec helpers
+    json.rs        – jpath() JSON path access (jq-light)
 ```
 
 ## Progress
@@ -88,7 +89,8 @@ src/
 - [x] Header mode (`-H`): parse first line as column names, populate `HDR` array
 - [x] JSON lines input mode (`-i json`): each line is a JSON object, fields by value order
 - [x] RS as regex (multi-char RS treated as regex pattern after BEGIN)
-- [ ] JSON path support? jq light?
+- [x] `jpath(json, path)` — lightweight JSON path access (`.key`, `[N]`, `.key[]`, implicit iteration)
+- [x] `jpath(json, path, array)` — extract iterated values / arrays / objects into awk arrays
 
 #### 3c — Language additions
 - [x] `**` exponentiation operator
@@ -169,6 +171,15 @@ echo -e 'name,score\nAlice,95\nBob,87' | fk -i csv -H '{ print HDR[1], $1 }'
 
 # JSON lines input (fields are values in insertion order)
 echo '{"name":"Alice","age":30}' | fk -i json '{ print $1, $2 }'
+
+# jpath: navigate nested JSON (jq-light)
+echo '{"users":[{"name":"Alice"},{"name":"Bob"}]}' | fk '{ print jpath($0, ".users[1].name") }'
+
+# jpath: iterate — .users[].name or .users.name (implicit iteration)
+echo '{"users":[{"id":1},{"id":2},{"id":3}]}' | fk '{ print jpath($0, ".users[].id") }'
+
+# jpath: extract iterated values into awk array
+echo '{"items":[10,20,30]}' | fk '{ n = jpath($0, ".items", a); for (i=1; i<=n; i++) print a[i] }'
 
 # Multi-char RS as regex (paragraph mode)
 printf 'a\nb\n\nc\nd\n' | fk -v 'RS=\n\n' '{ print NR, $0 }'

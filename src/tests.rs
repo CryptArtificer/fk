@@ -780,3 +780,88 @@ fn unicode_index_returns_char_position() {
     );
     assert_eq!(rt.get_var("p"), "4");
 }
+
+// ── jpath (JSON path) ───────────────────────────────────────────
+
+#[test]
+fn jpath_flat_key() {
+    let rt = eval(
+        r#"{ x = jpath($0, ".name") }"#,
+        &[r#"{"name":"Alice","age":30}"#],
+    );
+    assert_eq!(rt.get_var("x"), "Alice");
+}
+
+#[test]
+fn jpath_nested_array() {
+    let rt = eval(
+        r#"{ x = jpath($0, ".users[1].name") }"#,
+        &[r#"{"users":[{"name":"Alice"},{"name":"Bob"}]}"#],
+    );
+    assert_eq!(rt.get_var("x"), "Bob");
+}
+
+#[test]
+fn jpath_missing_returns_empty() {
+    let rt = eval(
+        r#"{ x = jpath($0, ".nope") }"#,
+        &[r#"{"a":1}"#],
+    );
+    assert_eq!(rt.get_var("x"), "");
+}
+
+#[test]
+fn jpath_extract_array_into_awk_array() {
+    let rt = eval(
+        r#"{ n = jpath($0, ".items", arr); x = arr[1]; y = arr[2]; z = arr[3] }"#,
+        &[r#"{"items":[10,20,30]}"#],
+    );
+    assert_eq!(rt.get_var("n"), "3");
+    assert_eq!(rt.get_array("arr", "1"), "10");
+    assert_eq!(rt.get_array("arr", "2"), "20");
+    assert_eq!(rt.get_array("arr", "3"), "30");
+}
+
+#[test]
+fn jpath_extract_object_into_awk_array() {
+    let rt = eval(
+        r#"{ n = jpath($0, ".", arr) }"#,
+        &[r#"{"name":"Alice","age":30}"#],
+    );
+    assert_eq!(rt.get_var("n"), "2");
+    assert_eq!(rt.get_array("arr", "name"), "Alice");
+    assert_eq!(rt.get_array("arr", "age"), "30");
+}
+
+#[test]
+fn jpath_extract_scalar_gives_single_element() {
+    let rt = eval(
+        r#"{ n = jpath($0, ".name", arr) }"#,
+        &[r#"{"name":"Bob"}"#],
+    );
+    assert_eq!(rt.get_var("n"), "1");
+    assert_eq!(rt.get_array("arr", "0"), "Bob");
+}
+
+#[test]
+fn jpath_iterate_and_project() {
+    // .users[].id or .users.id → extract all ids into array
+    let rt = eval(
+        r#"{ n = jpath($0, ".users[].id", ids) }"#,
+        &[r#"{"users":[{"id":10},{"id":20},{"id":30}]}"#],
+    );
+    assert_eq!(rt.get_var("n"), "3");
+    assert_eq!(rt.get_array("ids", "1"), "10");
+    assert_eq!(rt.get_array("ids", "2"), "20");
+    assert_eq!(rt.get_array("ids", "3"), "30");
+}
+
+#[test]
+fn jpath_implicit_iteration() {
+    // .users.name without [] — implicitly iterates
+    let rt = eval(
+        r#"{ x = jpath($0, ".users.name") }"#,
+        &[r#"{"users":[{"name":"Alice"},{"name":"Bob"}]}"#],
+    );
+    assert_eq!(rt.get_var("x"), "Alice\nBob");
+}
