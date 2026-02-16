@@ -135,6 +135,21 @@ src/
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 
+#### Phase 7 — Missing POSIX & gawk features
+- [ ] `break` / `continue` statements (loop control)
+- [ ] `do { ... } while (cond)` loop
+- [ ] `exit` / `exit(code)` statement
+- [ ] `-f program.awk` (read program from file)
+- [ ] `FILENAME` variable (current input file name)
+- [ ] `FNR` variable (per-file record number, resets each file)
+- [ ] `close(file)` / `close(cmd)` builtin (close output files and pipes)
+- [ ] `ENVIRON` array (environment variables)
+- [ ] `ARGC` / `ARGV` (command-line arguments)
+- [ ] `SUBSEP` and multi-dimensional arrays (`a[i,j]` → `a[i SUBSEP j]`)
+- [ ] `OFMT` variable (number output format)
+- [ ] Computed regex (`$0 ~ var` where var holds a pattern string)
+- [ ] `gensub(regex, replacement, how [, target])` (return modified string)
+
 ## Usage
 
 ```sh

@@ -48,11 +48,15 @@ pub enum Statement {
     Printf(Vec<Expr>, Option<Redirect>),
     If(Expr, Block, Option<Block>),
     While(Expr, Block),
+    DoWhile(Block, Expr),
     For(Option<Box<Statement>>, Option<Expr>, Option<Box<Statement>>, Block),
     ForIn(String, String, Block),
     Delete(String, Expr),
     DeleteAll(String),
     Nextfile,
+    Break,
+    Continue,
+    Exit(Option<Expr>),
     Return(Option<Expr>),
     Block(Block),
     Expression(Expr),
@@ -70,8 +74,8 @@ pub enum Expr {
     LogicalAnd(Box<Expr>, Box<Expr>),
     LogicalOr(Box<Expr>, Box<Expr>),
     LogicalNot(Box<Expr>),
-    Match(Box<Expr>, String),
-    NotMatch(Box<Expr>, String),
+    Match(Box<Expr>, Box<Expr>),
+    NotMatch(Box<Expr>, Box<Expr>),
     Assign(Box<Expr>, Box<Expr>),
     CompoundAssign(Box<Expr>, BinOp, Box<Expr>),
     Increment(Box<Expr>, bool),  // bool: true = pre (++x), false = post (x++)
@@ -266,9 +270,13 @@ impl Parser {
             Token::Printf => self.parse_printf(),
             Token::If => self.parse_if(),
             Token::While => self.parse_while(),
+            Token::Do => self.parse_do_while(),
             Token::For => self.parse_for(),
             Token::Delete => self.parse_delete(),
             Token::Nextfile => { self.advance(); Ok(Statement::Nextfile) }
+            Token::Break => { self.advance(); Ok(Statement::Break) }
+            Token::Continue => { self.advance(); Ok(Statement::Continue) }
+            Token::Exit => self.parse_exit(),
             Token::Return => self.parse_return(),
             Token::LBrace => {
                 let block = self.parse_brace_block()?;
@@ -399,6 +407,35 @@ impl Parser {
         };
 
         Ok(Statement::While(cond, body))
+    }
+
+    fn parse_do_while(&mut self) -> Result<Statement, String> {
+        self.advance(); // consume 'do'
+        self.skip_terminators();
+
+        let body = if self.check(&Token::LBrace) {
+            self.parse_brace_block()?
+        } else {
+            vec![self.parse_statement()?]
+        };
+
+        self.skip_terminators();
+        self.expect(&Token::While)?;
+        self.expect(&Token::LParen)?;
+        let cond = self.parse_expr()?;
+        self.expect(&Token::RParen)?;
+
+        Ok(Statement::DoWhile(body, cond))
+    }
+
+    fn parse_exit(&mut self) -> Result<Statement, String> {
+        self.advance(); // consume 'exit'
+        if self.is_terminator() || self.check(&Token::RBrace) {
+            Ok(Statement::Exit(None))
+        } else {
+            let expr = self.parse_expr()?;
+            Ok(Statement::Exit(Some(expr)))
+        }
     }
 
     fn parse_for(&mut self) -> Result<Statement, String> {
@@ -600,18 +637,20 @@ impl Parser {
             self.advance();
             if let Token::Regex(pat) = self.current().clone() {
                 self.advance();
-                return Ok(Expr::Match(Box::new(left), pat));
+                return Ok(Expr::Match(Box::new(left), Box::new(Expr::StringLit(pat))));
             } else {
-                return Err(format!("{}: expected regex after ~", self.current_span()));
+                let expr = self.parse_primary()?;
+                return Ok(Expr::Match(Box::new(left), Box::new(expr)));
             }
         }
         if self.check(&Token::NotMatch) {
             self.advance();
             if let Token::Regex(pat) = self.current().clone() {
                 self.advance();
-                return Ok(Expr::NotMatch(Box::new(left), pat));
+                return Ok(Expr::NotMatch(Box::new(left), Box::new(Expr::StringLit(pat))));
             } else {
-                return Err(format!("{}: expected regex after !~", self.current_span()));
+                let expr = self.parse_primary()?;
+                return Ok(Expr::NotMatch(Box::new(left), Box::new(expr)));
             }
         }
 
@@ -755,10 +794,21 @@ impl Parser {
 
         loop {
             if self.check(&Token::LBracket) {
-                // Array subscript
+                // Array subscript — supports multi-dimensional a[i,j] → a[i SUBSEP j]
                 if let Expr::Var(name) = expr {
                     self.advance();
-                    let key = self.parse_expr()?;
+                    let mut key = self.parse_expr()?;
+                    while self.check(&Token::Comma) {
+                        self.advance();
+                        let next = self.parse_expr()?;
+                        key = Expr::Concat(
+                            Box::new(Expr::Concat(
+                                Box::new(key),
+                                Box::new(Expr::Var("SUBSEP".to_string())),
+                            )),
+                            Box::new(next),
+                        );
+                    }
                     self.expect(&Token::RBracket)?;
                     expr = Expr::ArrayRef(name, Box::new(key));
                 } else {

@@ -15,9 +15,11 @@ incrementally as a learning exercise. The user values:
 
 - **~5,500 lines of Rust** across 22 source files
 - **152 tests**, zero warnings
-- **Phases 0–5 complete**, Phase 6 (Hardening & Optimisation) in progress
+- **Phases 0–6 substantially complete**, Phase 7 (Missing Features) in progress
 - Single dependency: `regex` crate (for RS-as-regex)
 - Dev dependency: `criterion` (benchmarks)
+- **IMPORTANT**: Partial code changes in working tree (lexer.rs, parser.rs) — see
+  "Phase 7 in-progress" section below. Code does NOT compile yet.
 
 ## Architecture (read src/lib.rs for module list)
 
@@ -60,7 +62,7 @@ builtins/json.rs   — jpath() with JSON parser, path evaluator, iteration
 - All string builtins are unicode-aware (chars, not bytes)
 - jpath() supports multi-value navigation: .key[], .arr.key (implicit iteration)
 
-## What's done (Phases 0–5, Phase 6 in progress)
+## What's done (Phases 0–6)
 
 Phase 0: CLI, I/O, field splitting, print, patterns, BEGIN/END, built-in vars
 Phase 1: Expressions, assignment, control flow, arrays, printf, operators
@@ -71,12 +73,106 @@ Phase 3c: **, hex literals, \x/\u escapes, nextfile, delete arr, length(arr), $-
 Phase 3d: Unicode-aware strings, REPL
 Phase 4: Criterion benchmarks (field split, lex+parse, record processing), Makefile, comparison harness
 Phase 5: 5 example scripts, cheat sheet, man page
-Phase 6 (partial): Buffered stdout, interned built-in vars, zero-alloc print path,
+Phase 6: Buffered stdout, interned built-in vars, zero-alloc print path,
   edge-case audit (15 new tests), recursion depth guard (limit 200),
-  profile-guided executor optimisation
+  profile-guided executor optimisation, clippy clean
 
-## What's next: Phase 6 — Hardening & Optimisation (remaining)
+## What's next: Phase 7 — Missing POSIX & gawk features
 
+All of these are in one batch. Partial code exists (see below).
+
+### Feature list
+1. `break` / `continue` — loop control statements
+2. `do { ... } while (cond)` — post-test loop
+3. `exit` / `exit(code)` — terminate program (runs END block, then exits)
+4. `-f program.awk` — read program from file instead of CLI arg
+5. `FILENAME` — current input file name
+6. `FNR` — per-file record number (resets when switching files)
+7. `close(file)` / `close(cmd)` — close output file or pipe by name
+8. `ENVIRON` array — populated from process environment at startup
+9. `ARGC` / `ARGV` — command-line argument count and values
+10. `SUBSEP` and multi-dimensional arrays — `a[i,j]` desugars to `a[i SUBSEP j]`
+11. `OFMT` — number output format variable (default "%.6g")
+12. Computed regex — `$0 ~ var` where the RHS is any expression, not just /regex/
+13. `gensub(regex, replacement, how [, target])` — like gsub but returns result
+
+### Phase 7 in-progress changes (code does NOT compile yet)
+
+**Already changed in working tree (uncommitted):**
+
+#### `src/lexer.rs`
+- Added `Do`, `Break`, `Continue`, `Exit` keywords to Token enum
+- Added keyword mappings in `read_ident`
+
+#### `src/parser.rs`
+- Added `DoWhile(Block, Expr)`, `Break`, `Continue`, `Exit(Option<Expr>)` to Statement enum
+- Changed `Match(Box<Expr>, String)` → `Match(Box<Expr>, Box<Expr>)` (computed regex)
+- Changed `NotMatch(Box<Expr>, String)` → `NotMatch(Box<Expr>, Box<Expr>)`
+- Updated `parse_statement` to dispatch break/continue/do/exit
+- Added `parse_do_while()` and `parse_exit()` methods
+- Updated `parse_match_expr` to accept expressions after ~ and !~ (not just /regex/)
+- Updated array subscript parsing to handle `a[i,j]` → concat with SUBSEP
+
+**Still needs to be done:**
+
+#### `src/action.rs` (executor) — largest set of changes
+- Change `ReturnValue` from `struct ReturnValue(String)` to:
+  ```rust
+  enum Signal {
+      Return(String),
+      Break,
+      Continue,
+      Exit(i32),
+  }
+  ```
+- Update `exec_block` and `exec_stmt` return type to `Option<Signal>`
+- Update all loops (While, For, ForIn) to handle Break/Continue signals
+- Add DoWhile execution
+- Add Break/Continue/Exit statement handling in exec_stmt
+- For Exit: set a flag, skip remaining rules, run END block, then exit with code
+- Fix regex pattern matching: `Pattern::Regex` and `Expr::Match/NotMatch` currently
+  use `str::contains()` — should use `regex::Regex` for proper regex semantics
+- Add `close()` builtin: look up name in `output_files` / `output_pipes`, close it
+- Add `gensub()` builtin: evaluate regex, replacement, how; return modified string
+- Update `call_user_func` to handle new Signal enum instead of ReturnValue
+
+#### `src/runtime.rs`
+- Add interned variables: `subsep` (default "\x1c"), `ofmt` (default "%.6g"),
+  `fnr` (u64), `filename` (String)
+- Update INTERNED_NAMES, get_var, set_var, has_var, remove_var, all_var_names
+- Add `increment_fnr()` and `reset_fnr()` methods
+
+#### `src/cli.rs`
+- Add `-f` flag: `program_file: Option<String>` in Args struct
+- Parse `-f file` to read program text from file
+
+#### `src/main.rs`
+- If `-f` given, read program from file
+- Initialize ENVIRON array from `std::env::vars()`
+- Set ARGC/ARGV from command-line args
+- Track FILENAME per file: expose current filename from Input, set in runtime
+- Track FNR: reset when switching files
+- Wire up exit handling (exit code from Signal::Exit)
+
+#### `src/input/mod.rs`
+- Add `pub fn current_filename(&self) -> &str` to Input struct
+  so main.rs can update FILENAME in the runtime
+
+#### Tests
+- break in while, for, for-in, do-while
+- continue in while, for, for-in, do-while
+- do-while basic, do-while runs at least once
+- exit with and without code
+- -f flag
+- FILENAME and FNR across multiple files
+- close() reopening a file
+- ENVIRON access
+- ARGC/ARGV
+- SUBSEP multi-dimensional arrays
+- computed regex (var ~ var)
+- gensub basic, gensub global, gensub nth occurrence
+
+### Remaining from Phase 6
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 

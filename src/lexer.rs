@@ -23,12 +23,16 @@ pub enum Token {
     Else,
     While,
     For,
+    Do,
     In,
     Delete,
     Function,
     Return,
     Getline,
     Nextfile,
+    Break,
+    Continue,
+    Exit,
 
     // Operators
     Plus,
@@ -455,10 +459,14 @@ impl Lexer {
             "for" => Token::For,
             "in" => Token::In,
             "delete" => Token::Delete,
+            "do" => Token::Do,
             "function" => Token::Function,
             "return" => Token::Return,
             "getline" => Token::Getline,
             "nextfile" => Token::Nextfile,
+            "break" => Token::Break,
+            "continue" => Token::Continue,
+            "exit" => Token::Exit,
             _ => Token::Ident(s),
         }
     }
