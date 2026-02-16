@@ -24,14 +24,13 @@ src/
   runtime.rs       – runtime state (variables, fields, arrays)
   field.rs         – field splitting (FS / OFS semantics)
   error.rs         – source-location-aware diagnostics (Span type)
-  unicode.rs       – char-aware field/string operations       (Phase 3)
-  repl.rs          – interactive mode                         (Phase 3)
+  repl.rs          – interactive REPL mode
   input/
-    mod.rs         – RecordReader trait, source orchestration
-    line.rs        – default line-oriented input (current behaviour)
-    csv.rs         – RFC 4180 CSV/TSV parser                  (Phase 3)
-    json.rs        – line-delimited JSON (NDJSON) parser      (Phase 3)
-    header.rs      – first-line header → named-field mapping  (Phase 3)
+    mod.rs         – Record struct, RecordReader trait, source orchestration
+    line.rs        – default line-oriented reader
+    csv.rs         – RFC 4180 CSV/TSV reader (quoted fields, multi-line)
+    json.rs        – JSON Lines (NDJSON) reader
+    regex_rs.rs    – regex-based record separator reader
   builtins/
     mod.rs         – dispatch table, coercion helpers
     string.rs      – length, substr, index, sub, gsub, …
@@ -84,16 +83,17 @@ src/
 - [x] Add `error.rs` with formatted diagnostics
 
 #### 3b — Structured input formats
-- [ ] CSV input mode (`-i csv`, RFC 4180 compliant: quoted fields, embedded commas/newlines)
-- [ ] TSV input mode (`-i tsv`)
-- [ ] Header mode (`-H`): parse first line as column names, access via `@"name"` or `$FI["name"]`
-- [ ] JSON lines input mode (`-i json`): each line is a JSON object, fields by key
-- [ ] RS as regex (multi-char / pattern record separator)
+- [x] CSV input mode (`-i csv`, RFC 4180 compliant: quoted fields, embedded commas/newlines)
+- [x] TSV input mode (`-i tsv`)
+- [x] Header mode (`-H`): parse first line as column names, populate `HDR` array
+- [x] JSON lines input mode (`-i json`): each line is a JSON object, fields by value order
+- [x] RS as regex (multi-char RS treated as regex pattern after BEGIN)
+- [ ] JSON path support? jq light?
 
 #### 3c — Language additions
 - [x] `**` exponentiation operator
 - [x] Hex numeric literals (`0x1F`) and `\x` / `\u` escape sequences
-- [ ] `nextfile` statement
+- [x] `nextfile` statement
 - [x] `delete array` (delete entire array, not just one key)
 - [x] `length(array)` (return number of elements)
 - [x] Negative field indexes (`$-1` = last field, `$-2` = second-to-last) and `$(expr)` computed fields
@@ -103,8 +103,8 @@ src/
 
 #### 3d — Quality of life
 - [x] Error messages with source locations (`line:col`)
-- [ ] Unicode-aware `length()`, `substr()`, field splitting
-- [ ] REPL / interactive mode
+- [x] Unicode-aware `length()`, `substr()`, `index()`, field splitting
+- [x] REPL / interactive mode (`--repl`)
 
 #### Phase 4 — Benchmarks
 - [ ] Create `benches/` directory with criterion-based benchmarks
@@ -157,6 +157,31 @@ echo "" | fk '{ system("echo hello from system()") }'
 
 # Print to stderr
 echo "oops" | fk '{ print $0 > "/dev/stderr" }'
+
+# CSV input (RFC 4180: handles quoted fields, embedded commas)
+echo -e 'name,age\n"Alice",30\n"Bob ""B""",25' | fk -i csv '{ print $1, $2 }'
+
+# TSV input
+echo -e 'x\t10\ny\t20' | fk -i tsv '{ sum += $2 } END { print sum }'
+
+# Header mode: first line defines column names in HDR array
+echo -e 'name,score\nAlice,95\nBob,87' | fk -i csv -H '{ print HDR[1], $1 }'
+
+# JSON lines input (fields are values in insertion order)
+echo '{"name":"Alice","age":30}' | fk -i json '{ print $1, $2 }'
+
+# Multi-char RS as regex (paragraph mode)
+printf 'a\nb\n\nc\nd\n' | fk -v 'RS=\n\n' '{ print NR, $0 }'
+
+# Unicode-aware: length, substr, index count characters, not bytes
+echo "café" | fk '{ print length($0), substr($0,4,1) }'
+
+# REPL / interactive mode
+# fk --repl
+# fk> BEGIN { x = 42; print x }
+# 42
+# fk> :vars
+# fk> :q
 ```
 
 ## Building
