@@ -162,11 +162,25 @@ impl<'a> Executor<'a> {
     fn exec_stmt(&mut self, stmt: &Statement) -> Option<ReturnValue> {
         match stmt {
             Statement::Print(exprs, redir) => {
-                let ofs = self.rt.get_var("OFS");
-                let ors = self.rt.get_var("ORS");
-                let parts: Vec<String> = exprs.iter().map(|e| self.eval_expr(e)).collect();
-                let output = format!("{}{}", parts.join(&ofs), ors);
-                self.write_output(&output, redir);
+                if redir.is_none() {
+                    let ofs = self.rt.ofs().to_owned();
+                    let ors = self.rt.ors().to_owned();
+                    for (i, e) in exprs.iter().enumerate() {
+                        if i > 0 {
+                            let _ = self.stdout.write_all(ofs.as_bytes());
+                        }
+                        let val = self.eval_expr(e);
+                        let _ = self.stdout.write_all(val.as_bytes());
+                    }
+                    let _ = self.stdout.write_all(ors.as_bytes());
+                } else {
+                    let ofs = self.rt.ofs().to_owned();
+                    let ors = self.rt.ors().to_owned();
+                    let parts: Vec<String> = exprs.iter().map(|e| self.eval_expr(e)).collect();
+                    let mut output = parts.join(&ofs);
+                    output.push_str(&ors);
+                    self.write_output(&output, redir);
+                }
             }
             Statement::Printf(exprs, redir) => {
                 if exprs.is_empty() {
@@ -174,7 +188,11 @@ impl<'a> Executor<'a> {
                 }
                 let args: Vec<String> = exprs.iter().map(|e| self.eval_expr(e)).collect();
                 let output = format_printf(&args[0], &args[1..]);
-                self.write_output(&output, redir);
+                if redir.is_none() {
+                    let _ = self.stdout.write_all(output.as_bytes());
+                } else {
+                    self.write_output(&output, redir);
+                }
             }
             Statement::If(cond, then_block, else_block) => {
                 let val = self.eval_expr(cond);

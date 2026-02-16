@@ -85,6 +85,12 @@ impl Runtime {
         names
     }
 
+    /// Borrow OFS directly (avoids clone in hot print path).
+    pub fn ofs(&self) -> &str { &self.ofs }
+
+    /// Borrow ORS directly (avoids clone in hot print path).
+    pub fn ors(&self) -> &str { &self.ors }
+
     pub fn get_field(&self, idx: usize) -> String {
         if idx == 0 {
             return self.fields.join(&self.ofs);

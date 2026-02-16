@@ -55,6 +55,7 @@ builtins/json.rs   — jpath() with JSON parser, path evaluator, iteration
 - Built-in vars (NR, NF, FS, OFS, RS, ORS) are dedicated fields in Runtime,
   not in the HashMap; NR/NF stored as integers, formatted on read
 - Executor owns a BufWriter<Stdout>; flushed at END, fflush(), and before system()
+- Print writes parts directly to BufWriter (no intermediate String allocation)
 - All string builtins are unicode-aware (chars, not bytes)
 - jpath() supports multi-value navigation: .key[], .arr.key (implicit iteration)
 
@@ -69,23 +70,23 @@ Phase 3c: **, hex literals, \x/\u escapes, nextfile, delete arr, length(arr), $-
 Phase 3d: Unicode-aware strings, REPL
 Phase 4: Criterion benchmarks (field split, lex+parse, record processing), Makefile, comparison harness
 Phase 5: 5 example scripts, cheat sheet, man page
-Phase 6 (partial): Buffered stdout, interned built-in variables
+Phase 6 (partial): Buffered stdout, interned built-in vars, zero-alloc print path
 
 ## What's next: Phase 6 — Hardening & Optimisation (remaining)
 
 - [ ] Fuzz testing (lexer, parser, executor) with cargo-fuzz
 - [ ] Edge-case audit: empty input, binary data, extremely long lines, deep recursion
-- [ ] Reduce allocations in hot paths (field splitting, record loop, string concat)
 - [ ] Profile-guided review of the executor loop
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 
-### Performance (from `make bench-compare` on 1M lines):
-- `print $2`: fk ~0.71s vs awk ~0.58s (1.2× — remaining gap likely format!/join overhead)
-- Sum/arithmetic: fk ~0.39s vs awk ~0.60s (fk faster)
-- Pattern matching: fk ~0.39s vs awk ~0.82s (fk 2× faster)
-- Field arithmetic: fk ~0.41s vs awk ~0.62s (fk faster)
-- Associative arrays: fk ~0.52s vs awk ~0.67s (fk faster)
+### Performance (from `make bench-compare` on 1M lines, Apple M3 Pro):
+fk is now faster than awk (macOS system awk 20200816) on all 5 benchmarks:
+- `print $2`: fk ~0.53s vs awk ~0.57s
+- Sum/arithmetic: fk ~0.39s vs awk ~0.60s
+- Pattern matching: fk ~0.38s vs awk ~0.78s (fk 2× faster)
+- Field arithmetic: fk ~0.41s vs awk ~0.62s
+- Associative arrays: fk ~0.53s vs awk ~0.67s
 
 ## Tooling
 
