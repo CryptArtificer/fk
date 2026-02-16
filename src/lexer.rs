@@ -15,10 +15,13 @@ pub enum Token {
     Begin,
     End,
     Print,
+    Printf,
     If,
     Else,
     While,
     For,
+    In,
+    Delete,
 
     // Operators
     Plus,
@@ -27,6 +30,13 @@ pub enum Token {
     Slash,
     Percent,
     Assign,
+    PlusAssign,     // +=
+    MinusAssign,    // -=
+    StarAssign,     // *=
+    SlashAssign,    // /=
+    PercentAssign,  // %=
+    Increment,      // ++
+    Decrement,      // --
     Eq,
     Ne,
     Lt,
@@ -38,13 +48,14 @@ pub enum Token {
     Not,         // !
     And,         // &&
     Or,          // ||
-    Append,      // +=
 
     // Delimiters
     LBrace,
     RBrace,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
     Semicolon,
     Comma,
     Newline,
@@ -92,20 +103,65 @@ impl Lexer {
                 '}' => { self.pos += 1; Token::RBrace }
                 '(' => { self.pos += 1; Token::LParen }
                 ')' => { self.pos += 1; Token::RParen }
+                '[' => { self.pos += 1; Token::LBracket }
+                ']' => { self.pos += 1; Token::RBracket }
                 ';' => { self.pos += 1; Token::Semicolon }
                 ',' => { self.pos += 1; Token::Comma }
                 '+' => {
                     self.pos += 1;
                     if self.peek() == Some('=') {
                         self.pos += 1;
-                        Token::Append
+                        Token::PlusAssign
+                    } else if self.peek() == Some('+') {
+                        self.pos += 1;
+                        Token::Increment
                     } else {
                         Token::Plus
                     }
                 }
-                '-' => { self.pos += 1; Token::Minus }
-                '*' => { self.pos += 1; Token::Star }
-                '%' => { self.pos += 1; Token::Percent }
+                '-' => {
+                    self.pos += 1;
+                    if self.peek() == Some('=') {
+                        self.pos += 1;
+                        Token::MinusAssign
+                    } else if self.peek() == Some('-') {
+                        self.pos += 1;
+                        Token::Decrement
+                    } else {
+                        Token::Minus
+                    }
+                }
+                '*' => {
+                    self.pos += 1;
+                    if self.peek() == Some('=') {
+                        self.pos += 1;
+                        Token::StarAssign
+                    } else {
+                        Token::Star
+                    }
+                }
+                '%' => {
+                    self.pos += 1;
+                    if self.peek() == Some('=') {
+                        self.pos += 1;
+                        Token::PercentAssign
+                    } else {
+                        Token::Percent
+                    }
+                }
+                '/' => {
+                    if self.is_regex_context(&tokens) {
+                        self.read_regex()?
+                    } else {
+                        self.pos += 1;
+                        if self.peek() == Some('=') {
+                            self.pos += 1;
+                            Token::SlashAssign
+                        } else {
+                            Token::Slash
+                        }
+                    }
+                }
                 '=' => {
                     self.pos += 1;
                     if self.peek() == Some('=') {
@@ -164,16 +220,6 @@ impl Lexer {
                         return Err(format!("unexpected character '|' at position {}", self.pos - 1));
                     }
                 }
-                '/' => {
-                    // Regex literal: only when we expect a pattern (start of program,
-                    // after { or ; or newline, or after && / ||).
-                    if self.is_regex_context(&tokens) {
-                        self.read_regex()?
-                    } else {
-                        self.pos += 1;
-                        Token::Slash
-                    }
-                }
                 '"' => self.read_string()?,
                 '$' => self.read_field()?,
                 _ if ch.is_ascii_digit() || ch == '.' => self.read_number()?,
@@ -209,7 +255,8 @@ impl Lexer {
             None => true,
             Some(Token::LBrace) | Some(Token::Semicolon) | Some(Token::Newline)
             | Some(Token::And) | Some(Token::Or) | Some(Token::Not)
-            | Some(Token::LParen) | Some(Token::Comma) => true,
+            | Some(Token::LParen) | Some(Token::Comma)
+            | Some(Token::Match) | Some(Token::NotMatch) => true,
             _ => false,
         }
     }
@@ -318,10 +365,13 @@ impl Lexer {
             "BEGIN" => Token::Begin,
             "END" => Token::End,
             "print" => Token::Print,
+            "printf" => Token::Printf,
             "if" => Token::If,
             "else" => Token::Else,
             "while" => Token::While,
             "for" => Token::For,
+            "in" => Token::In,
+            "delete" => Token::Delete,
             _ => Token::Ident(s),
         }
     }
@@ -374,5 +424,45 @@ mod tests {
         let tokens = lexer.tokenize().unwrap();
         assert!(matches!(tokens[0], Token::Begin));
         assert!(tokens.iter().any(|t| matches!(t, Token::End)));
+    }
+
+    #[test]
+    fn increment_decrement() {
+        let mut lexer = Lexer::new("{ i++; j-- }");
+        let tokens = lexer.tokenize().unwrap();
+        assert!(tokens.contains(&Token::Increment));
+        assert!(tokens.contains(&Token::Decrement));
+    }
+
+    #[test]
+    fn compound_assign() {
+        let mut lexer = Lexer::new("{ x += 1; y -= 2; z *= 3; w /= 4; m %= 5 }");
+        let tokens = lexer.tokenize().unwrap();
+        assert!(tokens.contains(&Token::PlusAssign));
+        assert!(tokens.contains(&Token::MinusAssign));
+        assert!(tokens.contains(&Token::StarAssign));
+        assert!(tokens.contains(&Token::SlashAssign));
+        assert!(tokens.contains(&Token::PercentAssign));
+    }
+
+    #[test]
+    fn array_access() {
+        let mut lexer = Lexer::new("{ a[\"key\"] = 1 }");
+        let tokens = lexer.tokenize().unwrap();
+        assert!(tokens.contains(&Token::LBracket));
+        assert!(tokens.contains(&Token::RBracket));
+    }
+
+    #[test]
+    fn keywords_phase1() {
+        let mut lexer = Lexer::new("if else for while in delete printf");
+        let tokens = lexer.tokenize().unwrap();
+        assert!(tokens.contains(&Token::If));
+        assert!(tokens.contains(&Token::Else));
+        assert!(tokens.contains(&Token::For));
+        assert!(tokens.contains(&Token::While));
+        assert!(tokens.contains(&Token::In));
+        assert!(tokens.contains(&Token::Delete));
+        assert!(tokens.contains(&Token::Printf));
     }
 }

@@ -5,6 +5,7 @@ use crate::field;
 #[derive(Debug)]
 pub struct Runtime {
     pub variables: HashMap<String, String>,
+    pub arrays: HashMap<String, HashMap<String, String>>,
     pub fields: Vec<String>,
 }
 
@@ -20,6 +21,7 @@ impl Runtime {
 
         Runtime {
             variables,
+            arrays: HashMap::new(),
             fields: Vec::new(),
         }
     }
@@ -45,6 +47,23 @@ impl Runtime {
             .unwrap_or_default()
     }
 
+    pub fn set_field(&mut self, idx: usize, value: &str) {
+        if idx == 0 {
+            let fs = self.get_var("FS");
+            self.fields = field::split(value, &fs);
+            let nf = self.fields.len();
+            self.set_var("NF", &nf.to_string());
+            return;
+        }
+        let idx = idx - 1;
+        while self.fields.len() <= idx {
+            self.fields.push(String::new());
+        }
+        self.fields[idx] = value.to_string();
+        let nf = self.fields.len();
+        self.set_var("NF", &nf.to_string());
+    }
+
     pub fn set_record(&mut self, line: &str) {
         let fs = self.get_var("FS");
         self.fields = field::split(line, &fs);
@@ -57,13 +76,39 @@ impl Runtime {
         self.set_var("NR", &nr.to_string());
     }
 
-    #[allow(dead_code)]
-    pub fn nr(&self) -> u64 {
-        self.get_var("NR").parse().unwrap_or(0)
+    // --- array operations ---
+
+    pub fn get_array(&self, name: &str, key: &str) -> String {
+        self.arrays
+            .get(name)
+            .and_then(|a| a.get(key))
+            .cloned()
+            .unwrap_or_default()
     }
 
-    #[allow(dead_code)]
-    pub fn nf(&self) -> usize {
-        self.get_var("NF").parse().unwrap_or(0)
+    pub fn set_array(&mut self, name: &str, key: &str, value: &str) {
+        self.arrays
+            .entry(name.to_string())
+            .or_default()
+            .insert(key.to_string(), value.to_string());
+    }
+
+    pub fn delete_array(&mut self, name: &str, key: &str) {
+        if let Some(a) = self.arrays.get_mut(name) {
+            a.remove(key);
+        }
+    }
+
+    pub fn array_has_key(&self, name: &str, key: &str) -> bool {
+        self.arrays
+            .get(name)
+            .map_or(false, |a| a.contains_key(key))
+    }
+
+    pub fn array_keys(&self, name: &str) -> Vec<String> {
+        self.arrays
+            .get(name)
+            .map(|a| a.keys().cloned().collect())
+            .unwrap_or_default()
     }
 }

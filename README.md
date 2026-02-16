@@ -12,53 +12,55 @@ A modernized, modular awk clone built in Rust.
 - **Minimal dependencies** — lean on the Rust standard library; pull in crates only when they genuinely earn their keep.
 - **Incremental** — built in deliberate steps, each one leaving a usable tool.
 
-## Architecture (planned)
+## Architecture
 
 ```
 src/
-  main.rs          – entry point, arg parsing, orchestration
-  cli.rs           – command-line argument definitions
-  input.rs         – record-oriented reading (files, stdin)
-  field.rs         – field splitting (FS / OFS)
-  pattern.rs       – pattern matching (string, regex, ranges)
-  action.rs        – action execution (print, assignment, …)
-  expr.rs          – expression evaluation
-  program.rs       – parsed program representation (rules, BEGIN/END)
-  lexer.rs         – tokeniser for the fk language
-  parser.rs        – parser (tokens → program AST)
-  runtime.rs       – runtime state (variables, NR, NF, etc.)
-  builtins/        – built-in function modules (math, string, I/O, …)
+  main.rs      – entry point, orchestration
+  cli.rs       – command-line argument parsing (-F, -v, program, files)
+  input.rs     – record-oriented reading (files, stdin, "-")
+  field.rs     – field splitting (FS / OFS semantics)
+  lexer.rs     – tokeniser for the fk language
+  parser.rs    – recursive-descent parser (tokens → AST)
+  action.rs    – executor: pattern matching, statements, expressions, builtins
+  runtime.rs   – runtime state (variables, fields, associative arrays)
 ```
 
 ## Progress
 
 ### Phase 0 — Skeleton & essentials
-- [ ] Argument handling (`-F`, `-v`, `'program'`, file operands)
-- [ ] Read lines from stdin and file arguments
-- [ ] Split records into fields (`$0`, `$1` … `$NF`)
-- [ ] Print action (bare `{ print }` / `{ print $N }`)
-- [ ] Field separator (`-F` flag and `FS` variable)
-- [ ] Basic pattern matching (string equality, `/regex/`)
-- [ ] `BEGIN` and `END` blocks
-- [ ] Built-in variables: `NR`, `NF`, `FS`, `OFS`, `RS`, `ORS`
+- [x] Argument handling (`-F`, `-v`, `'program'`, file operands)
+- [x] Read lines from stdin and file arguments
+- [x] Split records into fields (`$0`, `$1` … `$NF`)
+- [x] Print action (bare `{ print }` / `{ print $N }`)
+- [x] Field separator (`-F` flag and `FS` variable)
+- [x] Basic pattern matching (string equality, `/regex/`)
+- [x] `BEGIN` and `END` blocks
+- [x] Built-in variables: `NR`, `NF`, `FS`, `OFS`, `RS`, `ORS`
 
 ### Phase 1 — Language core
-- [ ] Arithmetic & string expressions
-- [ ] Variable assignment
-- [ ] `if` / `else`
-- [ ] `while`, `for`, `for-in`
-- [ ] User-defined variables and associative arrays
-- [ ] `printf` / `sprintf`
+- [x] Arithmetic & string expressions
+- [x] Variable assignment (including `+=`, `-=`, `*=`, `/=`, `%=`)
+- [x] `if` / `else` (including `else if` chains)
+- [x] `while`, C-style `for`, `for (k in array)`
+- [x] `++` / `--` (pre and post)
+- [x] User-defined variables and associative arrays
+- [x] `printf` / `sprintf`
+- [x] Implicit string concatenation
+- [x] Logical operators (`&&`, `||`, `!`)
+- [x] Match operators (`~`, `!~`)
+- [x] `delete array[key]`
+- [x] Built-in functions: `length`, `substr`, `index`, `tolower`, `toupper`, `int`, `sqrt`, `sin`, `cos`, `log`, `exp`
 
 ### Phase 2 — Full awk compatibility
 - [ ] User-defined functions
 - [ ] Getline variants
 - [ ] Output redirection (`>`, `>>`, `|`)
-- [ ] All POSIX awk built-in functions (substr, index, split, sub, gsub, match, length, tolower, toupper, …)
-- [ ] Multiple rule support, pattern ranges (`/start/,/stop/`)
+- [ ] Remaining POSIX builtins (`split`, `sub`, `gsub`, `match`, `sprintf` width `*`, …)
+- [ ] Pattern ranges (`/start/,/stop/`)
 - [ ] Uninitialized variable semantics (0 / "")
-- [ ] Concatenation as implicit operator
 - [ ] Coercion rules (string ↔ number)
+- [ ] Ternary operator (`?:`)
 
 ### Phase 3 — Modernisation & extensions
 - [ ] Better error messages with source locations
