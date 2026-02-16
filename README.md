@@ -129,8 +129,9 @@ src/
 - [x] Buffer stdout output (`BufWriter` in Executor, flushed at END / fflush / system)
 - [x] Intern built-in variable names (NR, NF, FS, OFS, RS, ORS as dedicated fields)
 - [x] Reduce allocations in print hot path (direct-write to BufWriter, no intermediate string)
+- [x] Edge-case audit: empty input, binary data, long lines, deep recursion (15 new tests)
+- [x] Recursion depth guard (limit 200, clean error instead of stack overflow)
 - [ ] Fuzz testing (lexer, parser, executor) with `cargo-fuzz`
-- [ ] Edge-case audit: empty input, binary data, extremely long lines, deep recursion
 - [ ] Profile-guided review of the executor loop
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io

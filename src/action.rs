@@ -12,6 +12,8 @@ use crate::runtime::Runtime;
 struct ReturnValue(String);
 
 /// Execute a parsed program against the runtime.
+const MAX_CALL_DEPTH: usize = 200;
+
 pub struct Executor<'a> {
     program: &'a Program,
     rt: &'a mut Runtime,
@@ -20,6 +22,7 @@ pub struct Executor<'a> {
     output_files: HashMap<String, File>,
     output_pipes: HashMap<String, Child>,
     stdout: BufWriter<io::Stdout>,
+    call_depth: usize,
     next_file: bool,
 }
 
@@ -35,6 +38,7 @@ impl<'a> Executor<'a> {
             output_files: HashMap::new(),
             output_pipes: HashMap::new(),
             stdout: BufWriter::new(io::stdout()),
+            call_depth: 0,
             next_file: false,
         }
     }
@@ -517,6 +521,12 @@ impl<'a> Executor<'a> {
     }
 
     fn call_user_func(&mut self, func: &FuncDef, args: &[String]) -> String {
+        if self.call_depth >= MAX_CALL_DEPTH {
+            eprintln!("fk: maximum call depth ({}) exceeded", MAX_CALL_DEPTH);
+            return String::new();
+        }
+        self.call_depth += 1;
+
         let mut saved: Vec<(String, bool, String)> = Vec::new();
         for param in &func.params {
             let existed = self.rt.has_var(param);
@@ -542,6 +552,7 @@ impl<'a> Executor<'a> {
             }
         }
 
+        self.call_depth -= 1;
         result
     }
 

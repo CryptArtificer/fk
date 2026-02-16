@@ -13,8 +13,8 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~5,400 lines of Rust** across 22 source files
-- **137 tests**, zero warnings
+- **~5,500 lines of Rust** across 22 source files
+- **152 tests**, zero warnings
 - **Phases 0–5 complete**, Phase 6 (Hardening & Optimisation) in progress
 - Single dependency: `regex` crate (for RS-as-regex)
 - Dev dependency: `criterion` (benchmarks)
@@ -56,6 +56,7 @@ builtins/json.rs   — jpath() with JSON parser, path evaluator, iteration
   not in the HashMap; NR/NF stored as integers, formatted on read
 - Executor owns a BufWriter<Stdout>; flushed at END, fflush(), and before system()
 - Print writes parts directly to BufWriter (no intermediate String allocation)
+- Recursion depth guard (MAX_CALL_DEPTH = 200) prevents stack overflow
 - All string builtins are unicode-aware (chars, not bytes)
 - jpath() supports multi-value navigation: .key[], .arr.key (implicit iteration)
 
@@ -70,12 +71,12 @@ Phase 3c: **, hex literals, \x/\u escapes, nextfile, delete arr, length(arr), $-
 Phase 3d: Unicode-aware strings, REPL
 Phase 4: Criterion benchmarks (field split, lex+parse, record processing), Makefile, comparison harness
 Phase 5: 5 example scripts, cheat sheet, man page
-Phase 6 (partial): Buffered stdout, interned built-in vars, zero-alloc print path
+Phase 6 (partial): Buffered stdout, interned built-in vars, zero-alloc print path,
+  edge-case audit (15 new tests), recursion depth guard (limit 200)
 
 ## What's next: Phase 6 — Hardening & Optimisation (remaining)
 
 - [ ] Fuzz testing (lexer, parser, executor) with cargo-fuzz
-- [ ] Edge-case audit: empty input, binary data, extremely long lines, deep recursion
 - [ ] Profile-guided review of the executor loop
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io

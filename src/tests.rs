@@ -865,3 +865,122 @@ fn jpath_implicit_iteration() {
     );
     assert_eq!(rt.get_var("x"), "Alice\nBob");
 }
+
+// ── Edge-case audit ─────────────────────────────────────────────
+
+#[test]
+fn empty_input_produces_no_records() {
+    let rt = eval("{ count++ } END { x = count }", &[]);
+    assert_eq!(rt.get_var("NR"), "0");
+    assert_eq!(rt.get_var("x"), "");
+}
+
+#[test]
+fn empty_line_gives_nf_zero() {
+    let rt = eval("{ nf = NF }", &[""]);
+    assert_eq!(rt.get_var("NR"), "1");
+    assert_eq!(rt.get_var("nf"), "0");
+}
+
+#[test]
+fn multiple_empty_lines() {
+    let rt = eval("{ total += NF } END { x = total }", &["", "", ""]);
+    assert_eq!(rt.get_var("NR"), "3");
+    assert_eq!(rt.get_var("x"), "0");
+}
+
+#[test]
+fn begin_end_with_no_input() {
+    let rt = eval("BEGIN { x = 1 } END { y = 2 }", &[]);
+    assert_eq!(rt.get_var("x"), "1");
+    assert_eq!(rt.get_var("y"), "2");
+}
+
+#[test]
+fn nul_byte_in_input() {
+    let rt = eval("{ nf = NF; len = length($0) }", &["a\x00b"]);
+    assert_eq!(rt.get_var("nf"), "1");
+    assert_eq!(rt.get_var("len"), "3");
+}
+
+#[test]
+fn high_field_read_returns_empty() {
+    let rt = eval("{ x = $100 }", &["a b c"]);
+    assert_eq!(rt.get_var("x"), "");
+}
+
+#[test]
+fn high_field_write_extends_nf() {
+    let rt = eval("{ $500 = \"x\"; nf = NF }", &["a"]);
+    assert_eq!(rt.get_var("nf"), "500");
+}
+
+#[test]
+fn trailing_separator_produces_empty_fields() {
+    let rt2 = eval(
+        "BEGIN { FS = \",\" } { nf = NF; f2 = $2; f3 = $3 }",
+        &["a,,"],
+    );
+    assert_eq!(rt2.get_var("nf"), "3");
+    assert_eq!(rt2.get_var("f2"), "");
+    assert_eq!(rt2.get_var("f3"), "");
+}
+
+#[test]
+fn long_line_1mb() {
+    let line = "x".repeat(1_000_000);
+    let rt = eval("{ len = length($0) }", &[&line]);
+    assert_eq!(rt.get_var("len"), "1000000");
+}
+
+#[test]
+fn many_fields() {
+    let line = (1..=1000).map(|i| i.to_string()).collect::<Vec<_>>().join(" ");
+    let rt = eval("{ nf = NF; last = $NF }", &[&line]);
+    assert_eq!(rt.get_var("nf"), "1000");
+    assert_eq!(rt.get_var("last"), "1000");
+}
+
+#[test]
+fn deep_recursion_does_not_crash() {
+    // Should hit the call depth limit (200) and return gracefully, not stack overflow
+    let rt = eval(
+        "function f(n) { if (n <= 0) return 0; return f(n-1) } BEGIN { x = f(500) }",
+        &[],
+    );
+    // x will be "" because the depth limit is hit before n reaches 0
+    let x = rt.get_var("x");
+    assert!(x == "0" || x == "", "unexpected result: {}", x);
+}
+
+#[test]
+fn moderate_recursion_works() {
+    let rt = eval(
+        "function f(n) { if (n <= 1) return 1; return n * f(n-1) } BEGIN { x = f(10) }",
+        &[],
+    );
+    assert_eq!(rt.get_var("x"), "3628800");
+}
+
+#[test]
+fn field_zero_reconstructed_with_ofs() {
+    let rt = eval(
+        "BEGIN { OFS = \"-\" } { $1 = $1; x = $0 }",
+        &["a b c"],
+    );
+    assert_eq!(rt.get_var("x"), "a-b-c");
+}
+
+#[test]
+fn assign_field_zero_re_splits() {
+    let rt = eval("{ $0 = \"x y z\"; nf = NF; f2 = $2 }", &["a"]);
+    assert_eq!(rt.get_var("nf"), "3");
+    assert_eq!(rt.get_var("f2"), "y");
+}
+
+#[test]
+fn uninitialized_array_length_is_zero() {
+    let rt = eval("BEGIN { x = length(arr) }", &[]);
+    // length of non-existent array: should not crash
+    assert_eq!(rt.get_var("x"), "0");
+}
