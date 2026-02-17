@@ -130,11 +130,12 @@ Works with files and stdin; supports compressed files (.gz, .zst, .bz2, .xz).
 .
 .TP
 \fB\-S\fR, \fB\-\-suggest\fR
-Suggest mode (extended describe).
-Like \fB\-\-describe\fR, but prints a comprehensive categorised guide of
-\fBfk\fR programs using the actual column names from the data.  Categories:
-selecting, filtering, counting, grouping, statistics, sorting, string ops,
-output formatting, control flow, multi-file, and pipeline combinations.
+Suggest mode.
+Like \fB\-\-describe\fR, but adds a curated set of smart, copy\-pasteable
+\fBfk\fR programs tailored to the data.  Picks the best category column
+(lowest cardinality), uses real values and thresholds from the sample rows.
+Typically produces 3\-6 suggestions covering filtering, aggregation,
+group-by, statistics, and unique values.
 .
 .TP
 \fB\-\-repl\fR

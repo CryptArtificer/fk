@@ -439,11 +439,9 @@ pub fn print_suggestions(schema: &Schema, file_hint: &str) {
     let flags = build_flags(schema);
     let file_part = if file_hint.is_empty() { String::new() } else { format!(" {}", file_hint) };
 
-    // Find interesting columns: prefer floats for aggregation, last numeric for
-    // "measure" heuristic (first numeric is often an ID).
-    let first_str = schema.columns.iter().enumerate()
-        .find(|(i, _)| schema.types.get(*i) == Some(&ColType::String))
-        .map(|(_, c)| c.as_str());
+    // Find interesting columns: use lowest-cardinality string for categories,
+    // prefer floats for aggregation, last numeric for "measure" heuristic.
+    let best_str = pick_best_category(schema);
     let first_float = schema.columns.iter().enumerate()
         .find(|(i, _)| schema.types.get(*i) == Some(&ColType::Float))
         .map(|(_, c)| c.as_str());
@@ -454,8 +452,8 @@ pub fn print_suggestions(schema: &Schema, file_hint: &str) {
     let first_num = first_float.or(last_num);
     let second_str = schema.columns.iter().enumerate()
         .filter(|(i, _)| schema.types.get(*i) == Some(&ColType::String))
-        .nth(1)
-        .map(|(_, c)| c.as_str());
+        .map(|(_, c)| c.as_str())
+        .find(|s| Some(*s) != best_str);
 
     eprintln!("  \x1b[1mexamples:\x1b[0m");
     eprintln!();
@@ -468,7 +466,7 @@ pub fn print_suggestions(schema: &Schema, file_hint: &str) {
     }
 
     // 2. Filter rows
-    if let Some(s) = first_str {
+    if let Some(s) = best_str {
         let cr = col_ref(s);
         suggestion(&flags, &format!("{} ~ /pattern/", cr), "filter rows (regex)", &file_part);
     }
@@ -483,7 +481,7 @@ pub fn print_suggestions(schema: &Schema, file_hint: &str) {
     }
 
     // 5. Group by
-    if let (Some(s), Some(n)) = (first_str, first_num) {
+    if let (Some(s), Some(n)) = (best_str, first_num) {
         let sr = col_ref(s);
         let nr = col_ref(n);
         suggestion(&flags,
@@ -500,14 +498,14 @@ pub fn print_suggestions(schema: &Schema, file_hint: &str) {
     }
 
     // 7. Unique values
-    if let Some(s) = first_str {
+    if let Some(s) = best_str {
         let sr = col_ref(s);
         suggestion(&flags, &format!("{{ a[{}] }} END {{ for (k in a) print k }}", sr),
             &format!("unique {}", s), &file_part);
     }
 
     // 8. Top N by frequency
-    if let Some(s) = second_str.or(first_str) {
+    if let Some(s) = second_str.or(best_str) {
         let sr = col_ref(s);
         suggestion(&flags,
             &format!("{{ a[{}]++ }} END {{ for (k in a) print a[k], k }}", sr),
@@ -615,36 +613,6 @@ fn sample_str<'a>(schema: &'a Schema, col_name: &str) -> &'a str {
     sample_values(schema, col_name).into_iter().next().unwrap_or("example")
 }
 
-/// Helper: extract a regex-friendly substring from a sample value.
-/// Picks a short, interesting fragment (word, prefix, etc.).
-fn sample_regex(schema: &Schema, col_name: &str) -> String {
-    let vals = sample_values(schema, col_name);
-    if vals.is_empty() {
-        return "pattern".to_string();
-    }
-    let v = vals[0];
-    // If it contains a space or separator, use the first word
-    if let Some(word) = v.split([' ', '-', '_']).next()
-        && word.len() >= 2 && word.len() <= 15 {
-            return regex_escape(word);
-    }
-    // Otherwise use up to the first 8 chars
-    let fragment = if v.len() > 8 { &v[..8] } else { v };
-    regex_escape(fragment)
-}
-
-/// Escape regex metacharacters in a literal string.
-fn regex_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        if "\\.*+?[](){}|^$".contains(c) {
-            out.push('\\');
-        }
-        out.push(c);
-    }
-    out
-}
-
 /// Helper: compute a numeric threshold from sample data (approximate median).
 fn sample_threshold(schema: &Schema, col_name: &str) -> String {
     let vals = sample_values(schema, col_name);
@@ -664,253 +632,126 @@ fn sample_threshold(schema: &Schema, col_name: &str) -> String {
     }
 }
 
-/// Helper: detect a common delimiter in sample string values.
-fn sample_delimiter(schema: &Schema, col_name: &str) -> &'static str {
-    let vals = sample_values(schema, col_name);
-    let counts = |ch: char| -> usize { vals.iter().filter(|v| v.contains(ch)).count() };
-    if counts('-') > vals.len() / 2 { return "-"; }
-    if counts('_') > vals.len() / 2 { return "_"; }
-    if counts('.') > vals.len() / 2 { return "."; }
-    if counts('/') > vals.len() / 2 { return "/"; }
-    if counts(':') > vals.len() / 2 { return ":"; }
-    if counts(' ') > vals.len() / 2 { return " "; }
-    "-"
+/// Pick the string column with the lowest cardinality (most repeated values).
+/// Columns where every value is unique (like timestamps or IDs) are poor
+/// group-by targets, so we skip those.
+fn pick_best_category(schema: &Schema) -> Option<&str> {
+    use std::collections::HashSet;
+
+    let str_cols: Vec<(usize, &str)> = schema.columns.iter().enumerate()
+        .filter(|(i, _)| schema.types.get(*i) == Some(&ColType::String))
+        .map(|(i, c)| (i, c.as_str()))
+        .collect();
+
+    if str_cols.is_empty() {
+        return None;
+    }
+
+    let n_rows = schema.sample_rows.len();
+    let mut best: Option<(&str, usize)> = None;
+
+    for (idx, name) in &str_cols {
+        let unique: HashSet<&str> = schema.sample_rows.iter()
+            .filter_map(|row| row.get(*idx).map(|s| s.as_str()))
+            .filter(|s| !s.is_empty())
+            .collect();
+        let cardinality = unique.len();
+        // Skip columns where every sample value is unique (not categorical)
+        if n_rows > 2 && cardinality >= n_rows {
+            continue;
+        }
+        if best.is_none() || cardinality < best.unwrap().1 {
+            best = Some((name, cardinality));
+        }
+    }
+
+    best.map(|(name, _)| name)
+        .or_else(|| str_cols.first().map(|(_, name)| *name))
 }
 
-/// Print comprehensive suggestions covering fk's feature surface,
-/// tailored to actual values in the sample data.
+/// Print a small number of curated, smart suggestions based on the
+/// data shape — not a reference manual, but "here's what you probably
+/// want to do with this data."
 pub fn print_suggest(schema: &Schema, file_hint: &str) {
     let flags = build_flags(schema);
     let fp = if file_hint.is_empty() { String::new() } else { format!(" {}", file_hint) };
 
-    let strs: Vec<&str> = schema.columns.iter().enumerate()
-        .filter(|(i, _)| schema.types.get(*i) == Some(&ColType::String))
+    let floats: Vec<&str> = schema.columns.iter().enumerate()
+        .filter(|(i, _)| schema.types.get(*i) == Some(&ColType::Float))
         .map(|(_, c)| c.as_str()).collect();
     let nums: Vec<&str> = schema.columns.iter().enumerate()
         .filter(|(i, _)| matches!(schema.types.get(*i), Some(ColType::Int | ColType::Float)))
         .map(|(_, c)| c.as_str()).collect();
-    let floats: Vec<&str> = schema.columns.iter().enumerate()
-        .filter(|(i, _)| schema.types.get(*i) == Some(&ColType::Float))
-        .map(|(_, c)| c.as_str()).collect();
 
-    let s1 = strs.first().copied().unwrap_or("$1");
-    let s2 = strs.get(1).copied().unwrap_or(s1);
+    // Pick the best category column: the string column with the lowest
+    // cardinality (most repeated values) — that's the best group-by target.
+    let s1 = pick_best_category(schema).unwrap_or("$1");
     let n1 = floats.first().copied()
         .or_else(|| nums.last().copied())
         .unwrap_or("$1");
 
     let sr1 = col_ref(s1);
-    let sr2 = col_ref(s2);
     let nr1 = col_ref(n1);
 
-    // Sample data for tailored examples
     let s1_val = sample_str(schema, s1);
-    let s1_regex = sample_regex(schema, s1);
     let n1_thresh = sample_threshold(schema, n1);
-    let s1_delim = sample_delimiter(schema, s1);
 
-    // ── Selecting & Printing ──
-    section("Selecting & Printing");
+    eprintln!("  \x1b[1mtry:\x1b[0m");
+    eprintln!();
 
-    if schema.columns.len() >= 2 {
-        let c1 = col_ref(&schema.columns[0]);
-        let c2 = col_ref(&schema.columns[1]);
-        suggestion(&flags, &format!("{{ print {}, {} }}", c1, c2), "select columns", &fp);
+    // 1. Always: filter by a real value
+    if s1 != "$1" {
+        suggest_cmd(&flags, &fp,
+            &format!("{} == \"{}\"", sr1, s1_val),
+            &format!("show rows where {} is \"{}\"", s1, s1_val));
     }
-    suggestion(&flags, "{ print NR, $0 }", "print with line numbers", &fp);
-    if schema.columns.len() >= 3 {
-        let c1 = col_ref(&schema.columns[0]);
-        let c3 = col_ref(&schema.columns[2]);
-        suggestion(&flags,
-            &format!("{{ printf \"%s -> %s\\n\", {}, {} }}", c1, c3),
-            "formatted output", &fp);
+
+    // 2. If numeric column: aggregate it
+    if n1 != "$1" {
+        suggest_cmd(&flags, &fp,
+            &format!("{{ s += {} }} END {{ printf \"total=%.2f  n=%d  avg=%.2f\\n\", s, NR, s/NR }}", nr1),
+            &format!("sum and average {}", n1));
     }
+
+    // 3. If string + numeric: group by
+    if s1 != "$1" && n1 != "$1" {
+        suggest_cmd(&flags, &fp,
+            &format!("{{ a[{}] += {}; n[{}]++ }} END {{ for (k in a) printf \"%-20s total=%8.2f  avg=%8.2f  n=%d\\n\", k, a[k], a[k]/n[k], n[k] }}", sr1, nr1, sr1),
+            &format!("total and average {} by {}", n1, s1));
+    }
+
+    // 4. If numeric: stats
+    if n1 != "$1" {
+        suggest_cmd(&flags, &fp,
+            &format!("{{ a[NR] = {} }} END {{ printf \"min=%.2f  median=%.2f  mean=%.2f  p95=%.2f  max=%.2f\\n\", min(a), median(a), mean(a), p(a,95), max(a) }}", nr1),
+            &format!("distribution of {}", n1));
+    }
+
+    // 5. If numeric: filter by threshold
     if n1 != "$1" && s1 != "$1" {
-        suggestion(&flags,
-            &format!("{{ printf \"%-20s %10.2f\\n\", {}, {} }}", sr1, nr1),
-            "aligned columns (right-justify numbers)", &fp);
-    }
-    suggestion(&flags, "BEGIN { OFS = \"\\t\" } { print $0 }",
-        "change output separator to tab", &fp);
-
-    // ── Filtering ──
-    section("Filtering");
-
-    suggestion(&flags,
-        &format!("{} ~ /{}/", sr1, s1_regex),
-        &format!("rows where {} matches \"{}\"", s1, s1_regex), &fp);
-    suggestion(&flags,
-        &format!("{} !~ /{}/", sr1, s1_regex),
-        &format!("rows where {} does not match \"{}\"", s1, s1_regex), &fp);
-    if !nums.is_empty() {
-        suggestion(&flags,
+        suggest_cmd(&flags, &fp,
             &format!("{} > {}", nr1, n1_thresh),
-            &format!("{} above {} (sample median)", n1, n1_thresh), &fp);
-    }
-    if !strs.is_empty() && !nums.is_empty() {
-        suggestion(&flags,
-            &format!("{} == \"{}\" && {} > {}", sr1, s1_val, nr1, n1_thresh),
-            "compound filter with real values", &fp);
-    }
-    suggestion(&flags, "NR >= 5 && NR <= 15", "select row range", &fp);
-
-    // ── Counting & Aggregation ──
-    section("Counting & Aggregation");
-
-    suggestion(&flags, "END { print NR }", "count all rows", &fp);
-    suggestion(&flags,
-        &format!("{} ~ /{}/ {{ n++ }} END {{ print n }}", sr1, s1_regex),
-        &format!("count rows matching \"{}\"", s1_regex), &fp);
-    if !nums.is_empty() {
-        suggestion(&flags,
-            &format!("{{ s += {} }} END {{ print s }}", nr1),
-            &format!("sum {}", n1), &fp);
-        suggestion(&flags,
-            &format!("{{ s += {}; n++ }} END {{ print s/n }}", nr1),
-            &format!("average {}", n1), &fp);
-        suggestion(&flags,
-            &format!("{{ if ({0} > max) max = {0} }} END {{ print max }}", nr1),
-            &format!("max {}", n1), &fp);
+            &format!("rows where {} > {} (median)", n1, n1_thresh));
+    } else if n1 != "$1" {
+        suggest_cmd(&flags, &fp,
+            &format!("{} > {}", nr1, n1_thresh),
+            &format!("rows where {} > {}", n1, n1_thresh));
     }
 
-    // ── Grouping ──
-    section("Grouping");
-
-    if s1 != "$1" && n1 != "$1" {
-        suggestion(&flags,
-            &format!("{{ a[{}] += {} }} END {{ for (k in a) print k, a[k] }}", sr1, nr1),
-            &format!("sum {} by {}", n1, s1), &fp);
-        suggestion(&flags,
-            &format!("{{ a[{}]++; s[{}] += {} }} END {{ for (k in a) printf \"%s: n=%d sum=%.2f avg=%.2f\\n\", k, a[k], s[k], s[k]/a[k] }}", sr1, sr1, nr1),
-            &format!("count + sum + avg of {} by {}", n1, s1), &fp);
-    }
-    if s1 != s2 && s1 != "$1" {
-        suggestion(&flags,
-            &format!("{{ a[{},{}]++ }} END {{ for (k in a) print k, a[k] }}", sr1, sr2),
-            &format!("cross-tab {} x {} (uses SUBSEP)", s1, s2), &fp);
-    }
-
-    // ── Statistics (built-in) ──
-    section("Statistics");
-
-    if !nums.is_empty() {
-        suggestion(&flags,
-            &format!("{{ a[NR] = {} }} END {{ printf \"mean=%.2f stddev=%.2f\\n\", mean(a), stddev(a) }}", nr1),
-            &format!("mean & standard deviation of {}", n1), &fp);
-        suggestion(&flags,
-            &format!("{{ a[NR] = {} }} END {{ printf \"min=%.2f p25=%.2f median=%.2f p75=%.2f max=%.2f\\n\", min(a), p(a,25), median(a), p(a,75), max(a) }}", nr1),
-            &format!("five-number summary of {}", n1), &fp);
-        suggestion(&flags,
-            &format!("{{ a[NR] = {} }} END {{ printf \"p50=%.2f p90=%.2f p95=%.2f p99=%.2f\\n\", p(a,50), p(a,90), p(a,95), p(a,99) }}", nr1),
-            &format!("percentile ladder for {}", n1), &fp);
-        suggestion(&flags,
-            &format!("{{ a[NR] = {} }} END {{ printf \"iqm=%.2f variance=%.4f\\n\", iqm(a), variance(a) }}", nr1),
-            "interquartile mean & variance", &fp);
-    }
-
-    // ── Sorting ──
-    section("Sorting");
-
+    // 6. If multiple strings: unique values of category column
     if s1 != "$1" {
-        suggestion(&flags,
-            &format!("{{ a[NR] = {} }} END {{ asort(a); for (i in a) print a[i] }}", sr1),
-            &format!("sort {} values alphabetically", s1), &fp);
-    }
-    if !nums.is_empty() {
-        suggestion(&flags,
-            &format!("{{ a[NR] = {} }} END {{ asort(a); for (i=1; i<=length(a); i++) print a[i] }}", nr1),
-            &format!("sort {} numerically", n1), &fp);
-    }
-    if s1 != "$1" && n1 != "$1" {
-        suggestion(&flags,
-            &format!("{{ a[{}] += {} }} END {{ for (k in a) print a[k], k }}",
-                sr1, nr1),
-            "group totals (pipe to: sort -rn | head -10)", &fp);
-    }
-
-    // ── String Operations ──
-    section("String Operations");
-
-    suggestion(&flags,
-        &format!("{{ print toupper({}) }}", sr1),
-        "uppercase", &fp);
-    suggestion(&flags,
-        &format!("{{ print substr({}, 1, 4) }}", sr1),
-        &format!("first 4 chars (e.g. \"{}\" → \"{}\")", s1_val, &s1_val[..s1_val.len().min(4)]), &fp);
-    suggestion(&flags,
-        &format!("{{ gsub(/{0}/, \"NEW\", {1}); print }}", s1_regex, sr1),
-        &format!("replace \"{}\" with \"NEW\"", s1_regex), &fp);
-    suggestion(&flags,
-        &format!("{{ n = split({}, parts, \"{}\"); print parts[1] }}", sr1, s1_delim),
-        &format!("split on \"{}\"", s1_delim), &fp);
-    suggestion(&flags,
-        &format!("{{ if (match({}, /[0-9]+/)) print substr({}, RSTART, RLENGTH) }}", sr1, sr1),
-        "extract first number from string", &fp);
-
-    // ── Output Formatting ──
-    section("Output Formatting");
-
-    if !nums.is_empty() {
-        suggestion(&flags,
-            &format!("{{ printf \"%08d\\n\", {} }}", nr1),
-            "zero-padded number", &fp);
-        suggestion(&flags,
-            &format!("{{ printf \"%+.2f\\n\", {} }}", nr1),
-            "force sign on number", &fp);
-    }
-    suggestion(&flags,
-        "BEGIN { OFS = \",\" } { $1 = $1; print }",
-        "convert to CSV", &fp);
-    if schema.columns.len() >= 2 {
-        let c1 = col_ref(&schema.columns[0]);
-        let c2 = col_ref(&schema.columns[1]);
-        suggestion(&flags,
-            &format!("BEGIN {{ OFS = \"\\t\" }} {{ print {}, {} }}", c1, c2),
-            "convert to TSV", &fp);
-    }
-
-    // ── Control Flow ──
-    section("Control Flow");
-
-    suggestion(&flags, "NR <= 10", "first 10 rows (like head)", &fp);
-    suggestion(&flags, "NR % 2 == 0", "every other row", &fp);
-    if !nums.is_empty() {
-        suggestion(&flags,
-            &format!("{{ if ({0} > {1}) print \"high\", {0}; else print \"low\", {0} }}", nr1, n1_thresh),
-            &format!("classify by {} threshold ({})", n1, n1_thresh), &fp);
-    }
-    if s1 != "$1" {
-        suggestion(&flags,
+        suggest_cmd(&flags, &fp,
             &format!("!seen[{}]++", sr1),
-            &format!("deduplicate by {}", s1), &fp);
+            &format!("unique values of {}", s1));
     }
 
-    // ── Multi-file & System ──
-    section("Multi-file & System");
+    eprintln!();
+}
 
-    suggestion(&flags, "{ print FILENAME, NR, FNR, $0 }",
-        "show filename and record numbers", &fp);
-    suggestion(&flags, "FNR == 1 { print \"--- \" FILENAME \" ---\" }",
-        "print header between files", &fp);
-    suggestion(&flags, "BEGIN { while ((\"date\" | getline d) > 0) print d }",
-        "capture command output with getline", &fp);
-
-    // ── Pipelines ──
-    section("Pipelines (combine with shell)");
-
-    if s1 != "$1" && n1 != "$1" {
-        suggestion(&flags,
-            &format!("{{ a[{}] += {} }} END {{ for (k in a) print a[k], k }}", sr1, nr1),
-            &format!("| sort -rn | head  → top {} by {}", s1, n1), &fp);
-    }
-    suggestion(&flags, "{ print $0 }",
-        "| wc -l  → count (or just: END { print NR })", &fp);
-    if !nums.is_empty() {
-        suggestion(&flags,
-            &format!("{{ print {} }}", nr1),
-            &format!("| sort -n | uniq -c  → frequency distribution of {}", n1), &fp);
-    }
-
+fn suggest_cmd(flags: &str, file_part: &str, program: &str, why: &str) {
+    let flag_part = if flags.is_empty() { String::new() } else { format!(" {}", flags) };
+    eprintln!("  \x1b[90m# {}\x1b[0m", why);
+    eprintln!("  \x1b[32mfk{} '{}'{}\x1b[0m", flag_part, program, file_part);
     eprintln!();
 }
 
@@ -951,7 +792,3 @@ pub fn run_describe(files: &[String], suggest: bool) {
     }
 }
 
-fn section(title: &str) {
-    eprintln!("  \x1b[1;4m{}\x1b[0m", title);
-    eprintln!();
-}

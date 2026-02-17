@@ -146,7 +146,7 @@ pub fn parse_args() -> Args {
         None => {
             eprintln!("usage: fk [-F fs] [-v var=val] [-f progfile] 'program' [file ...]");
             eprintln!("       fk --describe [file ...]   # detect format, show schema");
-            eprintln!("       fk --suggest [file ...]    # schema + comprehensive examples");
+            eprintln!("       fk --suggest [file ...]    # schema + smart copy-pasteable programs");
             eprintln!("       fk --repl");
             process::exit(1);
         }

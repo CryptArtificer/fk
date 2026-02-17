@@ -6,7 +6,7 @@
 fk [options] 'program' [file ...]
 fk -f progfile [file ...]          # read program from file
 fk --describe [file ...]           # sniff format, show schema & examples
-fk --suggest  [file ...]           # schema + comprehensive fk tutorial
+fk --suggest  [file ...]           # schema + smart tailored programs
 fk --repl                          # interactive mode
 ```
 
@@ -21,7 +21,7 @@ fk --repl                          # interactive mode
 | `-i parquet` | Apache Parquet input |
 | `-H` | Header mode (first line → `HDR` array + named columns) |
 | `-d`, `--describe` | Describe mode: detect format, infer schema, suggest programs |
-| `-S`, `--suggest` | Suggest mode: like describe but with comprehensive examples |
+| `-S`, `--suggest` | Suggest mode: schema + smart copy-pasteable programs |
 | `--repl` | Interactive REPL |
 
 ## Program structure
