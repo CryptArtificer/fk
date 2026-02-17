@@ -7,13 +7,14 @@ use std::io;
 /// Read all records from a Parquet file.
 /// Returns (column_names, rows) where each row is a Vec of string field values.
 pub fn read_parquet_file(path: &str) -> io::Result<(Vec<String>, Vec<Vec<String>>)> {
-    use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+    use parquet::arrow::arrow_reader::{ArrowReaderOptions, ParquetRecordBatchReaderBuilder};
     use std::fs::File;
 
     let file = File::open(path)
         .map_err(|e| io::Error::new(e.kind(), format!("fk: {}: {}", path, e)))?;
 
-    let builder = ParquetRecordBatchReaderBuilder::try_new(file)
+    let options = ArrowReaderOptions::new().with_skip_arrow_metadata(true);
+    let builder = ParquetRecordBatchReaderBuilder::try_new_with_options(file, options)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("fk: parquet: {}", e)))?;
 
     let schema = builder.schema().clone();
@@ -150,6 +151,38 @@ fn array_value_to_string(array: &dyn arrow::array::Array, idx: usize) -> String 
                         }
                     }
                 }
+            }
+        }
+        DataType::Dictionary(_, _) => {
+            if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::UInt32Type>>() {
+                let values = a.values();
+                let key = a.keys().value(idx) as usize;
+                array_value_to_string(values.as_ref(), key)
+            } else if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::Int32Type>>() {
+                let values = a.values();
+                let key = a.keys().value(idx) as usize;
+                array_value_to_string(values.as_ref(), key)
+            } else if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::UInt16Type>>() {
+                let values = a.values();
+                let key = a.keys().value(idx) as usize;
+                array_value_to_string(values.as_ref(), key)
+            } else if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::Int16Type>>() {
+                let values = a.values();
+                let key = a.keys().value(idx) as usize;
+                array_value_to_string(values.as_ref(), key)
+            } else if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::UInt8Type>>() {
+                let values = a.values();
+                let key = a.keys().value(idx) as usize;
+                array_value_to_string(values.as_ref(), key)
+            } else if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::Int8Type>>() {
+                let values = a.values();
+                let key = a.keys().value(idx) as usize;
+                array_value_to_string(values.as_ref(), key)
+            } else {
+                use arrow::util::display::ArrayFormatter;
+                ArrayFormatter::try_new(array, &Default::default())
+                    .map(|f| f.value(idx).to_string())
+                    .unwrap_or_default()
             }
         }
         _ => {
