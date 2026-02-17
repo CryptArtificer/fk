@@ -112,7 +112,7 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/fk
 	rm -f $(DESTDIR)$(PREFIX)/share/man/man1/fk.1
 
-# ── Examples ─────────────────────────────────────────────────────
+# ── Examples & Showcase ───────────────────────────────────────────
 
 .PHONY: examples showcase
 
@@ -122,8 +122,9 @@ examples: release
 	done
 
 showcase: release
-	@bash examples/07-showcase-vs-awk.sh
-	@bash examples/08-fk-uplot-aws.sh
+	@for f in showcase/[0-9]*.sh; do \
+		echo "" && echo "═══ Running $$f ═══" && echo "" && bash "$$f"; \
+	done
 
 # ── Run shortcuts ────────────────────────────────────────────────
 
@@ -223,8 +224,8 @@ help:
 	@echo "Run:"
 	@echo "  make repl         Start interactive REPL"
 	@echo "  make run ARGS=..  Run fk with arguments"
-	@echo "  make showcase     Run fk-vs-awk + uplot showcases"
-	@echo "  make examples     Run all example scripts"
+	@echo "  make showcase     Run showcase scripts (showcase/)"
+	@echo "  make examples     Run basic example scripts (examples/)"
 	@echo ""
 	@echo "Other:"
 	@echo "  make ci           Full CI check (fmt, clippy, test)"
