@@ -229,16 +229,18 @@ impl<'a> Executor<'a> {
         match stmt {
             Statement::Print(exprs, redir) => {
                 if redir.is_none() {
-                    let ofs = self.rt.ofs().to_owned();
-                    let ors = self.rt.ors().to_owned();
-                    for (i, e) in exprs.iter().enumerate() {
-                        if i > 0 {
-                            let _ = self.stdout.write_all(ofs.as_bytes());
+                    if exprs.len() == 1 {
+                        self.print_expr_fast(&exprs[0]);
+                    } else {
+                        let ofs = self.rt.ofs().to_owned();
+                        for (i, e) in exprs.iter().enumerate() {
+                            if i > 0 {
+                                let _ = self.stdout.write_all(ofs.as_bytes());
+                            }
+                            self.print_expr_fast(e);
                         }
-                        let val = self.eval_expr(e);
-                        val.write_to(&mut self.stdout);
                     }
-                    let _ = self.stdout.write_all(ors.as_bytes());
+                    let _ = self.stdout.write_all(self.rt.ors().as_bytes());
                 } else {
                     let ofs = self.rt.ofs().to_owned();
                     let ors = self.rt.ors().to_owned();
@@ -529,6 +531,20 @@ impl<'a> Executor<'a> {
     /// Evaluate an expression and return its string representation.
     fn eval_string(&mut self, expr: &Expr) -> String {
         self.eval_expr(expr).into_string()
+    }
+
+    /// Write an expression's value directly to stdout, bypassing Value
+    /// construction when possible (zero-copy for field literals).
+    #[inline]
+    fn print_expr_fast(&mut self, expr: &Expr) {
+        if let Expr::Field(idx_expr) = expr
+            && let Expr::NumberLit(n) = idx_expr.as_ref() {
+                let idx = self.resolve_field_idx(*n);
+                self.rt.write_field_to(idx, &mut self.stdout);
+                return;
+        }
+        let val = self.eval_expr(expr);
+        val.write_to(&mut self.stdout);
     }
 
     /// Resolve a field index, supporting negative values ($-1 = last field).

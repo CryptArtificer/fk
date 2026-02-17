@@ -16,7 +16,7 @@ incrementally as a learning exercise. The user values:
 - **~12,800 lines of Rust** across 34 source files
 - **226 tests**, zero warnings, clippy clean
 - **Phases 0–8 complete**
-- Dependencies: `regex` crate; optional `parquet` + `arrow` (behind `--features parquet`)
+- Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
 
 ## Architecture (read src/lib.rs for module list)
@@ -93,14 +93,14 @@ Phase 8: Header names as field accessors ($name, $"col-name", $var in -H mode),
 - [ ] Publish to crates.io
 
 ### Performance (from `make bench-compare` on 1M lines, Apple M3 Pro):
-fk is faster than awk (macOS system awk 20200816) on most workloads:
-- `print $2`: fk ~0.80s vs awk ~0.59s
-- Sum column: fk ~0.32s vs awk ~0.60s (fk 1.9× faster)
-- Pattern matching: fk ~0.37s vs awk ~0.78s (fk 2.1× faster)
-- Field arithmetic: fk ~0.33s vs awk ~0.64s (fk 1.9× faster)
-- Associative arrays: fk ~0.38s vs awk ~0.68s (fk 1.8× faster)
-- Computed regex: fk ~0.43s vs awk ~0.65s (fk 1.5× faster)
-- Tight loop (3x): fk ~0.79s vs awk ~0.75s (parity)
+fk is faster than awk (macOS system awk 20200816) on all benchmarks:
+- `print $2`: fk ~0.48s vs awk ~0.58s (fk 1.2× faster)
+- Sum column: fk ~0.24s vs awk ~0.60s (fk 2.5× faster)
+- Pattern matching: fk ~0.24s vs awk ~0.76s (fk 3.2× faster)
+- Field arithmetic: fk ~0.25s vs awk ~0.62s (fk 2.5× faster)
+- Associative arrays: fk ~0.28s vs awk ~0.67s (fk 2.4× faster)
+- Computed regex: fk ~0.34s vs awk ~0.65s (fk 1.9× faster)
+- Tight loop (3x): fk ~0.70s vs awk ~0.75s (fk 1.1× faster)
 
 ## Tooling
 

@@ -243,6 +243,18 @@ impl Runtime {
             .unwrap_or_default()
     }
 
+    /// Write a field directly to a writer without cloning (zero-copy print).
+    pub fn write_field_to(&self, idx: usize, w: &mut impl std::io::Write) {
+        if idx == 0 {
+            for (i, f) in self.fields.iter().enumerate() {
+                if i > 0 { let _ = w.write_all(self.ofs.as_bytes()); }
+                let _ = w.write_all(f.as_bytes());
+            }
+        } else if let Some(f) = self.fields.get(idx - 1) {
+            let _ = w.write_all(f.as_bytes());
+        }
+    }
+
     pub fn set_field(&mut self, idx: usize, value: &str) {
         if idx == 0 {
             self.fields = field::split(value, &self.fs);
@@ -258,7 +270,7 @@ impl Runtime {
     }
 
     pub fn set_record(&mut self, line: &str) {
-        self.fields = field::split(line, &self.fs);
+        field::split_into(&mut self.fields, line, &self.fs);
         self.nf = self.fields.len();
     }
 

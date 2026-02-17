@@ -133,7 +133,7 @@ fn main() {
                     cli::InputMode::Csv  => Box::new(input::csv::CsvReader::comma()),
                     cli::InputMode::Tsv  => Box::new(input::csv::CsvReader::tab()),
                     cli::InputMode::Json => Box::new(input::json::JsonReader),
-                    cli::InputMode::Line => Box::new(input::line::LineReader),
+                    cli::InputMode::Line => Box::new(input::line::LineReader::new()),
                     cli::InputMode::Parquet => unreachable!(),
                 }
             }
@@ -145,11 +145,11 @@ fn main() {
         loop {
             match inp.next_record() {
                 Ok(Some(record)) => {
-                    let cur_filename = inp.current_filename().to_owned();
+                    let cur_filename = inp.current_filename();
                     if cur_filename != prev_filename {
-                        exec.set_var("FILENAME", &cur_filename);
+                        prev_filename = cur_filename.to_owned();
+                        exec.set_var("FILENAME", &prev_filename);
                         exec.reset_fnr();
-                        prev_filename = cur_filename;
                     }
 
                     if args.header_mode && first_record {

@@ -23,6 +23,39 @@ pub fn split(record: &str, fs: &str) -> Vec<String> {
     }
 }
 
+/// Split into an existing Vec, reusing String allocations from previous records.
+pub fn split_into(fields: &mut Vec<String>, record: &str, fs: &str) {
+    let mut i = 0;
+    if fs == " " {
+        for part in record.split_whitespace() {
+            set_field(fields, i, part);
+            i += 1;
+        }
+    } else if fs.len() == 1 || (fs.len() > 1 && fs.chars().count() == 1) {
+        let ch = fs.chars().next().unwrap();
+        for part in record.split(ch) {
+            set_field(fields, i, part);
+            i += 1;
+        }
+    } else {
+        for part in record.split(fs) {
+            set_field(fields, i, part);
+            i += 1;
+        }
+    }
+    fields.truncate(i);
+}
+
+#[inline]
+fn set_field(fields: &mut Vec<String>, i: usize, val: &str) {
+    if i < fields.len() {
+        fields[i].clear();
+        fields[i].push_str(val);
+    } else {
+        fields.push(val.to_string());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

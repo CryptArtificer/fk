@@ -155,7 +155,7 @@ src/
 
 #### Phase 8 — Signature features & function library
 - [x] Header names as field accessors (`$name`, `$"col-name"`, `$var` in `-H` / parquet mode)
-- [x] Apache Parquet input (`-i parquet`, optional `--features parquet`)
+- [x] Apache Parquet input (`-i parquet`, enabled by default)
 - [x] `match()` with capture groups (3rd argument: array)
 - [x] `asort(arr)` / `asorti(arr)` — sort arrays by value / key
 - [x] `join(arr, sep)` — join array values into string
@@ -294,17 +294,17 @@ echo "" | fk 'BEGIN { print parsedate("2025-01-15 10:30:00", "%Y-%m-%d %H:%M:%S"
 ## Performance
 
 `make bench-compare` runs fk and awk head-to-head on a 1M-line CSV.
-fk is faster than awk on most workloads (1.5–2× on compute-heavy tasks):
+fk is faster than awk on every benchmark (1.1–3.2× faster):
 
-| Benchmark | fk | awk | Ratio |
+| Benchmark | fk | awk | Speedup |
 |---|---|---|---|
-| `print $2` | 0.80 s | 0.59 s | 1.36× |
-| Sum column | 0.32 s | 0.60 s | 0.53× |
-| `/active/` count | 0.37 s | 0.78 s | 0.47× |
-| Field arithmetic | 0.33 s | 0.64 s | 0.52× |
-| Associative array | 0.38 s | 0.68 s | 0.56× |
-| Computed regex | 0.43 s | 0.65 s | 0.66× |
-| Tight loop (3×) | 0.79 s | 0.75 s | 1.05× |
+| `print $2` | 0.48 s | 0.58 s | 1.2× |
+| Sum column | 0.24 s | 0.60 s | 2.5× |
+| `/active/` count | 0.24 s | 0.76 s | 3.2× |
+| Field arithmetic | 0.25 s | 0.62 s | 2.5× |
+| Associative array | 0.28 s | 0.67 s | 2.4× |
+| Computed regex | 0.34 s | 0.65 s | 1.9× |
+| Tight loop (3×) | 0.70 s | 0.75 s | 1.1× |
 
 Parquet support reads 1M rows, auto-extracts column names, and runs
 pattern-action programs with named field access — no other awk can do this.
@@ -315,11 +315,11 @@ awk version 20200816 (macOS system awk). `fk` built with `--release`.
 ## Building
 
 ```sh
-# Default build (lightweight, no optional deps)
+# Default build (includes Parquet support)
 cargo build --release
 
-# With Parquet support (adds arrow + parquet crates)
-cargo build --release --features parquet
+# Without Parquet (lighter binary, no arrow/parquet deps)
+cargo build --release --no-default-features
 
 # binary: target/release/fk
 ```
