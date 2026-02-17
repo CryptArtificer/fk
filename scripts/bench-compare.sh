@@ -66,7 +66,7 @@ FK_PARQUET="${FK}-parquet"
 # Build parquet-enabled binary if not already present
 if [ ! -f "$FK_PARQUET" ] || [ "$FK_PARQUET" -ot "src/main.rs" ]; then
     echo "Building fk with parquet support..."
-    cargo build --release --features parquet 2>/dev/null
+    cargo build --release 2>/dev/null
     cp "$FK" "$FK_PARQUET" 2>/dev/null || true
 fi
 

@@ -16,7 +16,7 @@ fk --repl                          # interactive mode
 | `-i csv` | CSV input mode (RFC 4180) |
 | `-i tsv` | TSV input mode |
 | `-i json` | JSON lines input mode |
-| `-i parquet` | Apache Parquet input (needs `--features parquet`) |
+| `-i parquet` | Apache Parquet input |
 | `-H` | Header mode (first line → `HDR` array + named columns) |
 | `--repl` | Interactive REPL |
 

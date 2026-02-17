@@ -95,7 +95,7 @@ $(BENCH_DATA)/large.csv:
 	@wc -l $@ | awk '{ printf "  → %s lines\n", $$1 }'
 
 bench-compare: release bench-data
-	@$(CARGO) build --release --features parquet 2>/dev/null || true
+	@$(CARGO) build --release 2>/dev/null || true
 	@./scripts/bench-compare.sh $(BINARY) $(BENCH_DATA)/large.csv $(BENCH_LINES)
 
 # ── Install / Uninstall ─────────────────────────────────────────
