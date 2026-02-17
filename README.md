@@ -249,6 +249,8 @@ same one Aho, Weinberger, and Kernighan designed almost fifty years ago.
 
 Standing on the shoulders of giants, writing a not-so-small toy. 😄
 
+*Yes, the name came first. "filter-kernel" is a backronym. No disrespect intended to awk or its creators — just a two-letter command that's easy to type and hard to forget.* 😁
+
 ## License
 
 MIT
