@@ -1,20 +1,84 @@
 #!/usr/bin/env bash
 # 07-showcase-vs-awk.sh — What fk can do that awk can't
 #
-# Every example here uses features with no direct awk equivalent.
+# A self-documenting showcase: each example prints the fk command
+# before running it. uplot charts are shown when uplot is installed.
+#
 # Run: ./examples/07-showcase-vs-awk.sh
 set -euo pipefail
 FK="${FK:-$(dirname "$0")/../target/release/fk}"
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
-section() { printf "\n\033[1;36m── %s ──\033[0m\n\n" "$1"; }
+HAS_UPLOT=false
+command -v uplot >/dev/null 2>&1 && HAS_UPLOT=true
 
-# ─────────────────────────────────────────────────────────────────
-section "1. CSV analytics with named columns"
-# awk: you'd pipe through csvkit, then awk -F, and count fields by hand.
-# fk: first-class CSV + header mode. Column names just work.
+# ── Display helpers ─────────────────────────────────────────────
+C_RESET=$'\033[0m'
+C_BOLD=$'\033[1m'
+C_DIM=$'\033[2m'
+C_CYAN=$'\033[1;96m'
+C_YEL=$'\033[93m'
+C_FLAG=$'\033[33m'
+C_FILE=$'\033[37m'
+C_SEC=$'\033[1;36m'
 
+section() { printf "\n${C_SEC}━━ %s ━━${C_RESET}\n\n" "$1"; }
+
+# Print the full fk command (program + switches), then run it.
+show() {
+    local flags="" prog="" files="" found_prog=false
+    for arg in "$@"; do
+        if [[ "$arg" == "$FK" ]]; then
+            continue
+        elif [[ "$found_prog" == false && "$arg" == -* ]]; then
+            flags+=" ${C_FLAG}${arg}${C_RESET}"
+        elif [[ "$found_prog" == false && ("$arg" == *"{"* || "$arg" == *"/"* && -f "$arg") ]]; then
+            if [[ -f "$arg" ]]; then
+                files+=" ${C_FILE}$(basename "$arg")${C_RESET}"
+            else
+                prog="$arg"
+                found_prog=true
+            fi
+        elif $found_prog && [[ -f "$arg" ]]; then
+            files+=" ${C_FILE}$(basename "$arg")${C_RESET}"
+        elif $found_prog; then
+            files+=" ${C_FILE}${arg}${C_RESET}"
+        else
+            flags+=" ${C_FLAG}${arg}${C_RESET}"
+        fi
+    done
+
+    # Header: $ fk [flags] [files]
+    printf "\n  ${C_DIM}\$${C_RESET} ${C_CYAN}${C_BOLD}fk${C_RESET}%s" "$flags"
+    [[ -n "$files" ]] && printf " %b" "$files"
+
+    # Program body — indented, yellow, with leading ' and trailing '
+    if [[ -n "$prog" ]]; then
+        printf " ${C_YEL}'${C_RESET}\n"
+        while IFS= read -r line; do
+            printf "    ${C_YEL}%s${C_RESET}\n" "$line"
+        done <<< "$prog"
+        printf "  ${C_YEL}'${C_RESET}\n"
+    else
+        printf "\n"
+    fi
+    echo ""
+    "$@"
+}
+
+# show_pipe: print a readable pipeline description, then run it via eval
+show_pipe() {
+    local desc="$1"
+    local display="${desc//$FK/fk}"
+    display="${display//$TMPDIR\//}"
+    printf "\n  ${C_DIM}\$${C_RESET} ${C_YEL}%s${C_RESET}\n\n" "$display"
+    eval "$desc"
+}
+
+# ═══════════════════════════════════════════════════════════════
+# Test data
+# ═══════════════════════════════════════════════════════════════
 cat > "$TMPDIR/sales.csv" <<'CSV'
 region,product,revenue,units,quarter
 EMEA,Widget,14500,230,Q1
@@ -28,31 +92,36 @@ NA,Gadget,16900,290,Q1
 APAC,Gizmo,8600,150,Q4
 CSV
 
-echo "Revenue by region (CSV with named columns):"
-$FK -i csv -H '
-    { rev[$region] += $revenue; units[$region] += $units }
-    END {
-        for (r in rev)
-            printf "  %-6s $%-8.0f  (%d units, $%.0f avg/unit)\n", r, rev[r], units[r], rev[r] / units[r]
-    }
-' "$TMPDIR/sales.csv"
+cat > "$TMPDIR/access.log" <<'LOG'
+192.168.1.10 - - [16/Feb/2025:10:15:30 +0000] "GET /index.html HTTP/1.1" 200 1234
+10.0.0.5 - admin [16/Feb/2025:10:15:31 +0000] "POST /api/login HTTP/1.1" 302 0
+172.16.0.1 - - [16/Feb/2025:10:15:32 +0000] "GET /static/style.css HTTP/1.1" 200 8901
+192.168.1.10 - - [16/Feb/2025:10:15:33 +0000] "GET /api/data HTTP/1.1" 500 45
+10.0.0.5 - admin [16/Feb/2025:10:15:34 +0000] "DELETE /api/users/3 HTTP/1.1" 204 0
+192.168.1.10 - - [16/Feb/2025:10:15:35 +0000] "GET /api/data HTTP/1.1" 200 2048
+172.16.0.1 - - [16/Feb/2025:10:15:36 +0000] "GET /api/users HTTP/1.1" 200 5120
+10.0.0.5 - admin [16/Feb/2025:10:15:37 +0000] "PUT /api/users/3 HTTP/1.1" 200 128
+LOG
 
-echo ""
-echo "Top product by total revenue:"
-$FK -i csv -H '
-    { rev[$product] += $revenue }
-    END {
-        best = ""; best_rev = 0
-        for (p in rev)
-            if (rev[p] > best_rev) { best = p; best_rev = rev[p] }
-        printf "  %s — $%.0f\n", best, best_rev
-    }
-' "$TMPDIR/sales.csv"
+cat > "$TMPDIR/events.csv" <<'CSV'
+event,date,attendees
+Kickoff,2025-01-15 09:00:00,45
+Sprint Review,2025-02-01 14:00:00,30
+Release Party,2025-02-16 18:00:00,120
+Retrospective,2025-03-01 10:30:00,25
+Offsite,2025-03-15 08:00:00,80
+Hackathon,2025-04-01 10:00:00,60
+CSV
 
-# ─────────────────────────────────────────────────────────────────
-section "2. JSON Lines — API log analysis with jpath()"
-# awk: no JSON support at all. You'd need jq + awk in a pipeline.
-# fk: jpath() navigates JSON objects and arrays natively.
+cat > "$TMPDIR/servers.csv" <<'CSV'
+host-name,cpu-usage,mem-usage,disk.free,net.rx-bytes
+web-01,72.5,85.3,120,984320
+web-02,45.1,60.2,250,1230400
+db-01,91.8,95.1,50,540200
+cache-01,12.3,40.7,180,320100
+worker-01,88.2,78.9,90,2100000
+worker-02,34.5,52.1,300,1800000
+CSV
 
 cat > "$TMPDIR/api.jsonl" <<'JSONL'
 {"ts":"2025-02-16T10:00:01","method":"GET","path":"/api/users","status":200,"ms":12}
@@ -65,354 +134,303 @@ cat > "$TMPDIR/api.jsonl" <<'JSONL'
 {"ts":"2025-02-16T10:00:08","method":"GET","path":"/api/users","status":200,"ms":11}
 JSONL
 
-echo "Request summary (from JSON Lines with jpath):"
-$FK '{
-    method = jpath($0, ".method")
-    status = jpath($0, ".status") + 0
-    ms     = jpath($0, ".ms") + 0
-    path   = jpath($0, ".path")
+printf "banana\napple\ncherry\ndate\nelderberry\nfig\ngrape\napricot\n" > "$TMPDIR/fruits.txt"
 
-    methods[method]++
-    total_ms += ms; n++
-    if (status >= 500) errors++
-    if (ms > slow_ms) { slow_ms = ms; slow_path = path }
-}
-END {
-    printf "  Requests: %d (avg %.0fms)\n", n, total_ms / n
-    printf "  Errors:   %d (%.0f%%)\n", errors+0, (errors+0)*100/n
-    printf "  Slowest:  %s (%dms)\n", slow_path, slow_ms
-    printf "  Methods:  "
-    for (m in methods) printf "%s=%d ", m, methods[m]
-    print ""
-}' "$TMPDIR/api.jsonl"
+# ═══════════════════════════════════════════════════════════════
+section "1. CSV with named columns — no csvkit, no counting fields"
+# awk needs: csvkit to parse, then count which column is which.
+# fk: -i csv -H gives you $column_name directly.
 
-# ─────────────────────────────────────────────────────────────────
-section "3. Nested JSON with jpath() iteration"
-# awk: completely impossible without external tools.
-# fk: jpath() navigates nested objects, arrays, supports iteration.
+show $FK -i csv -H '{ rev[$region] += $revenue } END { for (r in rev) printf "  %-6s $%.0f\n", r, rev[r] }' "$TMPDIR/sales.csv"
 
-echo '{"cluster":"prod","nodes":[{"host":"web-1","cpu":72,"mem":85},{"host":"web-2","cpu":45,"mem":60},{"host":"db-1","cpu":91,"mem":95}]}' | \
-$FK '{
-    cluster = jpath($0, ".cluster")
-    n = jpath($0, ".nodes", nodes)
-    printf "  Cluster: %s (%d nodes)\n", cluster, n
-    for (i = 1; i <= n; i++) {
-        host = jpath(nodes[i], ".host")
-        cpu  = jpath(nodes[i], ".cpu") + 0
-        mem  = jpath(nodes[i], ".mem") + 0
-        flag = ""
-        if (cpu > 90 || mem > 90) flag = " *** HIGH"
-        printf "    %-8s cpu=%d%%  mem=%d%%%s\n", host, cpu, mem, flag
-    }
-}'
+# ═══════════════════════════════════════════════════════════════
+section "2. Quoted column names — hyphens, dots, anything"
+# awk: impossible. fk: \$\"col-name\" for any header.
 
-# ─────────────────────────────────────────────────────────────────
-section "4. Regex capture groups — structured extraction"
-# awk: match() sets RSTART/RLENGTH but has no capture groups.
-# fk: match(str, regex, arr) fills arr[1], arr[2], ... with groups.
-
-cat > "$TMPDIR/access.log" <<'LOG'
-192.168.1.10 - - [16/Feb/2025:10:15:30 +0000] "GET /index.html HTTP/1.1" 200 1234
-10.0.0.5 - admin [16/Feb/2025:10:15:31 +0000] "POST /api/login HTTP/1.1" 302 0
-172.16.0.1 - - [16/Feb/2025:10:15:32 +0000] "GET /static/style.css HTTP/1.1" 200 8901
-192.168.1.10 - - [16/Feb/2025:10:15:33 +0000] "GET /api/data HTTP/1.1" 500 45
-10.0.0.5 - admin [16/Feb/2025:10:15:34 +0000] "DELETE /api/users/3 HTTP/1.1" 204 0
-LOG
-
-echo "Parse Apache log with capture groups:"
-$FK '{
-    match($0, "^([0-9.]+) .* \"([A-Z]+) ([^ ]+) .*\" ([0-9]+) ([0-9]+)", c)
-    ip = c[1]; method = c[2]; path = c[3]; status = c[4]+0; bytes = c[5]+0
-    printf "  %-15s %-6s %-25s %d  %dB\n", ip, method, path, status, bytes
-    if (status >= 500) errs++
-}
-END { printf "  → %d server errors\n", errs+0 }' "$TMPDIR/access.log"
-
-# ─────────────────────────────────────────────────────────────────
-section "5. Data pipeline: sort + join + histogram"
-# awk: no asort, no join, no repeat for bar charts.
-# fk: full array manipulation + string toolkit.
-
-echo "Word frequency histogram:"
-echo "the quick brown fox jumps over the lazy dog the fox the the" | $FK '{
-    for (i = 1; i <= NF; i++) freq[$i]++
-}
-END {
-    for (w in freq) counts[w] = freq[w]
-    n = asorti(freq)
-    for (i = 1; i <= n; i++) {
-        word = freq[i]
-        c = counts[word]
-        printf "  %-8s %s (%d)\n", word, repeat("█", c), c
-    }
-}'
-
-echo ""
-echo "Sort by value and join:"
-echo "cherry apple banana date" | $FK '{
-    for (i = 1; i <= NF; i++) a[i] = $i
-    asort(a)
-    print "  sorted:", join(a, " → ")
-}'
-
-# ─────────────────────────────────────────────────────────────────
-section "6. Multi-format date wrangling"
-# awk: no date parsing, no strftime, no mktime in POSIX awk.
-# fk: parsedate + strftime + mktime — all built in.
-
-cat > "$TMPDIR/events.csv" <<'CSV'
-event,date,attendees
-Kickoff,2025-01-15 09:00:00,45
-Sprint Review,2025-02-01 14:00:00,30
-Release Party,2025-02-16 18:00:00,120
-Retrospective,2025-03-01 10:30:00,25
-CSV
-
-echo "Event timeline with day-of-week:"
-$FK -i csv -H '{
-    ts = parsedate($date, "%Y-%m-%d %H:%M:%S")
-    dow = strftime("%A", ts)
-    ymd = strftime("%b %d", ts)
-    printf "  %-20s %-10s %-6s  %d attendees\n", $event, dow, ymd, $attendees
-}' "$TMPDIR/events.csv"
-
-echo ""
-echo "Epoch round-trip:"
-echo | $FK 'BEGIN {
-    epoch = mktime("2025 02 16 12 30 00")
-    print "  mktime → " epoch
-    print "  strftime → " strftime("%A, %B %d %Y at %H:%M UTC", epoch)
-}'
-
-# ─────────────────────────────────────────────────────────────────
-section "7. Bitwise flags + hex output"
-# awk: no bitwise operations, no hex(), no chr().
-# fk: and/or/xor/lshift/rshift + hex + chr for binary protocol work.
-
-echo "Unix permission bits from octal:"
-printf "511\n493\n420\n256\n438\n" | $FK '{
-    mode = $1 + 0
-    u = and(rshift(mode, 6), 7)
-    g = and(rshift(mode, 3), 7)
-    o = and(mode, 7)
-    printf "  %3d → %d%d%d (", mode, u, g, o
-    bits = "rwx"
-    for (shift = 8; shift >= 0; shift--) {
-        if (and(mode, lshift(1, shift)))
-            printf "%s", substr(bits, 3 - (shift % 3), 1)
-        else
-            printf "-"
-    }
-    printf ")  hex=%s\n", hex(mode)
-}'
-
-echo ""
-echo "Flag check — which IPs have the 'admin' bit (0x04) set:"
-printf "10.0.0.1 7\n10.0.0.2 3\n10.0.0.3 5\n10.0.0.4 12\n" | \
-    $FK '{ if (and($2, 4)) printf "  %-12s flags=%s → admin\n", $1, hex($2) }'
-
-# ─────────────────────────────────────────────────────────────────
-section "8. String toolkit one-liners"
-# awk: none of these exist — you'd write multi-line functions.
-# fk: built-in trim, reverse, startswith, endswith, repeat, chr, ord, hex.
-
-printf "  hello world  \n  fk is great  \n  trim me  \n" | \
-    $FK '{ printf "  trim: %-15s  reverse: %s\n", "\"" trim($0) "\"", reverse(trim($0)) }'
-
-echo ""
-echo "ASCII table (32–126) via chr():"
-echo | $FK 'BEGIN {
-    printf "  "
-    for (i = 32; i <= 126; i++) printf "%s", chr(i)
-    print ""
-    printf "  (%d printable characters)\n", 126 - 32 + 1
-}'
-
-echo ""
-echo "String analysis:"
-printf "Hello, World!\nfk-is-awesome\ncafé résumé\n" | $FK '{
-    printf "  %-16s len=%-3d", $0, length($0)
-    printf " starts_H=%d", startswith($0, "H")
-    printf " ends_!=%d", endswith($0, "!")
-    printf " rev=%s\n", reverse($0)
-}'
-
-# ─────────────────────────────────────────────────────────────────
-section "9. Negative indexing + computed fields"
-# awk: no negative field indexes, no $-1.
-# fk: $-1 = last, $-2 = second-to-last, etc.
-
-echo "Negative field indexes — access from the end:"
-printf "alice 30 NYC engineer\nbob 25 LA designer\ncarol 35 Chicago manager\n" | $FK '{
-    printf "  %-8s last=%-10s 2nd-last=%-8s\n", $1, $-1, $-2
-}'
-
-echo ""
-echo "Reverse column order (computed + negative fields):"
-echo "alpha beta gamma delta epsilon" | $FK '{
-    for (i = NF; i >= 1; i--) printf "%s ", $i
-    print ""
-}'
-
-# ─────────────────────────────────────────────────────────────────
-section "10. gensub — functional string replacement"
-# awk: sub/gsub modify in place, no way to get modified copy.
-# fk: gensub returns the result, leaving $0 untouched.
-
-echo "Sanitise sensitive fields without destroying the original:"
-printf "user=alice email=alice@example.com token=abc123secret\n" | $FK '{
-    safe = gensub("token=[^ ]+", "token=***", "g")
-    safe = gensub("[a-zA-Z0-9.]+@[a-zA-Z0-9.]+", "***@***", "g", safe)
-    print "  original:", $0
-    print "  redacted:", safe
-}'
-
-echo ""
-echo "Replace only the 2nd occurrence:"
-echo "one-two-three-four-five" | $FK '{
-    print "  original:", $0
-    print "  2nd dash → DASH:", gensub("-", "=DASH=", 2)
-}'
-
-# ─────────────────────────────────────────────────────────────────
-section "11. typeof() — runtime type introspection"
-# awk: no type introspection at all.
-# fk: typeof returns "number", "string", "array", "uninitialized".
-
-echo | $FK 'BEGIN {
-    x = 42; y = "hello"; z[1] = "a"; z[2] = "b"
-    printf "  %-12s type=%-15s value=%s\n", "x=42", typeof(x), x
-    printf "  %-12s type=%-15s value=%s\n", "y=\"hello\"", typeof(y), y
-    printf "  %-12s type=%-15s (%d elements)\n", "z[1]=\"a\"", typeof(z), length(z)
-    printf "  %-12s type=%s\n", "(unset)", typeof(missing)
-}'
-
-# ─────────────────────────────────────────────────────────────────
-section "12. Mini ETL — CSV analytics report"
-# Combines: -i csv, -H, named columns, parsedate, strftime,
-# trim, gensub — all in one cohesive program.
-
-cat > "$TMPDIR/orders.csv" <<'CSV'
-order_id,customer,email,amount,currency,created_at
-1001,Alice Smith,alice@example.com,149.99,USD,2025-01-10 08:30:00
-1002,Bob Jones,bob@corp.io,2340.00,EUR,2025-01-15 14:20:00
-1003,Carol Wu,carol@example.com,89.50,USD,2025-02-01 09:00:00
-1004,Alice Smith,alice@example.com,320.00,USD,2025-02-05 16:45:00
-1005,Dan Lee,dan@example.com,1100.00,GBP,2025-02-10 11:30:00
-1006,Bob Jones,bob@corp.io,450.00,EUR,2025-02-14 13:00:00
-1007,Eve Park,eve@startup.co,75.00,USD,2025-02-15 10:15:00
-1008,Alice Smith,alice@example.com,210.00,USD,2025-02-16 08:00:00
-CSV
-
-echo "Order analytics report:"
-$FK -i csv -H '
-{
-    ts = parsedate($created_at, "%Y-%m-%d %H:%M:%S")
-    month = strftime("%Y-%m", ts)
-    cust = trim($customer)
-    amt = $amount + 0
-
-    total += amt; count++
-    by_cust[cust] += amt; orders_cust[cust]++
-    by_month[month] += amt; cnt_month[month]++
-    if (amt > max_amt) { max_amt = amt; max_id = $order_id; max_cust = cust }
-}
-END {
-    printf "  Total: $%.2f across %d orders (avg $%.2f)\n", total, count, total/count
-    print ""
-    print "  By customer:"
-    for (c in by_cust)
-        printf "    %-18s %d orders  $%8.2f\n", c, orders_cust[c], by_cust[c]
-    print ""
-    print "  By month:"
-    for (m in by_month)
-        printf "    %s  %d orders  $%8.2f\n", m, cnt_month[m], by_month[m]
-    printf "\n  Largest: #%s by %s ($%.2f)\n", max_id, max_cust, max_amt
-}' "$TMPDIR/orders.csv"
-
-# ─────────────────────────────────────────────────────────────────
-section "13. Quoted column names — real-world headers"
-# awk: no way to use column names with special characters.
-# fk: $"col-name" accesses any header, hyphens/dots/spaces included.
-
-cat > "$TMPDIR/metrics.csv" <<'CSV'
-host-name,cpu-usage,mem-usage,disk.free,net.rx-bytes
-web-01,72.5,85.3,120,984320
-web-02,45.1,60.2,250,1230400
-db-01,91.8,95.1,50,540200
-cache-01,12.3,40.7,180,320100
-CSV
-
-echo "Server health check (using quoted column names):"
-$FK -i csv -H '{
-    host = $"host-name"
-    cpu  = $"cpu-usage" + 0
-    mem  = $"mem-usage" + 0
-    disk = $"disk.free" + 0
-
+show $FK -i csv -H '{
+    cpu = $"cpu-usage" + 0; mem = $"mem-usage" + 0
     status = "OK"
     if (cpu > 90 || mem > 90) status = "CRITICAL"
     else if (cpu > 70 || mem > 70) status = "WARNING"
-    else if (disk < 100) status = "LOW DISK"
+    printf "  %-12s cpu=%5.1f%%  mem=%5.1f%%  [%s]\n", $"host-name", cpu, mem, status
+}' "$TMPDIR/servers.csv"
 
-    printf "  %-10s cpu=%5.1f%%  mem=%5.1f%%  disk=%dGB  [%s]\n", host, cpu, mem, disk, status
-}' "$TMPDIR/metrics.csv"
+# ═══════════════════════════════════════════════════════════════
+section "3. JSON Lines with jpath() — no jq needed"
+# awk: zero JSON support. fk: jpath() navigates objects and arrays.
 
-# ─────────────────────────────────────────────────────────────────
-section "14. Piping: fk | fk — multi-stage pipelines"
-# fk stages compose naturally via stdin/stdout, just like awk.
-# But fk adds CSV-aware stages, named columns, and richer transforms.
+show $FK '{
+    method = jpath($0, ".method"); status = jpath($0, ".status") + 0
+    ms = jpath($0, ".ms") + 0; path = jpath($0, ".path")
+    tag = ""
+    if (status >= 500) tag = " ** ERROR"
+    if (ms > 100) tag = tag " SLOW"
+    printf "  %-6s %-20s %3d %4dms%s\n", method, path, status, ms, tag
+}' "$TMPDIR/api.jsonl"
 
-echo "Stage 1: CSV → extract + filter → Stage 2: aggregate"
-$FK -i csv -H '$revenue+0 > 10000 { print $region, $product, $revenue }' "$TMPDIR/sales.csv" | \
-    $FK '{ region[$1] += $3 } END { for (r in region) printf "  %-6s $%.0f\n", r, region[r] }'
+# ═══════════════════════════════════════════════════════════════
+section "4. Nested JSON iteration"
+# awk: completely impossible. fk: jpath with array extraction.
+
+show_pipe "echo '{\"team\":\"eng\",\"members\":[{\"name\":\"Alice\",\"role\":\"lead\"},{\"name\":\"Bob\",\"role\":\"dev\"},{\"name\":\"Carol\",\"role\":\"dev\"}]}' | $FK '{
+    team = jpath(\$0, \".team\")
+    n = jpath(\$0, \".members\", m)
+    for (i=1; i<=n; i++) printf \"  %s: %s (%s)\n\", team, jpath(m[i], \".name\"), jpath(m[i], \".role\")
+}'"
+
+# ═══════════════════════════════════════════════════════════════
+section "5. Regex capture groups — structured log parsing"
+# awk match() has no capture groups. fk: match(s, re, arr).
+
+show $FK '{
+    match($0, "^([0-9.]+) .* \"([A-Z]+) ([^ ]+) .*\" ([0-9]+) ([0-9]+)", c)
+    printf "  %-15s %-6s %-25s %s  %sB\n", c[1], c[2], c[3], c[4], c[5]
+}' "$TMPDIR/access.log"
+
+# ═══════════════════════════════════════════════════════════════
+section "6. Sorting — asort, asorti, join"
+# awk: no built-in sort. fk: asort (by value), asorti (by key), join.
+
+echo "Sort values alphabetically:"
+show $FK '{ a[NR] = $0 } END { asort(a); for (i=1; i<=NR; i++) printf "  %s\n", a[i] }' "$TMPDIR/fruits.txt"
 
 echo ""
-echo "Three-stage pipeline: generate → transform → summarise"
-printf "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n" | \
-    $FK '{ print $1, $1**2, $1**3 }' | \
-    $FK '$2 > 20 { printf "  n=%-3d n²=%-5d n³=%d\n", $1, $2, $3 }'
-
-# ─────────────────────────────────────────────────────────────────
-section "15. Piping: fk | awk | fk — interop with awk"
-# fk is a drop-in replacement: output format is awk-compatible.
-
-echo "fk (CSV parse) → awk (filter) → fk (format with fk builtins):"
-$FK -i csv -H '{ print $product, $revenue, $region }' "$TMPDIR/sales.csv" | \
-    awk '$2 + 0 > 15000' | \
-    $FK '{ printf "  %-8s $%-8s (%s)  hex=$%s\n", $1, $2, $3, hex($2+0) }'
-
-echo ""
-echo "awk (generate) → fk (enrich with features awk lacks):"
-awk 'BEGIN { for (i=1; i<=5; i++) print i, "item_" i, int(rand()*1000) }' | \
-    $FK '{
-        bar = repeat("▓", int($3 / 100))
-        printf "  #%-3s %-10s %4d %s\n", $1, $2, $3, bar
-    }'
-
-# ─────────────────────────────────────────────────────────────────
-section "16. Pure stdin — interactive-style one-liners"
-# No files needed. Everything from stdin, showcasing fk as a stream processor.
-
-echo "Live log simulation → parse + alert:"
-printf "2025-02-16T10:00:01 INFO  Starting service\n2025-02-16T10:00:02 WARN  High memory usage\n2025-02-16T10:00:03 ERROR Connection refused: db-01\n2025-02-16T10:00:04 INFO  Request processed\n2025-02-16T10:00:05 ERROR Timeout: api-gateway\n" | \
-$FK '{
-    match($0, "^([^ ]+) ([A-Z]+) +(.*)", c)
-    ts = c[1]; level = c[2]; msg = c[3]
-    if (level == "ERROR") {
-        errs++
-        print "  ** [" ts "] " level ": " msg
-    } else if (level == "WARN") {
-        print "  !  [" ts "] " level ": " msg
-    }
-    total++
+echo "Sort CSV by revenue (descending) — fk does the work, not sort(1):"
+show $FK -i csv -H '{
+    rev[NR] = $revenue + 0
+    line[NR] = sprintf("%-8s %-8s $%s", $region, $product, $revenue)
 }
-END { printf "  → %d errors out of %d lines\n", errs+0, total }'
+END {
+    for (i = 1; i <= NR; i++) order[i] = i
+    # Bubble sort by revenue descending (small dataset)
+    for (i = 1; i <= NR; i++)
+        for (j = i+1; j <= NR; j++)
+            if (rev[order[i]] < rev[order[j]]) {
+                tmp = order[i]; order[i] = order[j]; order[j] = tmp
+            }
+    for (i = 1; i <= NR; i++) printf "  %s\n", line[order[i]]
+}' "$TMPDIR/sales.csv"
 
 echo ""
-echo "Inline CSV from stdin → named column access:"
-printf "name,score,grade\nAlice,95,A\nBob,72,B\nCarol,88,A\nDan,61,D\n" | \
-    $FK -i csv -H '$score+0 >= 80 { printf "  %-8s %s (score %s)\n", $name, $grade, $score }'
+echo "Sort keys + join into a single line:"
+show_pipe "echo 'cherry apple banana date' | $FK '{ for (i=1;i<=NF;i++) a[i]=\$i; asort(a); print \"  \" join(a, \" → \") }'"
+
+if $HAS_UPLOT; then
+    echo ""
+    echo "Revenue by region (sorted bar chart via uplot):"
+    $FK -i csv -H '{ rev[$region] += $revenue } END { for (r in rev) printf "%s\t%.0f\n", r, rev[r] }' "$TMPDIR/sales.csv" | \
+        sort -t$'\t' -k2 -n -r | uplot bar -t "Revenue by Region" -c cyan
+fi
+
+# ═══════════════════════════════════════════════════════════════
+section "7. Date parsing + formatting"
+# POSIX awk: no date functions at all. fk: parsedate, strftime, mktime.
+
+show $FK -i csv -H '{
+    ts = parsedate($date, "%Y-%m-%d %H:%M:%S")
+    dow = strftime("%A", ts)
+    short = strftime("%b %d", ts)
+    printf "  %-20s %-10s %-6s  %d people\n", $event, dow, short, $attendees
+}' "$TMPDIR/events.csv"
+
+if $HAS_UPLOT; then
+    echo ""
+    echo "Attendees timeline (line chart):"
+    $FK -i csv -H '{
+        ts = parsedate($date, "%Y-%m-%d %H:%M:%S")
+        day = strftime("%m/%d", ts)
+        printf "%s\t%d\n", day, $attendees
+    }' "$TMPDIR/events.csv" | uplot bar -t "Attendees by Event Date" -c green
+fi
+
+# ═══════════════════════════════════════════════════════════════
+section "8. String toolkit — trim, reverse, chr, ord, hex"
+# awk: none of these exist. You'd write 10-line functions for each.
+
+show_pipe "printf '  hello world  \n  fk rocks  \n' | $FK '{ printf \"  trim: %-15s  rev: %s\n\", \"\\\"\" trim(\$0) \"\\\"\", reverse(trim(\$0)) }'"
 
 echo ""
-printf "\033[1;32m═══ Done! 16 examples — all showcasing what fk does that awk can't. ═══\033[0m\n"
+echo "ASCII table via chr():"
+show_pipe "echo | $FK 'BEGIN { printf \"  \"; for (i=33; i<=126; i++) printf \"%s\", chr(i); print \"\" }'"
+
+echo ""
+echo "Encode/decode:"
+show_pipe "echo 'Hello' | $FK '{ for (i=1; i<=length(\$0); i++) printf \"  %s → ord=%d hex=%s\n\", substr(\$0,i,1), ord(substr(\$0,i,1)), hex(ord(substr(\$0,i,1))) }'"
+
+# ═══════════════════════════════════════════════════════════════
+section "9. gensub — functional string replacement"
+# awk: sub/gsub modify in place. fk: gensub returns a copy.
+
+show_pipe "echo 'user=alice email=alice@example.com token=abc123secret' | $FK '{
+    safe = gensub(\"token=[^ ]+\", \"token=***\", \"g\")
+    safe = gensub(\"[a-zA-Z0-9.]+@[a-zA-Z0-9.]+\", \"***@***\", \"g\", safe)
+    print \"  original:\", \$0
+    print \"  redacted:\", safe
+}'"
+
+echo ""
+echo "Replace only the 2nd occurrence:"
+show_pipe "echo 'one-two-three-four-five' | $FK '{ print \"  \" gensub(\"-\", \"=DASH=\", 2) }'"
+
+# ═══════════════════════════════════════════════════════════════
+section "10. Bitwise operations + hex"
+# awk: no bitwise ops, no hex output. fk: and/or/xor/lshift/rshift + hex.
+
+echo "Unix permission decoder:"
+show_pipe "printf '511\n493\n420\n256\n' | $FK '{
+    mode = \$1+0; u=and(rshift(mode,6),7); g=and(rshift(mode,3),7); o=and(mode,7)
+    printf \"  %3d → %d%d%d  hex=%s\n\", mode, u, g, o, hex(mode)
+}'"
+
+# ═══════════════════════════════════════════════════════════════
+section "11. typeof() + negative fields"
+# awk: no type introspection, no negative indexes.
+
+show_pipe "echo | $FK 'BEGIN { x=42; y=\"hi\"; z[1]=\"a\"
+    printf \"  %-6s type=%s\n\", \"42\", typeof(x)
+    printf \"  %-6s type=%s\n\", \"\\\"hi\\\"\", typeof(y)
+    printf \"  %-6s type=%s\n\", \"z[]\", typeof(z)
+    printf \"  %-6s type=%s\n\", \"?\", typeof(w)
+}'"
+
+echo ""
+echo "Negative field indexes (\$-1 = last, \$-2 = second-to-last):"
+show_pipe "echo 'alpha beta gamma delta epsilon' | $FK '{ printf \"  last=%-10s 2nd-last=%s\n\", \$-1, \$-2 }'"
+
+# ═══════════════════════════════════════════════════════════════
+section "12. Piping: fk | fk — multi-stage pipelines"
+
+echo "Stage 1 (CSV parse + filter) → Stage 2 (aggregate):"
+show_pipe "$FK -i csv -H '\$revenue+0 > 15000 { print \$region, \$product, \$revenue }' $TMPDIR/sales.csv | $FK '{ by[\$1] += \$3 } END { for (r in by) printf \"  %-6s \$%.0f\n\", r, by[r] }'"
+
+echo ""
+echo "Three-stage: generate → compute → filter:"
+show_pipe "printf '1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n' | $FK '{ print \$1, \$1**2, \$1**3 }' | $FK '\$2 > 20 { printf \"  n=%-2d  n²=%-4d  n³=%d\n\", \$1, \$2, \$3 }'"
+
+# ═══════════════════════════════════════════════════════════════
+section "13. fk + sort + uniq — classic Unix pipeline, supercharged"
+# awk can do some of this, but fk's capture groups + named columns
+# make the extraction step trivial.
+
+echo "Top request paths by count (fk extracts, sort+uniq counts, fk formats):"
+show_pipe "$FK '{ match(\$0, \"\\\"[A-Z]+ ([^ ]+)\", c); print c[1] }' $TMPDIR/access.log | sort | uniq -c | sort -rn | $FK '{ printf \"  %3d  %s\n\", \$1, \$2 }'"
+
+echo ""
+echo "Unique IPs with request count (fk parses, sort -u deduplicates):"
+show_pipe "$FK '{ print \$1 }' $TMPDIR/access.log | sort | uniq -c | sort -rn | $FK '{ printf \"  %-15s %d requests\n\", \$2, \$1 }'"
+
+# ═══════════════════════════════════════════════════════════════
+section "14. fk + awk — interop both directions"
+# fk output is awk-compatible. Mix tools freely.
+
+echo "fk (CSV parse) → awk (filter) → fk (enrich with fk builtins):"
+show_pipe "$FK -i csv -H '{ print \$product, \$revenue, \$region }' $TMPDIR/sales.csv | awk '\$2+0 > 15000' | $FK '{ printf \"  %-8s \$%-6s (%s)  hex=\$%s\n\", \$1, \$2, \$3, hex(\$2+0) }'"
+
+echo ""
+echo "awk (generate data) → fk (bar chart with repeat):"
+show_pipe "awk 'BEGIN { srand(42); for (i=1;i<=6;i++) printf \"%s %d\n\", \"item_\" i, int(rand()*50)+1 }' | $FK '{ printf \"  %-8s %s (%d)\n\", \$1, repeat(\"▓\", \$2), \$2 }'"
+
+# ═══════════════════════════════════════════════════════════════
+section "15. fk + paste + diff — structural comparison"
+# Combine fk's CSV parsing with paste for side-by-side or diff for changes.
+
+echo "Side-by-side: product names vs revenue (paste combines fk outputs):"
+show_pipe "paste <($FK -i csv -H '{ print \$product }' $TMPDIR/sales.csv) <($FK -i csv -H '{ print \"\$\" \$revenue }' $TMPDIR/sales.csv) | $FK '{ printf \"  %-10s %s\n\", \$1, \$2 }'"
+
+echo ""
+echo "Diff two transformations of the same data:"
+diff --color=never \
+    <($FK -i csv -H '{ print $region, $product }' "$TMPDIR/sales.csv" | sort) \
+    <($FK -i csv -H '$revenue+0 > 15000 { print $region, $product }' "$TMPDIR/sales.csv" | sort) \
+    | $FK '{ print "  " $0 }' || true
+echo "  (lines starting with < were filtered out by revenue > 15000)"
+
+# ═══════════════════════════════════════════════════════════════
+section "16. fk + xargs — parallel processing"
+# fk extracts, xargs parallelises.
+
+echo "Extract unique IPs, then resolve each (simulated with printf):"
+show_pipe "$FK '{ ips[\$1]++ } END { for (ip in ips) print ip }' $TMPDIR/access.log | xargs -I{} printf '  resolve {} → {}.example.com\n'"
+
+# ═══════════════════════════════════════════════════════════════
+section "17. Mini ETL — CSV → aggregate → report"
+# Combines: -i csv, -H, named columns, parsedate, strftime, trim.
+
+cat > "$TMPDIR/orders.csv" <<'CSV'
+order_id,customer,amount,currency,created_at
+1001,Alice Smith,149.99,USD,2025-01-10 08:30:00
+1002,Bob Jones,2340.00,EUR,2025-01-15 14:20:00
+1003,Carol Wu,89.50,USD,2025-02-01 09:00:00
+1004,Alice Smith,320.00,USD,2025-02-05 16:45:00
+1005,Dan Lee,1100.00,GBP,2025-02-10 11:30:00
+1006,Bob Jones,450.00,EUR,2025-02-14 13:00:00
+1007,Eve Park,75.00,USD,2025-02-15 10:15:00
+1008,Alice Smith,210.00,USD,2025-02-16 08:00:00
+CSV
+
+show $FK -i csv -H '
+{
+    ts = parsedate($created_at, "%Y-%m-%d %H:%M:%S")
+    month = strftime("%Y-%m", ts)
+    cust = trim($customer); amt = $amount + 0
+    total += amt; count++
+    by_cust[cust] += amt; n_cust[cust]++
+    by_month[month] += amt
+    if (amt > mx) { mx = amt; mx_id = $order_id; mx_who = cust }
+}
+END {
+    printf "  Total: $%.2f across %d orders\n\n", total, count
+    print "  By customer:"
+    for (c in by_cust) printf "    %-16s %d orders  $%8.2f\n", c, n_cust[c], by_cust[c]
+    print "\n  By month:"
+    for (m in by_month) printf "    %s  $%8.2f\n", m, by_month[m]
+    printf "\n  Largest: #%s by %s ($%.2f)\n", mx_id, mx_who, mx
+}' "$TMPDIR/orders.csv"
+
+# ═══════════════════════════════════════════════════════════════
+# Conditional uplot section
+# ═══════════════════════════════════════════════════════════════
+if $HAS_UPLOT; then
+
+section "18. fk + uplot — terminal charts (uplot detected)"
+
+echo "Latency histogram from access log:"
+$FK '{ match($0, "\"[A-Z]+ [^ ]+ .*\" ([0-9]+) ([0-9]+)", c); print c[2]+0 }' "$TMPDIR/access.log" | \
+    uplot hist -n 8 -t "Response Bytes" -c yellow
+
+echo ""
+echo "Revenue by product (bar chart):"
+$FK -i csv -H '{ rev[$product] += $revenue } END { for (p in rev) printf "%s\t%.0f\n", p, rev[p] }' "$TMPDIR/sales.csv" | \
+    sort -t$'\t' -k2 -n -r | uplot bar -t "Revenue by Product" -c cyan
+
+echo ""
+echo "Server CPU usage (bar chart with named columns):"
+$FK -i csv -H '{ printf "%s\t%s\n", $"host-name", $"cpu-usage" }' "$TMPDIR/servers.csv" | \
+    sort -t$'\t' -k2 -n -r | uplot bar -t "CPU Usage (%)" -c red
+
+echo ""
+echo "Event attendance (bar chart with dates from parsedate):"
+$FK -i csv -H '{
+    ts = parsedate($date, "%Y-%m-%d %H:%M:%S")
+    printf "%s (%s)\t%d\n", $event, strftime("%b %d", ts), $attendees
+}' "$TMPDIR/events.csv" | uplot bar -t "Event Attendance" -c green
+
+echo ""
+echo "API latency by endpoint (jpath + uplot):"
+$FK '{
+    path = jpath($0, ".path"); ms = jpath($0, ".ms") + 0
+    printf "%s\t%d\n", path, ms
+}' "$TMPDIR/api.jsonl" | uplot box -t "API Latency by Endpoint (ms)"
+
+else
+    section "18. uplot not installed — skipping terminal charts"
+    echo "  Install with: gem install youplot"
+    echo "  Re-run to see bar charts, histograms, box plots, and scatter plots."
+fi
+
+# ═══════════════════════════════════════════════════════════════
+printf "\n\033[1;32m━━ Done! ━━\033[0m\n"
+echo "Every example uses fk features with no direct awk equivalent."
+if $HAS_UPLOT; then
+    echo "Charts rendered with uplot (gem install youplot)."
+fi

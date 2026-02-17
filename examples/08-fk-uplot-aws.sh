@@ -12,8 +12,8 @@ TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
 if ! command -v uplot >/dev/null 2>&1; then
-    echo "uplot not found. Install with: gem install youplot"
-    exit 1
+    echo "Skipping: uplot not found. Install with: gem install youplot"
+    exit 0
 fi
 
 section() { printf "\n\033[1;35m━━ %s ━━\033[0m\n\n" "$1"; }

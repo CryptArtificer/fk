@@ -123,6 +123,7 @@ examples: release
 
 showcase: release
 	@bash examples/07-showcase-vs-awk.sh
+	@bash examples/08-fk-uplot-aws.sh
 
 # ── Run shortcuts ────────────────────────────────────────────────
 
