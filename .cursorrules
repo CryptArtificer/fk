@@ -13,8 +13,8 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~12,800 lines of Rust** across 34 source files
-- **226 tests**, zero warnings, clippy clean
+- **~7,900 lines of Rust** across 23 source files
+- **255 tests**, zero warnings, clippy clean
 - **Phases 0–8 complete**
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
@@ -40,6 +40,7 @@ input/parquet_reader.rs — Apache Parquet reader (optional feature)
 builtins/mod.rs      — dispatch + coercion helpers (to_number, format_number)
 builtins/string.rs   — length, substr, index, trim, reverse, chr, ord, hex, ...
 builtins/math.rs     — int, sqrt, abs, ceil, floor, rand, min, max, ...
+                       (stats builtins in action.rs: sum, mean, median, stddev, p, iqm, ...)
 builtins/printf.rs   — format_printf
 builtins/time.rs     — systime, strftime, mktime, parsedate (pure UTC, no libc)
 builtins/json.rs     — jpath() with JSON parser, path evaluator, iteration
@@ -87,6 +88,8 @@ Phase 8: Header names as field accessors ($name, $"col-name", $var in -H mode),
   math (rand, srand, atan2, abs, ceil, floor, round, min, max, log2, log10),
   string (trim, ltrim, rtrim, startswith, endswith, repeat, reverse, chr, ord, hex),
   date (parsedate), richer strftime specifiers
+Phase 9: printf enhancement (0-pad, +sign, %x, %o), statistical builtins
+  (sum, mean, median, stddev, variance, p/percentile, quantile, iqm, min/max on arrays)
 
 ### Remaining
 - [ ] CI pipeline (build, test, lint, clippy)

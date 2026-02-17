@@ -162,6 +162,19 @@ print ... > "/dev/stderr"   # write to stderr
 | `asorti(arr)` | Sort by keys, store as values 1..N |
 | `join(arr, sep)` | Join array values into string |
 
+### Statistics (fk extensions)
+| Function | Description |
+|----------|-------------|
+| `sum(arr)` | Sum of all values |
+| `mean(arr)` | Arithmetic mean |
+| `median(arr)` | Median (50th percentile) |
+| `stddev(arr)` | Population standard deviation |
+| `variance(arr)` | Population variance |
+| `p(arr, n)` / `percentile(arr, n)` | nth percentile (0–100) |
+| `quantile(arr, q)` | Quantile (0–1, e.g. 0.95 = p95) |
+| `iqm(arr)` | Interquartile mean (robust to outliers) |
+| `min(arr)` / `max(arr)` | Min / max of array values |
+
 ### Utility (fk extensions)
 | Function | Description |
 |----------|-------------|
@@ -304,6 +317,20 @@ fk '{ if (and($1, 0x04)) print "flag set:", $0 }' file
 
 # Parse dates
 fk -F, -H '{ ts = parsedate($created, "%Y-%m-%d"); if (ts > 1700000000) print $name }' data.csv
+
+# ── Statistics ──
+
+# Quick summary stats
+fk '{ a[NR]=$1 } END { printf "n=%d mean=%.2f median=%.2f stddev=%.2f\n", length(a), mean(a), median(a), stddev(a) }' data.txt
+
+# p95 latency
+fk '{ a[NR]=$3 } END { print "p95:", p(a, 95) }' latency.log
+
+# Interquartile mean (outlier-robust average)
+fk '{ a[NR]=$1 } END { print "iqm:", iqm(a) }' measurements.txt
+
+# Zero-padded output
+fk '{ printf "%08d\n", $1 }' ids.txt
 ```
 
 ## REPL commands

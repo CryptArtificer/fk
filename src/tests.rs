@@ -1682,3 +1682,237 @@ fn numeric_string_field_still_works() {
     );
     assert_eq!(rt.get_var("x"), "world");
 }
+
+// ── printf alignment and formatting ─────────────────────────────
+
+#[test]
+fn printf_right_align_int() {
+    let r = crate::builtins::format_printf("%8d", &["42".into()]);
+    assert_eq!(r, "      42");
+}
+
+#[test]
+fn printf_left_align_int() {
+    let r = crate::builtins::format_printf("%-8d", &["42".into()]);
+    assert_eq!(r, "42      ");
+}
+
+#[test]
+fn printf_zero_pad_int() {
+    let r = crate::builtins::format_printf("%08d", &["42".into()]);
+    assert_eq!(r, "00000042");
+}
+
+#[test]
+fn printf_zero_pad_negative() {
+    let r = crate::builtins::format_printf("%08d", &["-42".into()]);
+    assert_eq!(r, "-0000042");
+}
+
+#[test]
+fn printf_force_sign() {
+    let r = crate::builtins::format_printf("%+d", &["42".into()]);
+    assert_eq!(r, "+42");
+}
+
+#[test]
+fn printf_force_sign_with_width() {
+    let r = crate::builtins::format_printf("%+8d", &["42".into()]);
+    assert_eq!(r, "     +42");
+}
+
+#[test]
+fn printf_zero_pad_with_sign() {
+    let r = crate::builtins::format_printf("%+08d", &["42".into()]);
+    assert_eq!(r, "+0000042");
+}
+
+#[test]
+fn printf_space_sign() {
+    let r = crate::builtins::format_printf("% d", &["42".into()]);
+    assert_eq!(r, " 42");
+}
+
+#[test]
+fn printf_zero_pad_float() {
+    let r = crate::builtins::format_printf("%012.2f", &["3.14".into()]);
+    assert_eq!(r, "000000003.14");
+}
+
+#[test]
+fn printf_force_sign_float() {
+    let r = crate::builtins::format_printf("%+.2f", &["3.14".into()]);
+    assert_eq!(r, "+3.14");
+}
+
+#[test]
+fn printf_hex_zero_pad() {
+    let r = crate::builtins::format_printf("%08x", &["255".into()]);
+    assert_eq!(r, "000000ff");
+}
+
+#[test]
+fn printf_octal_zero_pad() {
+    let r = crate::builtins::format_printf("%08o", &["255".into()]);
+    assert_eq!(r, "00000377");
+}
+
+#[test]
+fn printf_string_precision() {
+    let r = crate::builtins::format_printf("%.5s", &["hello world".into()]);
+    assert_eq!(r, "hello");
+}
+
+// ── Statistical builtins ────────────────────────────────────────
+
+#[test]
+fn stats_sum() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = sum(a) }"#,
+        &["10", "20", "30", "40", "50"],
+    );
+    assert_eq!(rt.get_var("result"), "150");
+}
+
+#[test]
+fn stats_mean() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = mean(a) }"#,
+        &["10", "20", "30", "40", "50"],
+    );
+    assert_eq!(rt.get_var("result"), "30");
+}
+
+#[test]
+fn stats_median_odd() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = median(a) }"#,
+        &["3", "1", "5", "2", "4"],
+    );
+    assert_eq!(rt.get_var("result"), "3");
+}
+
+#[test]
+fn stats_median_even() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = median(a) }"#,
+        &["1", "2", "3", "4"],
+    );
+    assert_eq!(rt.get_var("result"), "2.5");
+}
+
+#[test]
+fn stats_stddev() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = stddev(a) }"#,
+        &["2", "4", "4", "4", "5", "5", "7", "9"],
+    );
+    let v: f64 = rt.get_var("result").parse().unwrap();
+    assert!((v - 2.0).abs() < 0.01, "stddev should be ~2.0, got {}", v);
+}
+
+#[test]
+fn stats_variance() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = variance(a) }"#,
+        &["2", "4", "4", "4", "5", "5", "7", "9"],
+    );
+    let v: f64 = rt.get_var("result").parse().unwrap();
+    assert!((v - 4.0).abs() < 0.01, "variance should be ~4.0, got {}", v);
+}
+
+#[test]
+fn stats_percentile_p50() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = p(a, 50) }"#,
+        &["10", "20", "30", "40", "50"],
+    );
+    assert_eq!(rt.get_var("result"), "30");
+}
+
+#[test]
+fn stats_percentile_p95() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = p(a, 95) }"#,
+        &["10", "20", "30", "40", "50", "60", "70", "80", "90", "100"],
+    );
+    let v: f64 = rt.get_var("result").parse().unwrap();
+    assert!((v - 95.5).abs() < 0.01, "p95 should be ~95.5, got {}", v);
+}
+
+#[test]
+fn stats_percentile_long_form() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = percentile(a, 75) }"#,
+        &["10", "20", "30", "40", "50"],
+    );
+    assert_eq!(rt.get_var("result"), "40");
+}
+
+#[test]
+fn stats_quantile() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = quantile(a, 0.75) }"#,
+        &["10", "20", "30", "40", "50"],
+    );
+    assert_eq!(rt.get_var("result"), "40");
+}
+
+#[test]
+fn stats_iqm() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = iqm(a) }"#,
+        &["10", "20", "30", "40", "50", "60", "70", "80", "90", "100"],
+    );
+    let v: f64 = rt.get_var("result").parse().unwrap();
+    assert!(v > 30.0 && v < 80.0, "iqm should be in the middle range, got {}", v);
+}
+
+#[test]
+fn stats_min_array() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = min(a) }"#,
+        &["30", "10", "50", "20"],
+    );
+    assert_eq!(rt.get_var("result"), "10");
+}
+
+#[test]
+fn stats_max_array() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { result = max(a) }"#,
+        &["30", "10", "50", "20"],
+    );
+    assert_eq!(rt.get_var("result"), "50");
+}
+
+#[test]
+fn stats_scalar_min_max_still_works() {
+    let rt = eval(
+        r#"BEGIN { a = min(3, 7); b = max(3, 7) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("a"), "3");
+    assert_eq!(rt.get_var("b"), "7");
+}
+
+#[test]
+fn stats_empty_array() {
+    let rt = eval(
+        r#"END { result = sum(a) }"#,
+        &["ignored"],
+    );
+    assert_eq!(rt.get_var("result"), "0");
+}
+
+#[test]
+fn stats_single_element() {
+    let rt = eval(
+        r#"{ a[1] = 42 } END { s = sum(a); m = mean(a); d = median(a); sd = stddev(a) }"#,
+        &["x"],
+    );
+    assert_eq!(rt.get_var("s"), "42");
+    assert_eq!(rt.get_var("m"), "42");
+    assert_eq!(rt.get_var("d"), "42");
+    assert_eq!(rt.get_var("sd"), "0");
+}

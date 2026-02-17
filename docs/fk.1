@@ -240,6 +240,9 @@ Print values separated by OFS, terminated by ORS.
 \fBprintf\fR \fIfmt\fR, \fIargs\fR
 Formatted output (C-style).
 No trailing newline.
+Supports flags: \fB\-\fR (left-align), \fB0\fR (zero-pad),
+\fB+\fR (force sign), \fI(space)\fR (space before positive numbers).
+Conversions: \fB%d %i %f %e %g %s %c %x %o %%\fR.
 .TP
 \fBsprintf(\fIfmt\fR, \fIargs\fR)\fR
 Like printf but returns a string instead of printing.
@@ -386,6 +389,40 @@ Sort array by keys, store sorted keys as values with 1..N.
 \fBjoin(\fIarr\fB,\fR \fIsep\fB)\fR
 Join array values into a string, separated by \fIsep\fR.
 Numeric keys are joined in order.
+.
+.SS Statistics \fI[fk extensions]\fR
+.PP
+All statistics functions take an array as the first argument and operate
+on the numeric values in that array.
+.TP
+\fBsum(\fIarr\fB)\fR
+Sum of all values.
+.TP
+\fBmean(\fIarr\fB)\fR
+Arithmetic mean.
+.TP
+\fBmedian(\fIarr\fB)\fR
+Median value (50th percentile).
+.TP
+\fBstddev(\fIarr\fB)\fR
+Population standard deviation.
+.TP
+\fBvariance(\fIarr\fB)\fR
+Population variance.
+.TP
+\fBp(\fIarr\fB,\fR \fIn\fB)\fR / \fBpercentile(\fIarr\fB,\fR \fIn\fB)\fR
+\fIn\fRth percentile (0\(en100). Uses linear interpolation.
+.TP
+\fBquantile(\fIarr\fB,\fR \fIq\fB)\fR
+Same as percentile but \fIq\fR is 0\(en1 (e.g. 0.95 for p95).
+.TP
+\fBiqm(\fIarr\fB)\fR
+Interquartile mean \(em mean of values between the 25th and 75th percentiles.
+Robust against outliers.
+.TP
+\fBmin(\fIarr\fB)\fR / \fBmax(\fIarr\fB)\fR
+Minimum / maximum value in the array.
+(With two scalar arguments, returns the min/max of those two values.)
 .
 .SS Utility \fI[fk extensions]\fR
 .TP
@@ -625,6 +662,8 @@ Notably:
 \fBmatch()\fR with capture groups (3rd argument)
 .IP \(bu 2
 \fBasort()\fR, \fBasorti()\fR, \fBjoin()\fR, \fBtypeof()\fR
+.IP \(bu 2
+\fBsum()\fR, \fBmean()\fR, \fBmedian()\fR, \fBstddev()\fR, \fBvariance()\fR, \fBp()\fR, \fBiqm()\fR, \fBquantile()\fR
 .IP \(bu 2
 \fBtrim()\fR, \fBltrim()\fR, \fBrtrim()\fR, \fBstartswith()\fR, \fBendswith()\fR, \fBrepeat()\fR, \fBreverse()\fR
 .IP \(bu 2

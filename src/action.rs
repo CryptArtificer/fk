@@ -20,6 +20,23 @@ enum Signal {
 
 const MAX_CALL_DEPTH: usize = 200;
 
+/// Compute the p-th percentile from a *sorted* slice using linear interpolation.
+fn percentile_sorted(sorted: &[f64], pct: f64) -> f64 {
+    let n = sorted.len();
+    if n == 0 { return 0.0; }
+    if n == 1 { return sorted[0]; }
+    let pct = pct.clamp(0.0, 100.0);
+    let rank = (pct / 100.0) * (n as f64 - 1.0);
+    let lo = rank.floor() as usize;
+    let hi = rank.ceil() as usize;
+    if lo == hi || hi >= n {
+        sorted[lo.min(n - 1)]
+    } else {
+        let frac = rank - lo as f64;
+        sorted[lo] * (1.0 - frac) + sorted[hi] * frac
+    }
+}
+
 pub struct Executor<'a> {
     program: &'a Program,
     rt: &'a mut Runtime,
@@ -508,6 +525,22 @@ impl<'a> Executor<'a> {
                     "asorti" => return self.builtin_asort(args, true),
                     "and" | "or" | "xor" | "lshift" | "rshift" | "compl" => {
                         return self.builtin_bitwise(name, args);
+                    }
+                    "sum" | "mean" | "median" | "stddev" | "variance"
+                    | "percentile" | "p" | "iqm" | "quantile" => {
+                        return self.builtin_stats(name, args);
+                    }
+                    "min" if args.len() == 1 => {
+                        if let Expr::Var(v) = &args[0]
+                            && self.rt.arrays.contains_key(v.as_str()) {
+                                return self.builtin_stats("min", args);
+                        }
+                    }
+                    "max" if args.len() == 1 => {
+                        if let Expr::Var(v) = &args[0]
+                            && self.rt.arrays.contains_key(v.as_str()) {
+                                return self.builtin_stats("max", args);
+                        }
                     }
                     _ => {}
                 }
@@ -1056,6 +1089,106 @@ impl<'a> Executor<'a> {
             }
         }
         Value::from_number(count as f64)
+    }
+
+    /// Extract sorted numeric values from an array.
+    fn array_sorted_values(&self, array_name: &str) -> Vec<f64> {
+        let mut vals: Vec<f64> = self.rt.array_keys(array_name)
+            .into_iter()
+            .map(|k| {
+                let v = self.rt.get_array(array_name, &k);
+                builtins::to_number(&v)
+            })
+            .collect();
+        vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        vals
+    }
+
+    /// Statistical functions that operate on arrays.
+    /// sum(arr), mean(arr), median(arr), stddev(arr), variance(arr),
+    /// percentile(arr, n) / p(arr, n), quantile(arr, q), iqm(arr),
+    /// min(arr), max(arr).
+    fn builtin_stats(&mut self, name: &str, args: &[Expr]) -> Value {
+        if args.is_empty() {
+            eprintln!("fk: {}() requires an array argument", name);
+            return Value::from_number(0.0);
+        }
+        let array_name = match &args[0] {
+            Expr::Var(v) => v.clone(),
+            _ => {
+                eprintln!("fk: {}(): first argument must be an array name", name);
+                return Value::from_number(0.0);
+            }
+        };
+        if !self.rt.arrays.contains_key(&array_name) {
+            return Value::from_number(0.0);
+        }
+
+        let vals = self.array_sorted_values(&array_name);
+        if vals.is_empty() {
+            return Value::from_number(0.0);
+        }
+        let n = vals.len();
+
+        match name {
+            "sum" => {
+                let s: f64 = vals.iter().sum();
+                Value::from_number(s)
+            }
+            "mean" => {
+                let s: f64 = vals.iter().sum();
+                Value::from_number(s / n as f64)
+            }
+            "median" => {
+                Value::from_number(percentile_sorted(&vals, 50.0))
+            }
+            "variance" => {
+                let mean: f64 = vals.iter().sum::<f64>() / n as f64;
+                let var: f64 = vals.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / n as f64;
+                Value::from_number(var)
+            }
+            "stddev" => {
+                let mean: f64 = vals.iter().sum::<f64>() / n as f64;
+                let var: f64 = vals.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / n as f64;
+                Value::from_number(var.sqrt())
+            }
+            "percentile" | "p" => {
+                let pct = if args.len() >= 2 {
+                    builtins::to_number(&self.eval_string(&args[1]))
+                } else {
+                    50.0
+                };
+                Value::from_number(percentile_sorted(&vals, pct))
+            }
+            "quantile" => {
+                let q = if args.len() >= 2 {
+                    builtins::to_number(&self.eval_string(&args[1]))
+                } else {
+                    0.5
+                };
+                Value::from_number(percentile_sorted(&vals, q * 100.0))
+            }
+            "iqm" => {
+                let q1_idx = ((n as f64) * 0.25).ceil() as usize;
+                let q3_idx = ((n as f64) * 0.75).floor() as usize;
+                let q1 = q1_idx.max(1) - 1;
+                let q3 = q3_idx.min(n);
+                if q3 <= q1 {
+                    Value::from_number(vals.iter().sum::<f64>() / n as f64)
+                } else {
+                    let slice = &vals[q1..q3];
+                    let s: f64 = slice.iter().sum();
+                    Value::from_number(s / slice.len() as f64)
+                }
+            }
+            "min" => {
+                Value::from_number(vals[0])
+            }
+            "max" => {
+                Value::from_number(vals[n - 1])
+            }
+            _ => Value::from_number(0.0),
+        }
     }
 
     fn exec_getline(&mut self, var: Option<&str>, source: Option<&Expr>) -> Value {
