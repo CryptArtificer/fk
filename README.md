@@ -219,11 +219,19 @@ fk is faster than awk on every benchmark (1.1–3.2× faster):
 | Computed regex | 0.34 s | 0.65 s | 1.9× |
 | Tight loop (3×) | 0.70 s | 0.75 s | 1.1× |
 
+Field extraction from 1M AWS ARNs (`-F: '{ print $4 }'`):
+
+| Tool | Time | vs fk |
+|---|---|---|
+| fk | 0.19 s | — |
+| cut `-d: -f4` | 0.46 s | 2.4× slower |
+| awk | 0.97 s | 5.1× slower |
+
 Parquet support reads 1M rows, auto-extracts column names, and runs
 pattern-action programs with named field access — no other awk can do this.
 
 Measured on Apple M3 Pro, 36 GB RAM, macOS 26.2.
-awk version 20200816 (macOS system awk). `fk` built with `--release`.
+awk version 20200816 (macOS system awk), cut (macOS coreutils). `fk` built with `--release`.
 
 ## Building
 
