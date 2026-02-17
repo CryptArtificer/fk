@@ -279,6 +279,12 @@ fk 'NR==FNR { a[$1]=$2; next } ($1 in a) { print $1, a[$1], $2 }' ref.txt data.t
 # Query parquet by column name
 fk -i parquet '$age > 30 { print $name }' users.parquet
 
+# Quoted column names (special characters, hyphens, dots)
+fk -i parquet '{ print $"user-name", $"total.revenue" }' data.parquet
+
+# Column name in a variable
+fk -i parquet 'BEGIN { col="user-name" } { print $col }' data.parquet
+
 # Aggregate parquet data
 fk -i parquet '{ dept[$department] += $revenue } END { for (d in dept) print d, dept[d] }' sales.parquet
 

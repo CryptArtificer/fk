@@ -154,7 +154,7 @@ src/
 - [x] Proper regex semantics for `/pattern/` and `~`/`!~` (use `regex::Regex`)
 
 #### Phase 8 — Signature features & function library
-- [x] Header names as field accessors (`$name` in `-H` / parquet mode)
+- [x] Header names as field accessors (`$name`, `$"col-name"`, `$var` in `-H` / parquet mode)
 - [x] Apache Parquet input (`-i parquet`, optional `--features parquet`)
 - [x] `match()` with capture groups (3rd argument: array)
 - [x] `asort(arr)` / `asorti(arr)` — sort arrays by value / key
@@ -262,6 +262,9 @@ echo "" | fk 'BEGIN { a[1,2]="x"; a[3,4]="y"; for (k in a) print k, a[k] }'
 
 # Parquet files — query by column name
 fk -i parquet '$age > 30 { print $name, $city }' data.parquet
+
+# Quoted column names (hyphens, spaces, dots)
+fk -i parquet '{ print $"user-name", $"total.revenue" }' data.parquet
 
 # CSV with named columns (header mode)
 echo -e 'name,age,city\nAlice,30,NYC\nBob,25,LA' | fk -F, -H '$age > 28 { print $name }'

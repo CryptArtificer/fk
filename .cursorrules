@@ -13,8 +13,8 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~7,000 lines of Rust** across 23 source files
-- **221 tests**, zero warnings, clippy clean
+- **~12,800 lines of Rust** across 34 source files
+- **226 tests**, zero warnings, clippy clean
 - **Phases 0–8 complete**
 - Dependencies: `regex` crate; optional `parquet` + `arrow` (behind `--features parquet`)
 - Dev dependency: `criterion` (benchmarks)
@@ -60,6 +60,9 @@ builtins/json.rs     — jpath() with JSON parser, path evaluator, iteration
 - Recursion depth guard (MAX_CALL_DEPTH = 200) prevents stack overflow
 - All string builtins are unicode-aware (chars, not bytes)
 - jpath() supports multi-value navigation: .key[], .arr.key (implicit iteration)
+- Named column access: $expr where expr evaluates to a non-numeric string does
+  an HDR array lookup; works with literals ($"col-name"), variables ($col), and
+  expressions — enables column names with hyphens, spaces, dots, etc.
 
 ## What's done (Phases 0–8)
 
@@ -78,8 +81,8 @@ Phase 6: Buffered stdout, interned built-in vars, zero-alloc print path,
 Phase 7: break/continue, do-while, next, exit/exit(code), -f flag, FILENAME,
   FNR, close(), ENVIRON, ARGC/ARGV, SUBSEP + multi-dim arrays, OFMT,
   computed regex, gensub(), proper regex::Regex for patterns and ~/!~
-Phase 8: Header names as field accessors ($name in -H mode), Parquet input
-  (-i parquet, optional feature), match() with capture groups,
+Phase 8: Header names as field accessors ($name, $"col-name", $var in -H mode),
+  Parquet input (-i parquet, optional feature), match() with capture groups,
   asort/asorti, join, typeof, bitwise ops (and/or/xor/lshift/rshift/compl),
   math (rand, srand, atan2, abs, ceil, floor, round, min, max, log2, log10),
   string (trim, ltrim, rtrim, startswith, endswith, repeat, reverse, chr, ord, hex),

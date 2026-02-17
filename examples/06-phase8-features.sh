@@ -14,6 +14,11 @@ printf "name,age,city\nAlice,30,NYC\nBob,25,LA\nCarol,35,Chicago\n" | \
     $FK -F, -H '$age > 28 { print "  ", $name, "age", $age, "from", $city }'
 echo ""
 
+echo "1b) Quoted column names (for special characters):"
+printf "user-name,total.score\nAlice,95\nBob,87\n" | \
+    $FK -F, -H '{ print "  ", $"user-name", "scored", $"total.score" }'
+echo ""
+
 # ── match() with capture groups ─────────────────────────────────
 echo "2) match() with capture groups:"
 printf "2025-01-15\n2024-06-30\n" | $FK '{

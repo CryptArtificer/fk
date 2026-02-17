@@ -156,6 +156,16 @@ Last field.
 \fB$(expr)\fR
 Computed field access.
 Example: \fB$(NF \- 1)\fR for the second-to-last field.
+.TP
+\fB$"column\-name"\fR
+Named column access.
+When in header mode (\fB\-H\fR or \fB\-i parquet\fR), any \fB$expr\fR that
+evaluates to a non-numeric string is looked up in the \fBHDR\fR array.
+Works with any column name, including those with hyphens, spaces, or dots.
+.nf
+\fB$"user\-name"\fR             # string literal
+\fBcol = "revenue"; print $col\fR  # variable
+.fi
 .
 .\" ─────────────────────────────────────────────────────────────
 .SH VARIABLES
@@ -609,6 +619,8 @@ Notably:
 \fBjpath()\fR for JSON navigation
 .IP \(bu 2
 \fB\-i csv/tsv/json/parquet\fR, \fB\-H\fR header mode with named columns
+.IP \(bu 2
+\fB$"column\-name"\fR and \fB$var\fR named column access in header mode
 .IP \(bu 2
 \fBmatch()\fR with capture groups (3rd argument)
 .IP \(bu 2
