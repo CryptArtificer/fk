@@ -1,4 +1,4 @@
-use crate::error::Span;
+use crate::error::{FkError, Span};
 use crate::lexer::{Spanned, Token};
 
 /// A complete fk program: optional BEGIN, a set of rules, optional END, and functions.
@@ -130,7 +130,7 @@ impl Parser {
             .unwrap_or(Span::new(0, 0))
     }
 
-    pub fn parse(&mut self) -> Result<Program, String> {
+    pub fn parse(&mut self) -> Result<Program, FkError> {
         let mut begin = None;
         let mut rules = Vec::new();
         let mut end = None;
@@ -144,13 +144,13 @@ impl Parser {
                     self.advance();
                     self.skip_terminators();
                     let block = self.parse_brace_block()?;
-                    begin = Some(block);
+                    begin.get_or_insert_with(Vec::new).extend(block);
                 }
                 Token::End => {
                     self.advance();
                     self.skip_terminators();
                     let block = self.parse_brace_block()?;
-                    end = Some(block);
+                    end.get_or_insert_with(Vec::new).extend(block);
                 }
                 Token::Function => {
                     let func = self.parse_func_def()?;
@@ -167,11 +167,11 @@ impl Parser {
         Ok(Program { begin, rules, end, functions })
     }
 
-    fn parse_func_def(&mut self) -> Result<FuncDef, String> {
+    fn parse_func_def(&mut self) -> Result<FuncDef, FkError> {
         self.advance(); // consume 'function'
         let name = match self.current().clone() {
             Token::Ident(n) => { self.advance(); n }
-            _ => return Err(format!("{}: expected function name", self.current_span())),
+            _ => return Err(FkError::new(self.current_span(), "expected function name")),
         };
         self.expect(&Token::LParen)?;
 
@@ -179,13 +179,13 @@ impl Parser {
         if !self.check(&Token::RParen) {
             match self.current().clone() {
                 Token::Ident(p) => { self.advance(); params.push(p); }
-                _ => return Err(format!("{}: expected parameter name", self.current_span())),
+                _ => return Err(FkError::new(self.current_span(), "expected parameter name")),
             }
             while self.check(&Token::Comma) {
                 self.advance();
                 match self.current().clone() {
                     Token::Ident(p) => { self.advance(); params.push(p); }
-                    _ => return Err(format!("{}: expected parameter name", self.current_span())),
+                    _ => return Err(FkError::new(self.current_span(), "expected parameter name")),
                 }
             }
         }
@@ -197,7 +197,7 @@ impl Parser {
         Ok(FuncDef { name, params, body })
     }
 
-    fn parse_rule(&mut self) -> Result<Rule, String> {
+    fn parse_rule(&mut self) -> Result<Rule, FkError> {
         let pattern;
         let action;
 
@@ -217,7 +217,7 @@ impl Parser {
         Ok(Rule { pattern, action })
     }
 
-    fn parse_pattern(&mut self) -> Result<Pattern, String> {
+    fn parse_pattern(&mut self) -> Result<Pattern, FkError> {
         let first = match self.current() {
             Token::Regex(s) => {
                 let pat = Pattern::Regex(s.clone());
@@ -250,7 +250,7 @@ impl Parser {
         }
     }
 
-    fn parse_brace_block(&mut self) -> Result<Block, String> {
+    fn parse_brace_block(&mut self) -> Result<Block, FkError> {
         self.expect(&Token::LBrace)?;
         self.skip_terminators();
 
@@ -265,7 +265,7 @@ impl Parser {
         Ok(stmts)
     }
 
-    fn parse_statement(&mut self) -> Result<Statement, String> {
+    fn parse_statement(&mut self) -> Result<Statement, FkError> {
         match self.current() {
             Token::Print => self.parse_print(),
             Token::Printf => self.parse_printf(),
@@ -291,7 +291,7 @@ impl Parser {
         }
     }
 
-    fn parse_print(&mut self) -> Result<Statement, String> {
+    fn parse_print(&mut self) -> Result<Statement, FkError> {
         self.advance(); // consume 'print'
         let mut args = Vec::new();
         if !self.is_terminator() && !self.check(&Token::RBrace)
@@ -310,7 +310,7 @@ impl Parser {
         Ok(Statement::Print(args, redir))
     }
 
-    fn parse_printf(&mut self) -> Result<Statement, String> {
+    fn parse_printf(&mut self) -> Result<Statement, FkError> {
         let span = self.current_span();
         self.advance(); // consume 'printf'
         let mut args = Vec::new();
@@ -322,7 +322,7 @@ impl Parser {
             }
         }
         if args.is_empty() {
-            return Err(format!("{}: printf requires a format string", span));
+            return Err(FkError::new(span, "printf requires a format string"));
         }
         let redir = self.parse_redirect()?;
         Ok(Statement::Printf(args, redir))
@@ -331,11 +331,11 @@ impl Parser {
     /// Parse an expression for print/printf arguments. Parses up to but not
     /// including `>`, `>>`, or `|` at the top level, so they are consumed as
     /// redirection operators. Comparisons work inside parens: `print ($0 > 5)`.
-    fn parse_non_redirect_expr(&mut self) -> Result<Expr, String> {
+    fn parse_non_redirect_expr(&mut self) -> Result<Expr, FkError> {
         self.parse_concatenation()
     }
 
-    fn parse_redirect(&mut self) -> Result<Option<Redirect>, String> {
+    fn parse_redirect(&mut self) -> Result<Option<Redirect>, FkError> {
         if self.check(&Token::Gt) {
             self.advance();
             let target = self.parse_primary()?;
@@ -353,7 +353,7 @@ impl Parser {
         }
     }
 
-    fn parse_return(&mut self) -> Result<Statement, String> {
+    fn parse_return(&mut self) -> Result<Statement, FkError> {
         self.advance(); // consume 'return'
         if self.is_terminator() || self.check(&Token::RBrace) {
             Ok(Statement::Return(None))
@@ -363,7 +363,7 @@ impl Parser {
         }
     }
 
-    fn parse_if(&mut self) -> Result<Statement, String> {
+    fn parse_if(&mut self) -> Result<Statement, FkError> {
         self.advance(); // consume 'if'
         self.expect(&Token::LParen)?;
         let cond = self.parse_expr()?;
@@ -395,7 +395,7 @@ impl Parser {
         Ok(Statement::If(cond, then_block, else_block))
     }
 
-    fn parse_while(&mut self) -> Result<Statement, String> {
+    fn parse_while(&mut self) -> Result<Statement, FkError> {
         self.advance(); // consume 'while'
         self.expect(&Token::LParen)?;
         let cond = self.parse_expr()?;
@@ -411,7 +411,7 @@ impl Parser {
         Ok(Statement::While(cond, body))
     }
 
-    fn parse_do_while(&mut self) -> Result<Statement, String> {
+    fn parse_do_while(&mut self) -> Result<Statement, FkError> {
         self.advance(); // consume 'do'
         self.skip_terminators();
 
@@ -430,7 +430,7 @@ impl Parser {
         Ok(Statement::DoWhile(body, cond))
     }
 
-    fn parse_exit(&mut self) -> Result<Statement, String> {
+    fn parse_exit(&mut self) -> Result<Statement, FkError> {
         self.advance(); // consume 'exit'
         if self.is_terminator() || self.check(&Token::RBrace) {
             Ok(Statement::Exit(None))
@@ -440,7 +440,7 @@ impl Parser {
         }
     }
 
-    fn parse_for(&mut self) -> Result<Statement, String> {
+    fn parse_for(&mut self) -> Result<Statement, FkError> {
         self.advance(); // consume 'for'
         self.expect(&Token::LParen)?;
 
@@ -500,7 +500,7 @@ impl Parser {
         Ok(Statement::For(init, cond, update, body))
     }
 
-    fn parse_delete(&mut self) -> Result<Statement, String> {
+    fn parse_delete(&mut self) -> Result<Statement, FkError> {
         let span = self.current_span();
         self.advance(); // consume 'delete'
         if let Token::Ident(name) = self.current().clone() {
@@ -515,17 +515,17 @@ impl Parser {
                 Ok(Statement::DeleteAll(name))
             }
         } else {
-            Err(format!("{}: delete requires array or array[subscript]", span))
+            Err(FkError::new(span, "delete requires array or array[subscript]"))
         }
     }
 
     // --- expression parsing (precedence climbing) ---
 
-    fn parse_expr(&mut self) -> Result<Expr, String> {
+    fn parse_expr(&mut self) -> Result<Expr, FkError> {
         self.parse_assignment()
     }
 
-    fn parse_assignment(&mut self) -> Result<Expr, String> {
+    fn parse_assignment(&mut self) -> Result<Expr, FkError> {
         let expr = self.parse_ternary()?;
 
         match self.current() {
@@ -569,14 +569,14 @@ impl Parser {
         }
     }
 
-    fn check_lvalue(&self, expr: &Expr) -> Result<(), String> {
+    fn check_lvalue(&self, expr: &Expr) -> Result<(), FkError> {
         match expr {
             Expr::Var(_) | Expr::ArrayRef(_, _) | Expr::Field(_) => Ok(()),
-            _ => Err(format!("{}: invalid assignment target", self.current_span())),
+            _ => Err(FkError::new(self.current_span(), "invalid assignment target")),
         }
     }
 
-    fn parse_ternary(&mut self) -> Result<Expr, String> {
+    fn parse_ternary(&mut self) -> Result<Expr, FkError> {
         let expr = self.parse_logical_or()?;
 
         if self.check(&Token::Question) {
@@ -590,7 +590,7 @@ impl Parser {
         }
     }
 
-    fn parse_logical_or(&mut self) -> Result<Expr, String> {
+    fn parse_logical_or(&mut self) -> Result<Expr, FkError> {
         let mut left = self.parse_logical_and()?;
 
         while self.check(&Token::Or) {
@@ -602,7 +602,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_logical_and(&mut self) -> Result<Expr, String> {
+    fn parse_logical_and(&mut self) -> Result<Expr, FkError> {
         let mut left = self.parse_match_expr()?;
 
         while self.check(&Token::And) {
@@ -614,7 +614,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_match_expr(&mut self) -> Result<Expr, String> {
+    fn parse_match_expr(&mut self) -> Result<Expr, FkError> {
         let left = self.parse_comparison()?;
 
         // "cmd" | getline [var]
@@ -659,7 +659,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_comparison(&mut self) -> Result<Expr, String> {
+    fn parse_comparison(&mut self) -> Result<Expr, FkError> {
         let mut left = self.parse_concatenation()?;
 
         loop {
@@ -680,7 +680,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_concatenation(&mut self) -> Result<Expr, String> {
+    fn parse_concatenation(&mut self) -> Result<Expr, FkError> {
         let mut left = self.parse_addition()?;
 
         // Implicit concatenation: two adjacent values with no operator between them
@@ -706,7 +706,7 @@ impl Parser {
         )
     }
 
-    fn parse_addition(&mut self) -> Result<Expr, String> {
+    fn parse_addition(&mut self) -> Result<Expr, FkError> {
         let mut left = self.parse_multiplication()?;
 
         loop {
@@ -728,7 +728,7 @@ impl Parser {
         Ok(left)
     }
 
-    fn parse_multiplication(&mut self) -> Result<Expr, String> {
+    fn parse_multiplication(&mut self) -> Result<Expr, FkError> {
         let mut left = self.parse_exponentiation()?;
 
         loop {
@@ -756,7 +756,7 @@ impl Parser {
     }
 
     /// Exponentiation: right-associative, higher precedence than multiplication.
-    fn parse_exponentiation(&mut self) -> Result<Expr, String> {
+    fn parse_exponentiation(&mut self) -> Result<Expr, FkError> {
         let base = self.parse_unary()?;
 
         if self.check(&Token::Power) {
@@ -768,7 +768,7 @@ impl Parser {
         }
     }
 
-    fn parse_unary(&mut self) -> Result<Expr, String> {
+    fn parse_unary(&mut self) -> Result<Expr, FkError> {
         if self.check(&Token::Minus) {
             self.advance();
             let expr = self.parse_unary()?;
@@ -793,7 +793,7 @@ impl Parser {
         self.parse_postfix()
     }
 
-    fn parse_postfix(&mut self) -> Result<Expr, String> {
+    fn parse_postfix(&mut self) -> Result<Expr, FkError> {
         let mut expr = self.parse_primary()?;
 
         loop {
@@ -832,7 +832,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn parse_primary(&mut self) -> Result<Expr, String> {
+    fn parse_primary(&mut self) -> Result<Expr, FkError> {
         match self.current().clone() {
             Token::Number(n) => {
                 self.advance();
@@ -873,7 +873,7 @@ impl Parser {
                         self.advance();
                         return Ok(Expr::ArrayIn(name, arr));
                     } else {
-                        return Err(format!("{}: expected array name after 'in'", self.current_span()));
+                        return Err(FkError::new(self.current_span(), "expected array name after 'in'"));
                     }
                 }
 
@@ -911,11 +911,11 @@ impl Parser {
                 self.expect(&Token::RParen)?;
                 Ok(expr)
             }
-            _ => Err(format!("{}: unexpected token: {:?}", self.current_span(), self.current())),
+            _ => Err(FkError::new(self.current_span(), format!("unexpected token: {:?}", self.current()))),
         }
     }
 
-    fn parse_sprintf_args(&mut self) -> Result<Expr, String> {
+    fn parse_sprintf_args(&mut self) -> Result<Expr, FkError> {
         let span = self.current_span();
         self.expect(&Token::LParen)?;
         let mut args = Vec::new();
@@ -928,12 +928,12 @@ impl Parser {
         }
         self.expect(&Token::RParen)?;
         if args.is_empty() {
-            return Err(format!("{}: sprintf requires a format string", span));
+            return Err(FkError::new(span, "sprintf requires a format string"));
         }
         Ok(Expr::Sprintf(args))
     }
 
-    fn parse_func_call(&mut self, name: String) -> Result<Expr, String> {
+    fn parse_func_call(&mut self, name: String) -> Result<Expr, FkError> {
         self.expect(&Token::LParen)?;
         let mut args = Vec::new();
         if !self.check(&Token::RParen) {
@@ -963,12 +963,15 @@ impl Parser {
         std::mem::discriminant(self.current()) == std::mem::discriminant(token)
     }
 
-    fn expect(&mut self, token: &Token) -> Result<(), String> {
+    fn expect(&mut self, token: &Token) -> Result<(), FkError> {
         if self.check(token) {
             self.advance();
             Ok(())
         } else {
-            Err(format!("{}: expected {:?}, got {:?}", self.current_span(), token, self.current()))
+            Err(FkError::new(
+                self.current_span(),
+                format!("expected {:?}, got {:?}", token, self.current()),
+            ))
         }
     }
 

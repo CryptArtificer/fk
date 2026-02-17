@@ -82,7 +82,7 @@ pub fn run(rt: &mut Runtime) {
     }
 }
 
-fn try_run_program(source: &str, rt: &mut Runtime) -> Result<String, String> {
+fn try_run_program(source: &str, rt: &mut Runtime) -> Result<String, crate::error::FkError> {
     let mut lex = Lexer::new(source);
     let tokens = lex.tokenize()?;
     let mut par = Parser::new(tokens);

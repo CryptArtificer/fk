@@ -1916,3 +1916,24 @@ fn stats_single_element() {
     assert_eq!(rt.get_var("d"), "42");
     assert_eq!(rt.get_var("sd"), "0");
 }
+
+#[test]
+fn multiple_begin_blocks() {
+    let rt = eval(
+        r#"BEGIN { a = 1 } BEGIN { b = 2 } END { c = a + b }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("a"), "1");
+    assert_eq!(rt.get_var("b"), "2");
+    assert_eq!(rt.get_var("c"), "3");
+}
+
+#[test]
+fn multiple_end_blocks() {
+    let rt = eval(
+        r#"{ sum += $1 } END { a = sum } END { b = a * 2 }"#,
+        &["10", "20"],
+    );
+    assert_eq!(rt.get_var("a"), "30");
+    assert_eq!(rt.get_var("b"), "60");
+}

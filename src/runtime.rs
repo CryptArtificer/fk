@@ -9,6 +9,7 @@ const STR_VALID: u8 = 1;
 const NUM_VALID: u8 = 2;
 
 #[derive(Clone, Debug)]
+#[must_use]
 pub struct Value {
     s: String,
     n: f64,
@@ -106,9 +107,9 @@ impl Value {
 
 #[derive(Debug)]
 pub struct Runtime {
-    pub variables: HashMap<String, Value>,
-    pub arrays: HashMap<String, HashMap<String, Value>>,
-    pub fields: Vec<String>,
+    variables: HashMap<String, Value>,
+    arrays: HashMap<String, HashMap<String, Value>>,
+    pub(crate) fields: Vec<String>,
     nr: u64,
     nf: usize,
     fnr: u64,
@@ -347,6 +348,11 @@ impl Runtime {
         self.arrays
             .get(name)
             .is_some_and(|a| a.contains_key(key))
+    }
+
+    /// Check if an array exists (may be empty).
+    pub fn has_array(&self, name: &str) -> bool {
+        self.arrays.contains_key(name)
     }
 
     pub fn array_keys(&self, name: &str) -> Vec<String> {

@@ -1,4 +1,4 @@
-use crate::error::Span;
+use crate::error::{FkError, Span};
 
 /// Token types for the fk language.
 #[derive(Debug, Clone, PartialEq)]
@@ -91,6 +91,8 @@ pub struct Spanned {
 pub struct Lexer {
     input: Vec<char>,
     pos: usize,
+    line: usize,
+    col: usize,
 }
 
 impl Lexer {
@@ -98,96 +100,101 @@ impl Lexer {
         Lexer {
             input: input.chars().collect(),
             pos: 0,
+            line: 1,
+            col: 1,
         }
     }
 
-    /// Compute the line and column for a given byte position.
-    fn span_at(&self, pos: usize) -> Span {
-        let mut line = 1;
-        let mut col = 1;
-        for i in 0..pos.min(self.input.len()) {
-            if self.input[i] == '\n' {
-                line += 1;
-                col = 1;
+    /// Current source location — O(1).
+    fn span(&self) -> Span {
+        Span::new(self.line, self.col)
+    }
+
+    /// Advance position by one character, updating line/col tracking.
+    fn advance_char(&mut self) {
+        if self.pos < self.input.len() {
+            if self.input[self.pos] == '\n' {
+                self.line += 1;
+                self.col = 1;
             } else {
-                col += 1;
+                self.col += 1;
             }
+            self.pos += 1;
         }
-        Span::new(line, col)
     }
 
-    pub fn tokenize(&mut self) -> Result<Vec<Spanned>, String> {
+    pub fn tokenize(&mut self) -> Result<Vec<Spanned>, FkError> {
         let mut tokens = Vec::new();
 
         loop {
             self.skip_whitespace();
             if self.pos >= self.input.len() {
-                let span = self.span_at(self.pos);
+                let span = self.span();
                 tokens.push(Spanned { token: Token::Eof, span });
                 break;
             }
 
-            let span = self.span_at(self.pos);
+            let span = self.span();
             let ch = self.input[self.pos];
 
             // Comments
             if ch == '#' {
                 while self.pos < self.input.len() && self.input[self.pos] != '\n' {
-                    self.pos += 1;
+                    self.advance_char();
                 }
                 continue;
             }
 
             let token = match ch {
-                '\n' => { self.pos += 1; Token::Newline }
-                '{' => { self.pos += 1; Token::LBrace }
-                '}' => { self.pos += 1; Token::RBrace }
-                '(' => { self.pos += 1; Token::LParen }
-                ')' => { self.pos += 1; Token::RParen }
-                '[' => { self.pos += 1; Token::LBracket }
-                ']' => { self.pos += 1; Token::RBracket }
-                ';' => { self.pos += 1; Token::Semicolon }
-                ',' => { self.pos += 1; Token::Comma }
+                '\n' => { self.advance_char(); Token::Newline }
+                '{' => { self.advance_char(); Token::LBrace }
+                '}' => { self.advance_char(); Token::RBrace }
+                '(' => { self.advance_char(); Token::LParen }
+                ')' => { self.advance_char(); Token::RParen }
+                '[' => { self.advance_char(); Token::LBracket }
+                ']' => { self.advance_char(); Token::RBracket }
+                ';' => { self.advance_char(); Token::Semicolon }
+                ',' => { self.advance_char(); Token::Comma }
                 '+' => {
-                    self.pos += 1;
+                    self.advance_char();
                     if self.peek() == Some('=') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::PlusAssign
                     } else if self.peek() == Some('+') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::Increment
                     } else {
                         Token::Plus
                     }
                 }
                 '-' => {
-                    self.pos += 1;
+                    self.advance_char();
                     if self.peek() == Some('=') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::MinusAssign
                     } else if self.peek() == Some('-') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::Decrement
                     } else {
                         Token::Minus
                     }
                 }
                 '*' => {
-                    self.pos += 1;
+                    self.advance_char();
                     if self.peek() == Some('*') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::Power
                     } else if self.peek() == Some('=') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::StarAssign
                     } else {
                         Token::Star
                     }
                 }
                 '%' => {
-                    self.pos += 1;
+                    self.advance_char();
                     if self.peek() == Some('=') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::PercentAssign
                     } else {
                         Token::Percent
@@ -197,9 +204,9 @@ impl Lexer {
                     if self.is_regex_context(&tokens) {
                         self.read_regex()?
                     } else {
-                        self.pos += 1;
+                        self.advance_char();
                         if self.peek() == Some('=') {
-                            self.pos += 1;
+                            self.advance_char();
                             Token::SlashAssign
                         } else {
                             Token::Slash
@@ -207,63 +214,63 @@ impl Lexer {
                     }
                 }
                 '=' => {
-                    self.pos += 1;
+                    self.advance_char();
                     if self.peek() == Some('=') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::Eq
                     } else {
                         Token::Assign
                     }
                 }
                 '!' => {
-                    self.pos += 1;
+                    self.advance_char();
                     if self.peek() == Some('=') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::Ne
                     } else if self.peek() == Some('~') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::NotMatch
                     } else {
                         Token::Not
                     }
                 }
                 '<' => {
-                    self.pos += 1;
+                    self.advance_char();
                     if self.peek() == Some('=') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::Le
                     } else {
                         Token::Lt
                     }
                 }
                 '>' => {
-                    self.pos += 1;
+                    self.advance_char();
                     if self.peek() == Some('>') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::Append
                     } else if self.peek() == Some('=') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::Ge
                     } else {
                         Token::Gt
                     }
                 }
-                '~' => { self.pos += 1; Token::Match }
-                '?' => { self.pos += 1; Token::Question }
-                ':' => { self.pos += 1; Token::Colon }
+                '~' => { self.advance_char(); Token::Match }
+                '?' => { self.advance_char(); Token::Question }
+                ':' => { self.advance_char(); Token::Colon }
                 '&' => {
-                    self.pos += 1;
+                    self.advance_char();
                     if self.peek() == Some('&') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::And
                     } else {
-                        return Err(format!("{}: unexpected character '&'", span));
+                        return Err(FkError::new(span, "unexpected character '&'"));
                     }
                 }
                 '|' => {
-                    self.pos += 1;
+                    self.advance_char();
                     if self.peek() == Some('|') {
-                        self.pos += 1;
+                        self.advance_char();
                         Token::Or
                     } else {
                         Token::Pipe
@@ -274,7 +281,7 @@ impl Lexer {
                 _ if ch.is_ascii_digit() || ch == '.' => self.read_number()?,
                 _ if ch.is_ascii_alphabetic() || ch == '_' => self.read_ident(),
                 _ => {
-                    return Err(format!("{}: unexpected character '{}'", span, ch));
+                    return Err(FkError::new(span, format!("unexpected character '{}'", ch)));
                 }
             };
 
@@ -292,7 +299,7 @@ impl Lexer {
         while self.pos < self.input.len() {
             let ch = self.input[self.pos];
             if ch == ' ' || ch == '\t' || ch == '\r' {
-                self.pos += 1;
+                self.advance_char();
             } else {
                 break;
             }
@@ -309,54 +316,55 @@ impl Lexer {
         )
     }
 
-    fn read_regex(&mut self) -> Result<Token, String> {
-        let span = self.span_at(self.pos);
-        self.pos += 1; // skip opening /
+    fn read_regex(&mut self) -> Result<Token, FkError> {
+        let span = self.span();
+        self.advance_char(); // skip opening /
         let mut pattern = String::new();
         loop {
             if self.pos >= self.input.len() {
-                return Err(format!("{}: unterminated regex", span));
+                return Err(FkError::new(span, "unterminated regex"));
             }
             let ch = self.input[self.pos];
             if ch == '/' {
-                self.pos += 1;
+                self.advance_char();
                 return Ok(Token::Regex(pattern));
             }
             if ch == '\\' && self.pos + 1 < self.input.len() {
                 pattern.push('\\');
-                pattern.push(self.input[self.pos + 1]);
-                self.pos += 2;
+                self.advance_char();
+                pattern.push(self.input[self.pos]);
+                self.advance_char();
             } else {
                 pattern.push(ch);
-                self.pos += 1;
+                self.advance_char();
             }
         }
     }
 
-    fn read_string(&mut self) -> Result<Token, String> {
-        let span = self.span_at(self.pos);
-        self.pos += 1; // skip opening "
+    fn read_string(&mut self) -> Result<Token, FkError> {
+        let span = self.span();
+        self.advance_char(); // skip opening "
         let mut s = String::new();
         loop {
             if self.pos >= self.input.len() {
-                return Err(format!("{}: unterminated string", span));
+                return Err(FkError::new(span, "unterminated string"));
             }
             let ch = self.input[self.pos];
             if ch == '"' {
-                self.pos += 1;
+                self.advance_char();
                 return Ok(Token::StringLit(s));
             }
             if ch == '\\' && self.pos + 1 < self.input.len() {
-                self.pos += 1;
+                self.advance_char();
                 let escaped = self.input[self.pos];
                 match escaped {
-                    'n' => { s.push('\n'); self.pos += 1; }
-                    't' => { s.push('\t'); self.pos += 1; }
-                    '\\' => { s.push('\\'); self.pos += 1; }
-                    '"' => { s.push('"'); self.pos += 1; }
-                    '/' => { s.push('/'); self.pos += 1; }
+                    'n' => { s.push('\n'); self.advance_char(); }
+                    't' => { s.push('\t'); self.advance_char(); }
+                    '\\' => { s.push('\\'); self.advance_char(); }
+                    '"' => { s.push('"'); self.advance_char(); }
+                    '/' => { s.push('/'); self.advance_char(); }
                     'x' => {
-                        self.pos += 1; // skip 'x'
+                        self.advance_char(); // skip 'x'
                         if let Some(ch) = self.read_hex_escape(2) {
                             s.push(ch);
                         } else {
@@ -364,7 +372,7 @@ impl Lexer {
                         }
                     }
                     'u' => {
-                        self.pos += 1; // skip 'u'
+                        self.advance_char(); // skip 'u'
                         if let Some(ch) = self.read_hex_escape(4) {
                             s.push(ch);
                         } else {
@@ -374,29 +382,29 @@ impl Lexer {
                     _ => {
                         s.push('\\');
                         s.push(escaped);
-                        self.pos += 1;
+                        self.advance_char();
                     }
                 }
             } else {
                 s.push(ch);
-                self.pos += 1;
+                self.advance_char();
             }
         }
     }
 
-    fn read_field(&mut self) -> Result<Token, String> {
-        let span = self.span_at(self.pos);
-        self.pos += 1; // skip $
+    fn read_field(&mut self) -> Result<Token, FkError> {
+        let span = self.span();
+        self.advance_char(); // skip $
         if self.pos < self.input.len() && self.input[self.pos].is_ascii_digit() {
             let start = self.pos;
             while self.pos < self.input.len() && self.input[self.pos].is_ascii_digit() {
-                self.pos += 1;
+                self.advance_char();
             }
             let num: u32 = self.input[start..self.pos]
                 .iter()
                 .collect::<String>()
                 .parse()
-                .map_err(|_| format!("{}: invalid field number", span))?;
+                .map_err(|_| FkError::new(span, "invalid field number"))?;
             Ok(Token::Field(num))
         } else if self.pos < self.input.len()
             && (self.input[self.pos].is_ascii_alphabetic() || self.input[self.pos] == '_')
@@ -408,8 +416,8 @@ impl Lexer {
         }
     }
 
-    fn read_number(&mut self) -> Result<Token, String> {
-        let span = self.span_at(self.pos);
+    fn read_number(&mut self) -> Result<Token, FkError> {
+        let span = self.span();
         let start = self.pos;
 
         // Hex literal: 0x...
@@ -417,17 +425,18 @@ impl Lexer {
             && self.pos + 1 < self.input.len()
             && (self.input[self.pos + 1] == 'x' || self.input[self.pos + 1] == 'X')
         {
-            self.pos += 2; // skip "0x"
+            self.advance_char(); // '0'
+            self.advance_char(); // 'x'
             let hex_start = self.pos;
             while self.pos < self.input.len() && self.input[self.pos].is_ascii_hexdigit() {
-                self.pos += 1;
+                self.advance_char();
             }
             if self.pos == hex_start {
-                return Err(format!("{}: expected hex digits after 0x", span));
+                return Err(FkError::new(span, "expected hex digits after 0x"));
             }
             let hex: String = self.input[hex_start..self.pos].iter().collect();
             let num = u64::from_str_radix(&hex, 16)
-                .map_err(|_| format!("{}: invalid hex literal: 0x{}", span, hex))?;
+                .map_err(|_| FkError::new(span, format!("invalid hex literal: 0x{}", hex)))?;
             return Ok(Token::Number(num as f64));
         }
 
@@ -435,16 +444,16 @@ impl Lexer {
         while self.pos < self.input.len() {
             let ch = self.input[self.pos];
             if ch.is_ascii_digit() {
-                self.pos += 1;
+                self.advance_char();
             } else if ch == '.' && !has_dot {
                 has_dot = true;
-                self.pos += 1;
+                self.advance_char();
             } else {
                 break;
             }
         }
         let s: String = self.input[start..self.pos].iter().collect();
-        let num: f64 = s.parse().map_err(|_| format!("{}: invalid number: {}", span, s))?;
+        let num: f64 = s.parse().map_err(|_| FkError::new(span, format!("invalid number: {}", s)))?;
         Ok(Token::Number(num))
     }
 
@@ -478,16 +487,20 @@ impl Lexer {
     /// Returns None if not enough hex digits are available.
     fn read_hex_escape(&mut self, count: usize) -> Option<char> {
         let start = self.pos;
+        let saved_line = self.line;
+        let saved_col = self.col;
         let mut digits = 0;
         while digits < count
             && self.pos < self.input.len()
             && self.input[self.pos].is_ascii_hexdigit()
         {
-            self.pos += 1;
+            self.advance_char();
             digits += 1;
         }
         if digits < count {
-            self.pos = start; // backtrack
+            self.pos = start;
+            self.line = saved_line;
+            self.col = saved_col;
             return None;
         }
         let hex: String = self.input[start..self.pos].iter().collect();
@@ -500,7 +513,7 @@ impl Lexer {
         while self.pos < self.input.len()
             && (self.input[self.pos].is_ascii_alphanumeric() || self.input[self.pos] == '_')
         {
-            self.pos += 1;
+            self.advance_char();
         }
         self.input[start..self.pos].iter().collect()
     }
