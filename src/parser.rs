@@ -700,7 +700,9 @@ impl Parser {
                 | Token::Ident(_)
                 | Token::Field(_)
                 | Token::FieldVar(_)
+                | Token::Dollar
                 | Token::LParen
+                | Token::Not
         )
     }
 

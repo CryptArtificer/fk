@@ -1631,3 +1631,54 @@ fn match_captures_full_match() {
     );
     assert_eq!(rt.get_var("x"), "hello w");
 }
+
+// ── Quoted/string field access ($"name") ────────────────────────
+
+#[test]
+fn quoted_field_access_by_name() {
+    let rt = eval_with_header(
+        r#"{ result = $"name" " is " $"age" }"#,
+        ",",
+        &["name,age,city", "Alice,30,NYC"],
+    );
+    assert_eq!(rt.get_var("result"), "Alice is 30");
+}
+
+#[test]
+fn variable_field_access_by_name() {
+    let rt = eval_with_header(
+        r#"BEGIN { col = "city" } { result = $col }"#,
+        ",",
+        &["name,age,city", "Alice,30,NYC"],
+    );
+    assert_eq!(rt.get_var("result"), "NYC");
+}
+
+#[test]
+fn quoted_field_with_special_chars() {
+    let rt = eval_with_header(
+        r#"{ result = $"user-name" }"#,
+        ",",
+        &["user-name,user-age", "Alice,30"],
+    );
+    assert_eq!(rt.get_var("result"), "Alice");
+}
+
+#[test]
+fn quoted_field_filter() {
+    let rt = eval_with_header(
+        r#"$"score" > 90 { count++ }"#,
+        ",",
+        &["name,score", "Alice,95", "Bob,80", "Carol,92"],
+    );
+    assert_eq!(rt.get_var("count"), "2");
+}
+
+#[test]
+fn numeric_string_field_still_works() {
+    let rt = eval(
+        r#"{ x = $"2" }"#,
+        &["hello world"],
+    );
+    assert_eq!(rt.get_var("x"), "world");
+}

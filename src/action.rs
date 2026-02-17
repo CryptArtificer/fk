@@ -386,12 +386,8 @@ impl<'a> Executor<'a> {
             Expr::StringLit(s) => Value::from_string(s.clone()),
             Expr::Var(name) => self.rt.get_value(name),
             Expr::Field(idx_expr) => {
-                let n = if let Expr::NumberLit(n) = idx_expr.as_ref() {
-                    *n
-                } else {
-                    self.eval_expr(idx_expr).to_number()
-                };
-                Value::from_string(self.rt.get_field(self.resolve_field_idx(n)))
+                let idx = self.eval_field_idx(idx_expr);
+                Value::from_string(self.rt.get_field(idx))
             }
             Expr::ArrayRef(name, key_expr) => {
                 let key = self.eval_expr(key_expr).into_string();
@@ -547,6 +543,31 @@ impl<'a> Executor<'a> {
         }
     }
 
+    /// Evaluate a field index expression: numeric → direct index,
+    /// non-numeric string → HDR lookup (for named column access).
+    fn eval_field_idx(&mut self, idx_expr: &Expr) -> usize {
+        if let Expr::NumberLit(n) = idx_expr {
+            return self.resolve_field_idx(*n);
+        }
+        let val = self.eval_expr(idx_expr);
+        if val.is_numeric() {
+            return self.resolve_field_idx(val.to_number());
+        }
+        let s = val.to_string_val();
+        let n = crate::builtins::to_number(&s);
+        if n != 0.0 || s == "0" {
+            return self.resolve_field_idx(n);
+        }
+        // Non-numeric string: look up in HDR array
+        if let Some(idx_val) = self.rt.get_array_opt("HDR", &s) {
+            let idx = crate::builtins::to_number(&idx_val);
+            if idx > 0.0 {
+                return self.resolve_field_idx(idx);
+            }
+        }
+        0
+    }
+
     fn eval_lvalue(&mut self, expr: &Expr) -> Value {
         match expr {
             Expr::Var(name) => self.rt.get_value(name),
@@ -555,12 +576,8 @@ impl<'a> Executor<'a> {
                 self.rt.get_array_value(name, &key)
             }
             Expr::Field(idx_expr) => {
-                let n = if let Expr::NumberLit(n) = idx_expr.as_ref() {
-                    *n
-                } else {
-                    self.eval_expr(idx_expr).to_number()
-                };
-                Value::from_string(self.rt.get_field(self.resolve_field_idx(n)))
+                let idx = self.eval_field_idx(idx_expr);
+                Value::from_string(self.rt.get_field(idx))
             }
             _ => Value::default(),
         }
@@ -574,12 +591,8 @@ impl<'a> Executor<'a> {
                 self.rt.set_array_value(name, &key, value);
             }
             Expr::Field(idx_expr) => {
-                let n = if let Expr::NumberLit(n) = idx_expr.as_ref() {
-                    *n
-                } else {
-                    self.eval_expr(idx_expr).to_number()
-                };
-                self.rt.set_field(self.resolve_field_idx(n), &value.into_string());
+                let idx = self.eval_field_idx(idx_expr);
+                self.rt.set_field(idx, &value.into_string());
             }
             _ => {}
         }

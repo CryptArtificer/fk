@@ -299,6 +299,13 @@ impl Runtime {
         self.get_array_value(name, key).into_string()
     }
 
+    pub fn get_array_opt(&self, name: &str, key: &str) -> Option<String> {
+        self.arrays
+            .get(name)
+            .and_then(|a| a.get(key))
+            .map(|v| v.clone().into_string())
+    }
+
     pub fn set_array_value(&mut self, name: &str, key: &str, val: Value) {
         self.arrays
             .entry(name.to_string())
