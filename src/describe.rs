@@ -598,7 +598,87 @@ pub fn format_from_extension(path: &str) -> Option<Format> {
     else { None }
 }
 
-/// Print comprehensive suggestions covering fk's feature surface.
+/// Helper: get sample values for a column by name.
+fn sample_values<'a>(schema: &'a Schema, col_name: &str) -> Vec<&'a str> {
+    let idx = schema.columns.iter().position(|c| c == col_name);
+    match idx {
+        Some(i) => schema.sample_rows.iter()
+            .filter_map(|row| row.get(i).map(|s| s.as_str()))
+            .filter(|s| !s.is_empty())
+            .collect(),
+        None => vec![],
+    }
+}
+
+/// Helper: pick a representative string sample (first non-empty value).
+fn sample_str<'a>(schema: &'a Schema, col_name: &str) -> &'a str {
+    sample_values(schema, col_name).into_iter().next().unwrap_or("example")
+}
+
+/// Helper: extract a regex-friendly substring from a sample value.
+/// Picks a short, interesting fragment (word, prefix, etc.).
+fn sample_regex(schema: &Schema, col_name: &str) -> String {
+    let vals = sample_values(schema, col_name);
+    if vals.is_empty() {
+        return "pattern".to_string();
+    }
+    let v = vals[0];
+    // If it contains a space or separator, use the first word
+    if let Some(word) = v.split([' ', '-', '_']).next()
+        && word.len() >= 2 && word.len() <= 15 {
+            return regex_escape(word);
+    }
+    // Otherwise use up to the first 8 chars
+    let fragment = if v.len() > 8 { &v[..8] } else { v };
+    regex_escape(fragment)
+}
+
+/// Escape regex metacharacters in a literal string.
+fn regex_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        if "\\.*+?[](){}|^$".contains(c) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Helper: compute a numeric threshold from sample data (approximate median).
+fn sample_threshold(schema: &Schema, col_name: &str) -> String {
+    let vals = sample_values(schema, col_name);
+    let mut nums: Vec<f64> = vals.iter()
+        .filter_map(|v| v.parse::<f64>().ok())
+        .collect();
+    if nums.is_empty() {
+        return "100".to_string();
+    }
+    nums.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let median = nums[nums.len() / 2];
+    // Format nicely: integer if whole, otherwise 1 decimal
+    if median == median.floor() {
+        format!("{}", median as i64)
+    } else {
+        format!("{:.1}", median)
+    }
+}
+
+/// Helper: detect a common delimiter in sample string values.
+fn sample_delimiter(schema: &Schema, col_name: &str) -> &'static str {
+    let vals = sample_values(schema, col_name);
+    let counts = |ch: char| -> usize { vals.iter().filter(|v| v.contains(ch)).count() };
+    if counts('-') > vals.len() / 2 { return "-"; }
+    if counts('_') > vals.len() / 2 { return "_"; }
+    if counts('.') > vals.len() / 2 { return "."; }
+    if counts('/') > vals.len() / 2 { return "/"; }
+    if counts(':') > vals.len() / 2 { return ":"; }
+    if counts(' ') > vals.len() / 2 { return " "; }
+    "-"
+}
+
+/// Print comprehensive suggestions covering fk's feature surface,
+/// tailored to actual values in the sample data.
 pub fn print_suggest(schema: &Schema, file_hint: &str) {
     let flags = build_flags(schema);
     let fp = if file_hint.is_empty() { String::new() } else { format!(" {}", file_hint) };
@@ -618,12 +698,16 @@ pub fn print_suggest(schema: &Schema, file_hint: &str) {
     let n1 = floats.first().copied()
         .or_else(|| nums.last().copied())
         .unwrap_or("$1");
-    let n2 = nums.iter().find(|&&c| c != n1).copied().unwrap_or(n1);
 
     let sr1 = col_ref(s1);
     let sr2 = col_ref(s2);
     let nr1 = col_ref(n1);
-    let _nr2 = col_ref(n2);
+
+    // Sample data for tailored examples
+    let s1_val = sample_str(schema, s1);
+    let s1_regex = sample_regex(schema, s1);
+    let n1_thresh = sample_threshold(schema, n1);
+    let s1_delim = sample_delimiter(schema, s1);
 
     // ── Selecting & Printing ──
     section("Selecting & Printing");
@@ -652,16 +736,21 @@ pub fn print_suggest(schema: &Schema, file_hint: &str) {
     // ── Filtering ──
     section("Filtering");
 
-    suggestion(&flags, &format!("{} ~ /pattern/", sr1), "regex match", &fp);
-    suggestion(&flags, &format!("{} !~ /pattern/", sr1), "regex exclude", &fp);
+    suggestion(&flags,
+        &format!("{} ~ /{}/", sr1, s1_regex),
+        &format!("rows where {} matches \"{}\"", s1, s1_regex), &fp);
+    suggestion(&flags,
+        &format!("{} !~ /{}/", sr1, s1_regex),
+        &format!("rows where {} does not match \"{}\"", s1, s1_regex), &fp);
     if !nums.is_empty() {
-        suggestion(&flags, &format!("{} > 100", nr1),
-            &format!("numeric filter on {}", n1), &fp);
-    }
-    if strs.len() >= 2 {
         suggestion(&flags,
-            &format!("{} == \"value\" && {} > 0", sr1, nr1),
-            "compound filter", &fp);
+            &format!("{} > {}", nr1, n1_thresh),
+            &format!("{} above {} (sample median)", n1, n1_thresh), &fp);
+    }
+    if !strs.is_empty() && !nums.is_empty() {
+        suggestion(&flags,
+            &format!("{} == \"{}\" && {} > {}", sr1, s1_val, nr1, n1_thresh),
+            "compound filter with real values", &fp);
     }
     suggestion(&flags, "NR >= 5 && NR <= 15", "select row range", &fp);
 
@@ -669,8 +758,9 @@ pub fn print_suggest(schema: &Schema, file_hint: &str) {
     section("Counting & Aggregation");
 
     suggestion(&flags, "END { print NR }", "count all rows", &fp);
-    suggestion(&flags, &format!("{} ~ /pattern/ {{ n++ }} END {{ print n }}", sr1),
-        "count matching rows", &fp);
+    suggestion(&flags,
+        &format!("{} ~ /{}/ {{ n++ }} END {{ print n }}", sr1, s1_regex),
+        &format!("count rows matching \"{}\"", s1_regex), &fp);
     if !nums.is_empty() {
         suggestion(&flags,
             &format!("{{ s += {} }} END {{ print s }}", nr1),
@@ -746,13 +836,13 @@ pub fn print_suggest(schema: &Schema, file_hint: &str) {
         "uppercase", &fp);
     suggestion(&flags,
         &format!("{{ print substr({}, 1, 4) }}", sr1),
-        "first 4 characters", &fp);
+        &format!("first 4 chars (e.g. \"{}\" → \"{}\")", s1_val, &s1_val[..s1_val.len().min(4)]), &fp);
     suggestion(&flags,
-        &format!("{{ gsub(/old/, \"new\", {}); print }}", sr1),
-        "search & replace in-place", &fp);
+        &format!("{{ gsub(/{0}/, \"NEW\", {1}); print }}", s1_regex, sr1),
+        &format!("replace \"{}\" with \"NEW\"", s1_regex), &fp);
     suggestion(&flags,
-        &format!("{{ n = split({}, parts, \"-\"); print parts[1] }}", sr1),
-        "split on delimiter", &fp);
+        &format!("{{ n = split({}, parts, \"{}\"); print parts[1] }}", sr1, s1_delim),
+        &format!("split on \"{}\"", s1_delim), &fp);
     suggestion(&flags,
         &format!("{{ if (match({}, /[0-9]+/)) print substr({}, RSTART, RLENGTH) }}", sr1, sr1),
         "extract first number from string", &fp);
@@ -784,8 +874,11 @@ pub fn print_suggest(schema: &Schema, file_hint: &str) {
 
     suggestion(&flags, "NR <= 10", "first 10 rows (like head)", &fp);
     suggestion(&flags, "NR % 2 == 0", "every other row", &fp);
-    suggestion(&flags, &format!("{{ if ({0} > 100) print \"high\", {0}; else print \"low\", {0} }}", nr1),
-        "conditional output", &fp);
+    if !nums.is_empty() {
+        suggestion(&flags,
+            &format!("{{ if ({0} > {1}) print \"high\", {0}; else print \"low\", {0} }}", nr1, n1_thresh),
+            &format!("classify by {} threshold ({})", n1, n1_thresh), &fp);
+    }
     if s1 != "$1" {
         suggestion(&flags,
             &format!("!seen[{}]++", sr1),
