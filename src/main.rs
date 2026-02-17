@@ -43,9 +43,9 @@ fn run_parquet(args: &cli::Args, exec: &mut action::Executor) {
 fn main() {
     let args = cli::parse_args();
 
-    // Describe mode
+    // Describe / suggest mode
     if args.describe {
-        describe::run_describe(&args.files);
+        describe::run_describe(&args.files, args.suggest);
         return;
     }
 

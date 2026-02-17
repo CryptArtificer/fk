@@ -21,6 +21,7 @@ pub struct Args {
     pub header_mode: bool,
     pub program_file: Option<String>,
     pub describe: bool,
+    pub suggest: bool,
 }
 
 pub fn parse_args() -> Args {
@@ -35,6 +36,7 @@ pub fn parse_args() -> Args {
     let mut header_mode = false;
     let mut program_file: Option<String> = None;
     let mut describe = false;
+    let mut suggest = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -91,6 +93,9 @@ pub fn parse_args() -> Args {
             repl = true;
         } else if arg == "--describe" || arg == "-d" {
             describe = true;
+        } else if arg == "--suggest" || arg == "-S" {
+            describe = true;
+            suggest = true;
         } else if arg == "-H" || arg == "--header" {
             header_mode = true;
         } else if arg == "-i" {
@@ -140,7 +145,8 @@ pub fn parse_args() -> Args {
         None if describe => String::new(),
         None => {
             eprintln!("usage: fk [-F fs] [-v var=val] [-f progfile] 'program' [file ...]");
-            eprintln!("       fk --describe [file ...]");
+            eprintln!("       fk --describe [file ...]   # detect format, show schema");
+            eprintln!("       fk --suggest [file ...]    # schema + comprehensive examples");
             eprintln!("       fk --repl");
             process::exit(1);
         }
@@ -156,6 +162,7 @@ pub fn parse_args() -> Args {
         header_mode,
         program_file,
         describe,
+        suggest,
     }
 }
 

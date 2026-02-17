@@ -598,15 +598,241 @@ pub fn format_from_extension(path: &str) -> Option<Format> {
     else { None }
 }
 
+/// Print comprehensive suggestions covering fk's feature surface.
+pub fn print_suggest(schema: &Schema, file_hint: &str) {
+    let flags = build_flags(schema);
+    let fp = if file_hint.is_empty() { String::new() } else { format!(" {}", file_hint) };
+
+    let strs: Vec<&str> = schema.columns.iter().enumerate()
+        .filter(|(i, _)| schema.types.get(*i) == Some(&ColType::String))
+        .map(|(_, c)| c.as_str()).collect();
+    let nums: Vec<&str> = schema.columns.iter().enumerate()
+        .filter(|(i, _)| matches!(schema.types.get(*i), Some(ColType::Int | ColType::Float)))
+        .map(|(_, c)| c.as_str()).collect();
+    let floats: Vec<&str> = schema.columns.iter().enumerate()
+        .filter(|(i, _)| schema.types.get(*i) == Some(&ColType::Float))
+        .map(|(_, c)| c.as_str()).collect();
+
+    let s1 = strs.first().copied().unwrap_or("$1");
+    let s2 = strs.get(1).copied().unwrap_or(s1);
+    let n1 = floats.first().copied()
+        .or_else(|| nums.last().copied())
+        .unwrap_or("$1");
+    let n2 = nums.iter().find(|&&c| c != n1).copied().unwrap_or(n1);
+
+    let sr1 = col_ref(s1);
+    let sr2 = col_ref(s2);
+    let nr1 = col_ref(n1);
+    let _nr2 = col_ref(n2);
+
+    // ── Selecting & Printing ──
+    section("Selecting & Printing");
+
+    if schema.columns.len() >= 2 {
+        let c1 = col_ref(&schema.columns[0]);
+        let c2 = col_ref(&schema.columns[1]);
+        suggestion(&flags, &format!("{{ print {}, {} }}", c1, c2), "select columns", &fp);
+    }
+    suggestion(&flags, "{ print NR, $0 }", "print with line numbers", &fp);
+    if schema.columns.len() >= 3 {
+        let c1 = col_ref(&schema.columns[0]);
+        let c3 = col_ref(&schema.columns[2]);
+        suggestion(&flags,
+            &format!("{{ printf \"%s -> %s\\n\", {}, {} }}", c1, c3),
+            "formatted output", &fp);
+    }
+    if n1 != "$1" && s1 != "$1" {
+        suggestion(&flags,
+            &format!("{{ printf \"%-20s %10.2f\\n\", {}, {} }}", sr1, nr1),
+            "aligned columns (right-justify numbers)", &fp);
+    }
+    suggestion(&flags, "BEGIN { OFS = \"\\t\" } { print $0 }",
+        "change output separator to tab", &fp);
+
+    // ── Filtering ──
+    section("Filtering");
+
+    suggestion(&flags, &format!("{} ~ /pattern/", sr1), "regex match", &fp);
+    suggestion(&flags, &format!("{} !~ /pattern/", sr1), "regex exclude", &fp);
+    if !nums.is_empty() {
+        suggestion(&flags, &format!("{} > 100", nr1),
+            &format!("numeric filter on {}", n1), &fp);
+    }
+    if strs.len() >= 2 {
+        suggestion(&flags,
+            &format!("{} == \"value\" && {} > 0", sr1, nr1),
+            "compound filter", &fp);
+    }
+    suggestion(&flags, "NR >= 5 && NR <= 15", "select row range", &fp);
+
+    // ── Counting & Aggregation ──
+    section("Counting & Aggregation");
+
+    suggestion(&flags, "END { print NR }", "count all rows", &fp);
+    suggestion(&flags, &format!("{} ~ /pattern/ {{ n++ }} END {{ print n }}", sr1),
+        "count matching rows", &fp);
+    if !nums.is_empty() {
+        suggestion(&flags,
+            &format!("{{ s += {} }} END {{ print s }}", nr1),
+            &format!("sum {}", n1), &fp);
+        suggestion(&flags,
+            &format!("{{ s += {}; n++ }} END {{ print s/n }}", nr1),
+            &format!("average {}", n1), &fp);
+        suggestion(&flags,
+            &format!("{{ if ({0} > max) max = {0} }} END {{ print max }}", nr1),
+            &format!("max {}", n1), &fp);
+    }
+
+    // ── Grouping ──
+    section("Grouping");
+
+    if s1 != "$1" && n1 != "$1" {
+        suggestion(&flags,
+            &format!("{{ a[{}] += {} }} END {{ for (k in a) print k, a[k] }}", sr1, nr1),
+            &format!("sum {} by {}", n1, s1), &fp);
+        suggestion(&flags,
+            &format!("{{ a[{}]++; s[{}] += {} }} END {{ for (k in a) printf \"%s: n=%d sum=%.2f avg=%.2f\\n\", k, a[k], s[k], s[k]/a[k] }}", sr1, sr1, nr1),
+            &format!("count + sum + avg of {} by {}", n1, s1), &fp);
+    }
+    if s1 != s2 && s1 != "$1" {
+        suggestion(&flags,
+            &format!("{{ a[{},{}]++ }} END {{ for (k in a) print k, a[k] }}", sr1, sr2),
+            &format!("cross-tab {} x {} (uses SUBSEP)", s1, s2), &fp);
+    }
+
+    // ── Statistics (built-in) ──
+    section("Statistics");
+
+    if !nums.is_empty() {
+        suggestion(&flags,
+            &format!("{{ a[NR] = {} }} END {{ printf \"mean=%.2f stddev=%.2f\\n\", mean(a), stddev(a) }}", nr1),
+            &format!("mean & standard deviation of {}", n1), &fp);
+        suggestion(&flags,
+            &format!("{{ a[NR] = {} }} END {{ printf \"min=%.2f p25=%.2f median=%.2f p75=%.2f max=%.2f\\n\", min(a), p(a,25), median(a), p(a,75), max(a) }}", nr1),
+            &format!("five-number summary of {}", n1), &fp);
+        suggestion(&flags,
+            &format!("{{ a[NR] = {} }} END {{ printf \"p50=%.2f p90=%.2f p95=%.2f p99=%.2f\\n\", p(a,50), p(a,90), p(a,95), p(a,99) }}", nr1),
+            &format!("percentile ladder for {}", n1), &fp);
+        suggestion(&flags,
+            &format!("{{ a[NR] = {} }} END {{ printf \"iqm=%.2f variance=%.4f\\n\", iqm(a), variance(a) }}", nr1),
+            "interquartile mean & variance", &fp);
+    }
+
+    // ── Sorting ──
+    section("Sorting");
+
+    if s1 != "$1" {
+        suggestion(&flags,
+            &format!("{{ a[NR] = {} }} END {{ asort(a); for (i in a) print a[i] }}", sr1),
+            &format!("sort {} values alphabetically", s1), &fp);
+    }
+    if !nums.is_empty() {
+        suggestion(&flags,
+            &format!("{{ a[NR] = {} }} END {{ asort(a); for (i=1; i<=length(a); i++) print a[i] }}", nr1),
+            &format!("sort {} numerically", n1), &fp);
+    }
+    if s1 != "$1" && n1 != "$1" {
+        suggestion(&flags,
+            &format!("{{ a[{}] += {} }} END {{ for (k in a) print a[k], k }}",
+                sr1, nr1),
+            "group totals (pipe to: sort -rn | head -10)", &fp);
+    }
+
+    // ── String Operations ──
+    section("String Operations");
+
+    suggestion(&flags,
+        &format!("{{ print toupper({}) }}", sr1),
+        "uppercase", &fp);
+    suggestion(&flags,
+        &format!("{{ print substr({}, 1, 4) }}", sr1),
+        "first 4 characters", &fp);
+    suggestion(&flags,
+        &format!("{{ gsub(/old/, \"new\", {}); print }}", sr1),
+        "search & replace in-place", &fp);
+    suggestion(&flags,
+        &format!("{{ n = split({}, parts, \"-\"); print parts[1] }}", sr1),
+        "split on delimiter", &fp);
+    suggestion(&flags,
+        &format!("{{ if (match({}, /[0-9]+/)) print substr({}, RSTART, RLENGTH) }}", sr1, sr1),
+        "extract first number from string", &fp);
+
+    // ── Output Formatting ──
+    section("Output Formatting");
+
+    if !nums.is_empty() {
+        suggestion(&flags,
+            &format!("{{ printf \"%08d\\n\", {} }}", nr1),
+            "zero-padded number", &fp);
+        suggestion(&flags,
+            &format!("{{ printf \"%+.2f\\n\", {} }}", nr1),
+            "force sign on number", &fp);
+    }
+    suggestion(&flags,
+        "BEGIN { OFS = \",\" } { $1 = $1; print }",
+        "convert to CSV", &fp);
+    if schema.columns.len() >= 2 {
+        let c1 = col_ref(&schema.columns[0]);
+        let c2 = col_ref(&schema.columns[1]);
+        suggestion(&flags,
+            &format!("BEGIN {{ OFS = \"\\t\" }} {{ print {}, {} }}", c1, c2),
+            "convert to TSV", &fp);
+    }
+
+    // ── Control Flow ──
+    section("Control Flow");
+
+    suggestion(&flags, "NR <= 10", "first 10 rows (like head)", &fp);
+    suggestion(&flags, "NR % 2 == 0", "every other row", &fp);
+    suggestion(&flags, &format!("{{ if ({0} > 100) print \"high\", {0}; else print \"low\", {0} }}", nr1),
+        "conditional output", &fp);
+    if s1 != "$1" {
+        suggestion(&flags,
+            &format!("!seen[{}]++", sr1),
+            &format!("deduplicate by {}", s1), &fp);
+    }
+
+    // ── Multi-file & System ──
+    section("Multi-file & System");
+
+    suggestion(&flags, "{ print FILENAME, NR, FNR, $0 }",
+        "show filename and record numbers", &fp);
+    suggestion(&flags, "FNR == 1 { print \"--- \" FILENAME \" ---\" }",
+        "print header between files", &fp);
+    suggestion(&flags, "BEGIN { while ((\"date\" | getline d) > 0) print d }",
+        "capture command output with getline", &fp);
+
+    // ── Pipelines ──
+    section("Pipelines (combine with shell)");
+
+    if s1 != "$1" && n1 != "$1" {
+        suggestion(&flags,
+            &format!("{{ a[{}] += {} }} END {{ for (k in a) print a[k], k }}", sr1, nr1),
+            &format!("| sort -rn | head  → top {} by {}", s1, n1), &fp);
+    }
+    suggestion(&flags, "{ print $0 }",
+        "| wc -l  → count (or just: END { print NR })", &fp);
+    if !nums.is_empty() {
+        suggestion(&flags,
+            &format!("{{ print {} }}", nr1),
+            &format!("| sort -n | uniq -c  → frequency distribution of {}", n1), &fp);
+    }
+
+    eprintln!();
+}
+
 /// Run describe mode: sniff the input and print schema + suggestions.
-pub fn run_describe(files: &[String]) {
+pub fn run_describe(files: &[String], suggest: bool) {
     if files.is_empty() {
-        // stdin
         let stdin = io::stdin();
         let mut reader = BufReader::new(stdin.lock());
         let schema = sniff(&mut reader);
         print_description(&schema, None);
-        print_suggestions(&schema, "");
+        if suggest {
+            print_suggest(&schema, "");
+        } else {
+            print_suggestions(&schema, "");
+        }
     } else {
         for path in files {
             if files.len() > 1 {
@@ -623,7 +849,16 @@ pub fn run_describe(files: &[String]) {
             let mut reader = BufReader::new(file_reader);
             let schema = sniff(&mut reader);
             print_description(&schema, None);
-            print_suggestions(&schema, path);
+            if suggest {
+                print_suggest(&schema, path);
+            } else {
+                print_suggestions(&schema, path);
+            }
         }
     }
+}
+
+fn section(title: &str) {
+    eprintln!("  \x1b[1;4m{}\x1b[0m", title);
+    eprintln!();
 }

@@ -17,6 +17,9 @@ fk \(em filter-kernel: a modern awk for humans
 .B fk \-\-describe
 .RI [ file\~ .\|.\|.]
 .br
+.B fk \-\-suggest
+.RI [ file\~ .\|.\|.]
+.br
 .B fk \-\-repl
 .
 .\" ─────────────────────────────────────────────────────────────
@@ -122,8 +125,16 @@ Parquet mode (\fB\-i parquet\fR) enables header mode automatically.
 \fB\-d\fR, \fB\-\-describe\fR
 Describe mode.
 Sniff the input to detect format (CSV, TSV, JSON, whitespace), infer column
-names and types, and suggest example \fBfk\fR programs.
+names and types, and show a few example \fBfk\fR programs.
 Works with files and stdin; supports compressed files (.gz, .zst, .bz2, .xz).
+.
+.TP
+\fB\-S\fR, \fB\-\-suggest\fR
+Suggest mode (extended describe).
+Like \fB\-\-describe\fR, but prints a comprehensive categorised guide of
+\fBfk\fR programs using the actual column names from the data.  Categories:
+selecting, filtering, counting, grouping, statistics, sorting, string ops,
+output formatting, control flow, multi-file, and pipeline combinations.
 .
 .TP
 \fB\-\-repl\fR
