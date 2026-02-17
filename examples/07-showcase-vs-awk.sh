@@ -137,11 +137,18 @@ JSONL
 printf "banana\napple\ncherry\ndate\nelderberry\nfig\ngrape\napricot\n" > "$TMPDIR/fruits.txt"
 
 # ═══════════════════════════════════════════════════════════════
-section "1. CSV with named columns — no csvkit, no counting fields"
+section "1. CSV with named columns + stats — no csvkit, no counting fields"
 # awk needs: csvkit to parse, then count which column is which.
-# fk: -i csv -H gives you $column_name directly.
+# fk: -i csv -H gives you $column_name directly, plus built-in stats.
 
-show $FK -i csv -H '{ rev[$region] += $revenue } END { for (r in rev) printf "  %-6s $%.0f\n", r, rev[r] }' "$TMPDIR/sales.csv"
+show $FK -i csv -H '{
+    rev[$region] += $revenue
+    all[NR] = $revenue + 0
+}
+END {
+    for (r in rev) printf "  %-6s $%.0f\n", r, rev[r]
+    printf "\n  Revenue stats:  mean=$%.0f  median=$%.0f  stddev=$%.0f  p95=$%.0f\n", mean(all), median(all), stddev(all), p(all, 95)
+}' "$TMPDIR/sales.csv"
 
 # ═══════════════════════════════════════════════════════════════
 section "2. Quoted column names — hyphens, dots, anything"
@@ -162,10 +169,14 @@ section "3. JSON Lines with jpath() — no jq needed"
 show $FK '{
     method = jpath($0, ".method"); status = jpath($0, ".status") + 0
     ms = jpath($0, ".ms") + 0; path = jpath($0, ".path")
+    lat[NR] = ms
     tag = ""
     if (status >= 500) tag = " ** ERROR"
     if (ms > 100) tag = tag " SLOW"
     printf "  %-6s %-20s %3d %4dms%s\n", method, path, status, ms, tag
+}
+END {
+    printf "\n  Latency: mean=%.0fms  median=%.0fms  p95=%.0fms  p99=%.0fms  max=%.0fms\n", mean(lat), median(lat), p(lat,95), p(lat,99), max(lat)
 }' "$TMPDIR/api.jsonl"
 
 # ═══════════════════════════════════════════════════════════════
@@ -273,13 +284,14 @@ echo "Replace only the 2nd occurrence:"
 show_pipe "echo 'one-two-three-four-five' | $FK '{ print \"  \" gensub(\"-\", \"=DASH=\", 2) }'"
 
 # ═══════════════════════════════════════════════════════════════
-section "10. Bitwise operations + hex"
-# awk: no bitwise ops, no hex output. fk: and/or/xor/lshift/rshift + hex.
+section "10. Bitwise operations + hex + zero-padded printf"
+# awk: no bitwise ops, no hex output, no zero-padded printf.
+# fk: and/or/xor/lshift/rshift + hex + %08x/%04d.
 
-echo "Unix permission decoder:"
+echo "Unix permission decoder (zero-padded octal and hex):"
 show_pipe "printf '511\n493\n420\n256\n' | $FK '{
     mode = \$1+0; u=and(rshift(mode,6),7); g=and(rshift(mode,3),7); o=and(mode,7)
-    printf \"  %3d → %d%d%d  hex=%s\n\", mode, u, g, o, hex(mode)
+    printf \"  %04d → %d%d%d  hex=0x%04x\n\", mode, u, g, o, mode
 }'"
 
 # ═══════════════════════════════════════════════════════════════
@@ -298,7 +310,61 @@ echo "Negative field indexes (\$-1 = last, \$-2 = second-to-last):"
 show_pipe "echo 'alpha beta gamma delta epsilon' | $FK '{ printf \"  last=%-10s 2nd-last=%s\n\", \$-1, \$-2 }'"
 
 # ═══════════════════════════════════════════════════════════════
-section "12. Piping: fk | fk — multi-stage pipelines"
+section "12. Built-in statistics — no awk equivalent"
+# awk: you'd write 50+ lines for basic stats. fk: one function call each.
+
+cat > "$TMPDIR/latencies.txt" <<'DATA'
+12
+45
+8
+1230
+15
+34
+89
+11
+23
+67
+5
+450
+102
+19
+38
+DATA
+
+echo "Full stats summary from a single pass:"
+show $FK '{
+    a[NR] = $1
+}
+END {
+    printf "  n       = %d\n", length(a)
+    printf "  sum     = %.0f\n", sum(a)
+    printf "  mean    = %.2f\n", mean(a)
+    printf "  median  = %.2f\n", median(a)
+    printf "  stddev  = %.2f\n", stddev(a)
+    printf "  var     = %.2f\n", variance(a)
+    printf "  min     = %.0f\n", min(a)
+    printf "  max     = %.0f\n", max(a)
+    printf "  p25     = %.2f\n", p(a, 25)
+    printf "  p50     = %.2f\n", p(a, 50)
+    printf "  p75     = %.2f\n", p(a, 75)
+    printf "  p95     = %.2f\n", p(a, 95)
+    printf "  p99     = %.2f\n", p(a, 99)
+    printf "  iqm     = %.2f  (outlier-robust mean)\n", iqm(a)
+}' "$TMPDIR/latencies.txt"
+
+echo ""
+echo "Per-server CPU stats from CSV with named columns:"
+show $FK -i csv -H '{
+    cpu[NR] = $"cpu-usage" + 0
+    mem[NR] = $"mem-usage" + 0
+}
+END {
+    printf "  CPU: mean=%5.1f%%  median=%5.1f%%  stddev=%5.1f%%  p95=%5.1f%%\n", mean(cpu), median(cpu), stddev(cpu), p(cpu,95)
+    printf "  MEM: mean=%5.1f%%  median=%5.1f%%  stddev=%5.1f%%  p95=%5.1f%%\n", mean(mem), median(mem), stddev(mem), p(mem,95)
+}' "$TMPDIR/servers.csv"
+
+# ═══════════════════════════════════════════════════════════════
+section "13. Piping: fk | fk — multi-stage pipelines"
 
 echo "Stage 1 (CSV parse + filter) → Stage 2 (aggregate):"
 show_pipe "$FK -i csv -H '\$revenue+0 > 15000 { print \$region, \$product, \$revenue }' $TMPDIR/sales.csv | $FK '{ by[\$1] += \$3 } END { for (r in by) printf \"  %-6s \$%.0f\n\", r, by[r] }'"
@@ -308,7 +374,7 @@ echo "Three-stage: generate → compute → filter:"
 show_pipe "printf '1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n' | $FK '{ print \$1, \$1**2, \$1**3 }' | $FK '\$2 > 20 { printf \"  n=%-2d  n²=%-4d  n³=%d\n\", \$1, \$2, \$3 }'"
 
 # ═══════════════════════════════════════════════════════════════
-section "13. fk + sort + uniq — classic Unix pipeline, supercharged"
+section "14. fk + sort + uniq — classic Unix pipeline, supercharged"
 # awk can do some of this, but fk's capture groups + named columns
 # make the extraction step trivial.
 
@@ -320,7 +386,7 @@ echo "Unique IPs with request count (fk parses, sort -u deduplicates):"
 show_pipe "$FK '{ print \$1 }' $TMPDIR/access.log | sort | uniq -c | sort -rn | $FK '{ printf \"  %-15s %d requests\n\", \$2, \$1 }'"
 
 # ═══════════════════════════════════════════════════════════════
-section "14. fk + awk — interop both directions"
+section "15. fk + awk — interop both directions"
 # fk output is awk-compatible. Mix tools freely.
 
 echo "fk (CSV parse) → awk (filter) → fk (enrich with fk builtins):"
@@ -331,7 +397,7 @@ echo "awk (generate data) → fk (bar chart with repeat):"
 show_pipe "awk 'BEGIN { srand(42); for (i=1;i<=6;i++) printf \"%s %d\n\", \"item_\" i, int(rand()*50)+1 }' | $FK '{ printf \"  %-8s %s (%d)\n\", \$1, repeat(\"▓\", \$2), \$2 }'"
 
 # ═══════════════════════════════════════════════════════════════
-section "15. fk + paste + diff — structural comparison"
+section "16. fk + paste + diff — structural comparison"
 # Combine fk's CSV parsing with paste for side-by-side or diff for changes.
 
 echo "Side-by-side: product names vs revenue (paste combines fk outputs):"
@@ -346,14 +412,14 @@ diff --color=never \
 echo "  (lines starting with < were filtered out by revenue > 15000)"
 
 # ═══════════════════════════════════════════════════════════════
-section "16. fk + xargs — parallel processing"
+section "17. fk + xargs — parallel processing"
 # fk extracts, xargs parallelises.
 
 echo "Extract unique IPs, then resolve each (simulated with printf):"
 show_pipe "$FK '{ ips[\$1]++ } END { for (ip in ips) print ip }' $TMPDIR/access.log | xargs -I{} printf '  resolve {} → {}.example.com\n'"
 
 # ═══════════════════════════════════════════════════════════════
-section "17. Mini ETL — CSV → aggregate → report"
+section "18. Mini ETL — CSV → aggregate → report + stats"
 # Combines: -i csv, -H, named columns, parsedate, strftime, trim.
 
 cat > "$TMPDIR/orders.csv" <<'CSV'
@@ -373,6 +439,7 @@ show $FK -i csv -H '
     ts = parsedate($created_at, "%Y-%m-%d %H:%M:%S")
     month = strftime("%Y-%m", ts)
     cust = trim($customer); amt = $amount + 0
+    amounts[NR] = amt
     total += amt; count++
     by_cust[cust] += amt; n_cust[cust]++
     by_month[month] += amt
@@ -385,6 +452,9 @@ END {
     print "\n  By month:"
     for (m in by_month) printf "    %s  $%8.2f\n", m, by_month[m]
     printf "\n  Largest: #%s by %s ($%.2f)\n", mx_id, mx_who, mx
+    printf "\n  Order stats:\n"
+    printf "    mean=$%.2f  median=$%.2f  stddev=$%.2f\n", mean(amounts), median(amounts), stddev(amounts)
+    printf "    iqm=$%.2f  p25=$%.2f  p75=$%.2f  p95=$%.2f\n", iqm(amounts), p(amounts,25), p(amounts,75), p(amounts,95)
 }' "$TMPDIR/orders.csv"
 
 # ═══════════════════════════════════════════════════════════════
@@ -392,7 +462,7 @@ END {
 # ═══════════════════════════════════════════════════════════════
 if $HAS_UPLOT; then
 
-section "18. fk + uplot — terminal charts (uplot detected)"
+section "19. fk + uplot — terminal charts (uplot detected)"
 
 echo "Latency histogram from access log:"
 $FK '{ match($0, "\"[A-Z]+ [^ ]+ .*\" ([0-9]+) ([0-9]+)", c); print c[2]+0 }' "$TMPDIR/access.log" | \
@@ -423,7 +493,7 @@ $FK '{
 }' "$TMPDIR/api.jsonl" | uplot box -t "API Latency by Endpoint (ms)"
 
 else
-    section "18. uplot not installed — skipping terminal charts"
+    section "19. uplot not installed — skipping terminal charts"
     echo "  Install with: gem install youplot"
     echo "  Re-run to see bar charts, histograms, box plots, and scatter plots."
 fi

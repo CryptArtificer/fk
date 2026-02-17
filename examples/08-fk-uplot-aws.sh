@@ -232,14 +232,16 @@ section "Summary — computed entirely by fk"
 
 $FK -F$'\t' '{
     latency = $5 + 0; status = $4 + 0
-    total++; sum_lat += latency
-    if (latency > max_lat) max_lat = latency
+    lat[NR] = latency
+    total++
     if (status >= 500) err5xx++
     if (status >= 400 && status < 500) err4xx++
     methods[$2]++
 }
 END {
-    printf "  ALB: %d requests, avg latency %.0fms, max %dms\n", total, sum_lat/total, max_lat
+    printf "  ALB: %d requests\n", total
+    printf "  Latency: mean=%.0fms  median=%.0fms  p95=%.0fms  p99=%.0fms  max=%.0fms\n", mean(lat), median(lat), p(lat,95), p(lat,99), max(lat)
+    printf "  IQM latency: %.0fms  (robust to outlier spikes)\n", iqm(lat)
     printf "  5xx: %d (%.1f%%)  4xx: %d (%.1f%%)\n", err5xx+0, (err5xx+0)*100/total, err4xx+0, (err4xx+0)*100/total
     printf "  Methods: "
     for (m in methods) printf "%s=%d ", m, methods[m]
@@ -248,13 +250,15 @@ END {
 
 echo ""
 $FK -F$'\t' '{
-    total++; func = $2; dur = $3 + 0; sum_dur += dur
+    total++; func = $2; dur = $3 + 0
+    durations[NR] = dur
     if ($6 == "cold") colds++
     if ($7 != "none") errs++
     funcs[func]++
 }
 END {
-    printf "  Lambda: %d invocations, avg duration %.0fms\n", total, sum_dur/total
+    printf "  Lambda: %d invocations\n", total
+    printf "  Duration: mean=%.0fms  median=%.0fms  p95=%.0fms  stddev=%.0fms\n", mean(durations), median(durations), p(durations,95), stddev(durations)
     printf "  Cold starts: %d (%.1f%%)  Errors: %d (%.1f%%)\n", colds+0, (colds+0)*100/total, errs+0, (errs+0)*100/total
     printf "  Functions: "
     for (f in funcs) printf "%s=%d ", f, funcs[f]
