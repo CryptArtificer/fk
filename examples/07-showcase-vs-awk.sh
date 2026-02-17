@@ -358,5 +358,61 @@ $FK -i csv -H '{
     printf "  %-10s cpu=%5.1f%%  mem=%5.1f%%  disk=%dGB  [%s]\n", host, cpu, mem, disk, status
 }' "$TMPDIR/metrics.csv"
 
+# ─────────────────────────────────────────────────────────────────
+section "14. Piping: fk | fk — multi-stage pipelines"
+# fk stages compose naturally via stdin/stdout, just like awk.
+# But fk adds CSV-aware stages, named columns, and richer transforms.
+
+echo "Stage 1: CSV → extract + filter → Stage 2: aggregate"
+$FK -i csv -H '$revenue+0 > 10000 { print $region, $product, $revenue }' "$TMPDIR/sales.csv" | \
+    $FK '{ region[$1] += $3 } END { for (r in region) printf "  %-6s $%.0f\n", r, region[r] }'
+
 echo ""
-printf "\033[1;32m═══ Done! All examples use fk features with no awk equivalent. ═══\033[0m\n"
+echo "Three-stage pipeline: generate → transform → summarise"
+printf "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n" | \
+    $FK '{ print $1, $1**2, $1**3 }' | \
+    $FK '$2 > 20 { printf "  n=%-3d n²=%-5d n³=%d\n", $1, $2, $3 }'
+
+# ─────────────────────────────────────────────────────────────────
+section "15. Piping: fk | awk | fk — interop with awk"
+# fk is a drop-in replacement: output format is awk-compatible.
+
+echo "fk (CSV parse) → awk (filter) → fk (format with fk builtins):"
+$FK -i csv -H '{ print $product, $revenue, $region }' "$TMPDIR/sales.csv" | \
+    awk '$2 + 0 > 15000' | \
+    $FK '{ printf "  %-8s $%-8s (%s)  hex=$%s\n", $1, $2, $3, hex($2+0) }'
+
+echo ""
+echo "awk (generate) → fk (enrich with features awk lacks):"
+awk 'BEGIN { for (i=1; i<=5; i++) print i, "item_" i, int(rand()*1000) }' | \
+    $FK '{
+        bar = repeat("▓", int($3 / 100))
+        printf "  #%-3s %-10s %4d %s\n", $1, $2, $3, bar
+    }'
+
+# ─────────────────────────────────────────────────────────────────
+section "16. Pure stdin — interactive-style one-liners"
+# No files needed. Everything from stdin, showcasing fk as a stream processor.
+
+echo "Live log simulation → parse + alert:"
+printf "2025-02-16T10:00:01 INFO  Starting service\n2025-02-16T10:00:02 WARN  High memory usage\n2025-02-16T10:00:03 ERROR Connection refused: db-01\n2025-02-16T10:00:04 INFO  Request processed\n2025-02-16T10:00:05 ERROR Timeout: api-gateway\n" | \
+$FK '{
+    match($0, "^([^ ]+) ([A-Z]+) +(.*)", c)
+    ts = c[1]; level = c[2]; msg = c[3]
+    if (level == "ERROR") {
+        errs++
+        print "  ** [" ts "] " level ": " msg
+    } else if (level == "WARN") {
+        print "  !  [" ts "] " level ": " msg
+    }
+    total++
+}
+END { printf "  → %d errors out of %d lines\n", errs+0, total }'
+
+echo ""
+echo "Inline CSV from stdin → named column access:"
+printf "name,score,grade\nAlice,95,A\nBob,72,B\nCarol,88,A\nDan,61,D\n" | \
+    $FK -i csv -H '$score+0 >= 80 { printf "  %-8s %s (score %s)\n", $name, $grade, $score }'
+
+echo ""
+printf "\033[1;32m═══ Done! 16 examples — all showcasing what fk does that awk can't. ═══\033[0m\n"

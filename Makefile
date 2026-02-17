@@ -112,6 +112,18 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/fk
 	rm -f $(DESTDIR)$(PREFIX)/share/man/man1/fk.1
 
+# ── Examples ─────────────────────────────────────────────────────
+
+.PHONY: examples showcase
+
+examples: release
+	@for f in examples/*.sh; do \
+		echo "" && echo "═══ Running $$f ═══" && echo "" && bash "$$f"; \
+	done
+
+showcase: release
+	@bash examples/07-showcase-vs-awk.sh
+
 # ── Run shortcuts ────────────────────────────────────────────────
 
 .PHONY: run repl
@@ -205,6 +217,8 @@ help:
 	@echo "Run:"
 	@echo "  make repl         Start interactive REPL"
 	@echo "  make run ARGS=..  Run fk with arguments"
+	@echo "  make showcase     Run the fk-vs-awk showcase"
+	@echo "  make examples     Run all example scripts"
 	@echo ""
 	@echo "Other:"
 	@echo "  make ci           Full CI check (fmt, clippy, test)"
