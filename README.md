@@ -14,8 +14,32 @@ A slightly modernized awk clone built in Rust.
 ### Design principles
 
 - **Modular** — every concern is a separate module behind a clear interface.
-- **Minimal dependencies** — lean on the Rust standard library; pull in crates only when they genuinely earn their keep.
+- **Lean core** — the base binary depends only on `regex`. Parquet/Arrow support is an optional feature that can be disabled at build time.
 - **Incremental** — built in deliberate steps, each one leaving a usable tool.
+
+## What's different from awk
+
+The pattern-action model is the same. Everything below is new.
+
+- **Structured input** — native CSV, TSV, JSON Lines, and Apache Parquet readers (`-i csv`, `-i json`, `-i parquet`), so you don't need to pre-process with other tools.
+- **Named columns** — in header mode (`-H`), access fields by name: `$name`, `$"user-name"`, `$col`. Works with CSV, TSV, JSON, and Parquet.
+- **JSON navigation** — `jpath()` gives you jq-like path access from within a pattern-action program.
+- **Statistical builtins** — `sum`, `mean`, `median`, `stddev`, `variance`, `percentile`, `quantile`, `iqm` on arrays.
+- **Unicode-aware** — `length`, `substr`, `index`, and all string builtins count characters, not bytes.
+- **Transparent decompression** — gzip, zstd, bzip2, xz, and lz4 files are decompressed on the fly. No need to pipe through `zcat` or `zstdcat` first.
+- **Auto-detection** — file extension determines both the decompression method and the input format. `fk '{ print $2 }' data.tsv.gz` just works: it decompresses with zlib and parses as TSV, no flags needed.
+- **Schema discovery** — `--describe` sniffs a file, detects its format and compression, infers column names and types, and suggests programs you can run on it.
+- **Capture groups in match()** — `match($0, "([0-9]+)-([0-9]+)", cap)` extracts groups into an array. Standard awk can't do this.
+- **Better errors** — source-location-aware diagnostics with line and column numbers.
+- **Negative field indexes** — `$-1` is the last field, `$-2` is second-to-last.
+- **REPL** — interactive mode for exploration (`--repl`).
+
+Some of these — especially the built-in format readers and decompression —
+go against the classic Unix ideal of small, single-purpose tools composed with
+pipes. That's a deliberate trade-off: in practice, shelling out to `csvcut` or
+`jq` just to feed awk is slow and awkward. Keeping the format awareness inside
+the tool means one process, one pass, and column names that survive the whole
+pipeline.
 
 ## Architecture
 
@@ -217,9 +241,11 @@ patterns, actions — remains one of the most elegant ideas in computing.
 This project also leans on other things they gave us. The `printf` format
 strings implemented here come straight from C, co-authored by Kernighan and
 Dennis Ritchie. The regular expression theory underpinning the `regex` crate
-traces back to Aho's work on finite automata. And the entire premise of `fk` —
-a small, composable text filter that reads from stdin and writes to stdout —
-is the Unix philosophy that Kernighan helped articulate.
+traces back to Aho's work on finite automata. And the entire premise of `fk` — a composable text filter that reads from
+stdin and writes to stdout — is the Unix philosophy that Kernighan helped
+articulate. `fk` bends that philosophy a little by absorbing format readers
+that purists would keep as separate tools, but the core loop is still the
+same one Aho, Weinberger, and Kernighan designed almost fifty years ago.
 
 Standing on the shoulders of giants, writing a not-so-small toy. 😄
 
