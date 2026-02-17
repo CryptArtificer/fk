@@ -2,6 +2,11 @@
 
 A modernized, modular awk clone built in Rust.
 
+> **Note** — This is a personal project built as a learning exercise. It is not
+> intended as a production tool and may not be actively maintained. You are
+> welcome to explore the code, open issues, or fork it, but please set your
+> expectations accordingly.
+
 ## Intent
 
 `fk` aims to replicate the core text-processing model of awk — read input, split into records and fields, match patterns, execute actions — while providing a cleaner foundation that is easy to extend. Each category of functionality (I/O, field splitting, pattern matching, expressions, built-in functions, etc.) lives in its own module so new capabilities can be added without touching unrelated code.
@@ -205,4 +210,4 @@ cargo build --release --no-default-features
 
 ## License
 
-TBD
+MIT
