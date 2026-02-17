@@ -9,7 +9,6 @@ incrementally as a learning exercise. The user values:
 - Modularity and composability (no spaghetti)
 - Commits in logical, coherent pieces
 - Minimal dependencies (only `regex` crate so far; `criterion` for benchmarks)
-- Never add co-author tags to commits — use `git commit-tree` plumbing
 
 ## Current state
 
@@ -129,7 +128,4 @@ fk is faster than awk (macOS system awk 20200816) on all benchmarks:
 
 ## Commit conventions
 
-- Use `git commit-tree` to create commits (avoids hook-injected co-author tags)
-- Pattern: `git add ... && TREE=$(git write-tree) && PARENT=$(git rev-parse HEAD) && COMMIT=$(echo "message" | GIT_AUTHOR_NAME="$(git config user.name)" GIT_AUTHOR_EMAIL="$(git config user.email)" GIT_COMMITTER_NAME="$(git config user.name)" GIT_COMMITTER_EMAIL="$(git config user.email)" git commit-tree "$TREE" -p "$PARENT") && git reset --soft "$COMMIT"`
-- Never add co-author tags
 - Commit in logical, coherent pieces (one feature or concern per commit)

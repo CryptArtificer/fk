@@ -3,7 +3,7 @@
 /// Follows awk semantics:
 /// - If FS is a single space, split on runs of whitespace and trim leading/trailing.
 /// - If FS is a single character, split on that literal character.
-/// - Otherwise treat FS as a regex pattern (TODO: regex FS in later phase).
+/// - Otherwise treat FS as a literal string separator.
 pub fn split(record: &str, fs: &str) -> Vec<String> {
     if fs == " " {
         record
