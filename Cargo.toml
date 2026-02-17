@@ -2,7 +2,7 @@
 name = "fk"
 version = "0.1.0"
 edition = "2024"
-description = "A modernized, modular awk clone built in Rust"
+description = "A slightly modernized awk clone built in Rust"
 license = "MIT"
 repository = "https://github.com/CryptArtificer/fk"
 keywords = ["awk", "text-processing", "cli", "filter"]

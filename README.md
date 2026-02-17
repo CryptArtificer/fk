@@ -1,6 +1,6 @@
 # fk — filter-kernel
 
-A modernized, modular awk clone built in Rust.
+A slightly modernized awk clone built in Rust.
 
 > **Note** — This is a personal project built as a learning exercise. It is not
 > intended as a production tool and may not be actively maintained. You are
@@ -207,6 +207,21 @@ cargo build --release --no-default-features
 
 # binary: target/release/fk
 ```
+
+## Acknowledgments
+
+`fk` is a love letter to **awk**, created in 1977 by Alfred Aho, Peter
+Weinberger, and Brian Kernighan at Bell Labs. Their design — records, fields,
+patterns, actions — remains one of the most elegant ideas in computing.
+
+This project also leans on other things they gave us. The `printf` format
+strings implemented here come straight from C, co-authored by Kernighan and
+Dennis Ritchie. The regular expression theory underpinning the `regex` crate
+traces back to Aho's work on finite automata. And the entire premise of `fk` —
+a small, composable text filter that reads from stdin and writes to stdout —
+is the Unix philosophy that Kernighan helped articulate.
+
+Standing on the shoulders of giants, writing a not-so-small toy. 😄
 
 ## License
 
