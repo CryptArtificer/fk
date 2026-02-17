@@ -47,13 +47,18 @@ pipeline.
 src/
   main.rs              – entry point, orchestration
   cli.rs               – command-line argument parsing
+  describe.rs          – format sniffer, schema inference, suggestions, decompression
   lexer.rs             – tokeniser
   parser.rs            – recursive-descent parser (tokens → AST)
-  action.rs            – executor core: pattern matching, statements, expressions
   runtime.rs           – runtime state (variables, fields, arrays, Value type)
   field.rs             – field splitting (FS / OFS semantics)
   error.rs             – source-location-aware diagnostics (Span type)
   repl.rs              – interactive REPL mode
+  action/
+    mod.rs             – executor core, public API, pattern matching
+    eval.rs            – expression evaluation, field access, assignment
+    stmt.rs            – statement execution, control flow, output
+    builtins_rt.rs     – builtins needing runtime (sub, gsub, match, split, stats, …)
   input/
     mod.rs             – Record struct, RecordReader trait, source orchestration
     line.rs            – default line-oriented reader
@@ -72,7 +77,7 @@ src/
 
 ## Progress
 
-Phases 0–8 complete. See [docs/progress.md](docs/progress.md) for the full checklist.
+Phases 0–11 complete. See [docs/progress.md](docs/progress.md) for the full checklist.
 
 ## Usage
 
