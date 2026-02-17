@@ -14,6 +14,9 @@ fk \(em filter-kernel: a modern awk for humans
 .IR program\~
 .RI [ file\~ .\|.\|.]
 .br
+.B fk \-\-describe
+.RI [ file\~ .\|.\|.]
+.br
 .B fk \-\-repl
 .
 .\" ─────────────────────────────────────────────────────────────
@@ -49,6 +52,12 @@ Process CSV
 Dig into JSON
 .nf
 \fBfk '{ print jpath($0, ".users[].name") }' data.json\fR
+.fi
+.
+.TP
+Describe unknown data
+.nf
+\fBfk \-\-describe mystery.csv.gz\fR
 .fi
 .
 .PP
@@ -108,6 +117,13 @@ Additionally, each column name is set as a variable equal to its
 column index, so \fB$name\fR resolves to the right field.
 Subsequent records are numbered from 1.
 Parquet mode (\fB\-i parquet\fR) enables header mode automatically.
+.
+.TP
+\fB\-d\fR, \fB\-\-describe\fR
+Describe mode.
+Sniff the input to detect format (CSV, TSV, JSON, whitespace), infer column
+names and types, and suggest example \fBfk\fR programs.
+Works with files and stdin; supports compressed files (.gz, .zst, .bz2, .xz).
 .
 .TP
 \fB\-\-repl\fR
@@ -674,6 +690,12 @@ Notably:
 Bitwise: \fBand()\fR, \fBor()\fR, \fBxor()\fR, \fBlshift()\fR, \fBrshift()\fR, \fBcompl()\fR
 .IP \(bu 2
 \fB\-\-repl\fR interactive mode
+.IP \(bu 2
+\fB\-\-describe\fR auto-detect format, infer schema, suggest programs
+.IP \(bu 2
+Transparent decompression of .gz, .zst, .bz2, .xz, .lz4 files
+.IP \(bu 2
+Auto-detect input mode from file extension (.csv \(-> \-i csv, etc.)
 .IP \(bu 2
 Unicode-aware string functions
 .IP \(bu 2

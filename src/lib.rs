@@ -1,6 +1,7 @@
 pub mod action;
 pub mod builtins;
 pub mod cli;
+pub mod describe;
 pub mod error;
 pub mod field;
 pub mod input;

@@ -1,7 +1,7 @@
 use std::env;
 use std::process;
 
-use fk::{action, cli, input, lexer, parser, runtime, repl};
+use fk::{action, cli, describe, input, lexer, parser, runtime, repl};
 use fk::builtins::format_number;
 
 #[cfg(feature = "parquet")]
@@ -42,6 +42,12 @@ fn run_parquet(args: &cli::Args, exec: &mut action::Executor) {
 
 fn main() {
     let args = cli::parse_args();
+
+    // Describe mode
+    if args.describe {
+        describe::run_describe(&args.files);
+        return;
+    }
 
     // Lex
     let mut lex = lexer::Lexer::new(&args.program);
@@ -105,8 +111,25 @@ fn main() {
         process::exit(code);
     }
 
+    // Auto-detect input mode from first file extension when user didn't specify -i
+    let effective_mode = if args.input_mode == cli::InputMode::Line && !args.files.is_empty() {
+        if let Some(fmt) = describe::format_from_extension(&args.files[0]) {
+            match fmt {
+                describe::Format::Csv => cli::InputMode::Csv,
+                describe::Format::Tsv => cli::InputMode::Tsv,
+                describe::Format::Json => cli::InputMode::Json,
+                describe::Format::Space => cli::InputMode::Line,
+                describe::Format::Parquet => cli::InputMode::Parquet,
+            }
+        } else {
+            args.input_mode.clone()
+        }
+    } else {
+        args.input_mode.clone()
+    };
+
     // Parquet mode: reads entire file upfront (not streaming)
-    if args.input_mode == cli::InputMode::Parquet {
+    if effective_mode == cli::InputMode::Parquet {
         #[cfg(feature = "parquet")]
         {
             run_parquet(&args, &mut exec);
@@ -120,7 +143,7 @@ fn main() {
         // Select record reader based on input mode and RS (which may be set in BEGIN)
         let reader: Box<dyn input::RecordReader> = {
             let rs = exec.get_var("RS");
-            if args.input_mode == cli::InputMode::Line && rs.len() > 1 {
+            if effective_mode == cli::InputMode::Line && rs.len() > 1 {
                 match input::regex_rs::RegexReader::new(&rs) {
                     Ok(r) => Box::new(r),
                     Err(e) => {
@@ -129,7 +152,7 @@ fn main() {
                     }
                 }
             } else {
-                match args.input_mode {
+                match effective_mode {
                     cli::InputMode::Csv  => Box::new(input::csv::CsvReader::comma()),
                     cli::InputMode::Tsv  => Box::new(input::csv::CsvReader::tab()),
                     cli::InputMode::Json => Box::new(input::json::JsonReader),

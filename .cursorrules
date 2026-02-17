@@ -13,8 +13,8 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~7,980 lines of Rust** across 26 source files
-- **257 tests**, zero warnings, clippy clean
+- **~8,400 lines of Rust** across 27 source files
+- **264 tests**, zero warnings, clippy clean
 - **Phases 0–8 complete**
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
@@ -23,7 +23,8 @@ incrementally as a learning exercise. The user values:
 
 ```
 main.rs               — CLI dispatch, record loop
-cli.rs                — argument parsing (-F, -f, -v, -i, -H, --repl)
+cli.rs                — argument parsing (-F, -f, -v, -i, -H, -d, --repl)
+describe.rs           — format sniffer, schema inference, suggestions, decompression
 lexer.rs              — tokenizer (Spanned tokens with O(1) line:col tracking)
 parser.rs             — recursive-descent → AST (Program, Rules, Exprs, Stmts)
 action/mod.rs         — Executor struct, public API, pattern matching
@@ -99,6 +100,9 @@ Phase 10: Code quality — split action.rs into action/ directory (mod/eval/stmt
   structured FkError with Display+Error, O(1) lexer spans, multiple BEGIN/END blocks,
   encapsulated Runtime (private arrays/variables), #[must_use] on Value, eliminated AST
   clones in match_rule hot path
+Phase 11: Describe mode (--describe / -d) — auto-detect format, infer schema, suggest
+  programs. Transparent decompression (.gz/.zst/.bz2/.xz/.lz4). Auto-detect input mode
+  from file extension (.csv → -i csv, .tsv.gz → -i tsv, etc.)
 
 ### Remaining
 - [ ] CI pipeline (build, test, lint, clippy)

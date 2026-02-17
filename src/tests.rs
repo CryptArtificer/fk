@@ -1937,3 +1937,87 @@ fn multiple_end_blocks() {
     assert_eq!(rt.get_var("a"), "30");
     assert_eq!(rt.get_var("b"), "60");
 }
+
+// --- describe / sniffer tests ---
+
+#[test]
+fn sniff_csv() {
+    let data = "name,age,score\nalice,30,95.5\nbob,25,82.0\n";
+    let mut reader = std::io::BufReader::new(data.as_bytes());
+    let schema = crate::describe::sniff(&mut reader);
+    assert_eq!(schema.format, crate::describe::Format::Csv);
+    assert!(schema.has_header);
+    assert_eq!(schema.columns, vec!["name", "age", "score"]);
+    assert_eq!(schema.types[0], crate::describe::ColType::String);
+    assert_eq!(schema.types[1], crate::describe::ColType::Int);
+    assert_eq!(schema.types[2], crate::describe::ColType::Float);
+}
+
+#[test]
+fn sniff_tsv() {
+    let data = "host\tstatus\tlatency\nweb1\t200\t12.5\nweb2\t500\t45.1\n";
+    let mut reader = std::io::BufReader::new(data.as_bytes());
+    let schema = crate::describe::sniff(&mut reader);
+    assert_eq!(schema.format, crate::describe::Format::Tsv);
+    assert!(schema.has_header);
+    assert_eq!(schema.columns.len(), 3);
+}
+
+#[test]
+fn sniff_json() {
+    let data = r#"{"user":"alice","score":95}
+{"user":"bob","score":82}
+"#;
+    let mut reader = std::io::BufReader::new(data.as_bytes());
+    let schema = crate::describe::sniff(&mut reader);
+    assert_eq!(schema.format, crate::describe::Format::Json);
+    assert!(!schema.has_header);
+    assert_eq!(schema.columns, vec!["user", "score"]);
+    assert_eq!(schema.types[0], crate::describe::ColType::String);
+    assert_eq!(schema.types[1], crate::describe::ColType::Int);
+}
+
+#[test]
+fn sniff_whitespace() {
+    let data = "1234 root 2.5\n5678 www 15.3\n";
+    let mut reader = std::io::BufReader::new(data.as_bytes());
+    let schema = crate::describe::sniff(&mut reader);
+    assert_eq!(schema.format, crate::describe::Format::Space);
+    assert!(!schema.has_header);
+}
+
+#[test]
+fn sniff_csv_no_header() {
+    let data = "10,20,30\n40,50,60\n70,80,90\n";
+    let mut reader = std::io::BufReader::new(data.as_bytes());
+    let schema = crate::describe::sniff(&mut reader);
+    assert_eq!(schema.format, crate::describe::Format::Csv);
+    assert!(!schema.has_header);
+    assert_eq!(schema.types, vec![
+        crate::describe::ColType::Int,
+        crate::describe::ColType::Int,
+        crate::describe::ColType::Int,
+    ]);
+}
+
+#[test]
+fn format_from_extension_works() {
+    assert_eq!(crate::describe::format_from_extension("data.csv"), Some(crate::describe::Format::Csv));
+    assert_eq!(crate::describe::format_from_extension("data.csv.gz"), Some(crate::describe::Format::Csv));
+    assert_eq!(crate::describe::format_from_extension("data.tsv.zst"), Some(crate::describe::Format::Tsv));
+    assert_eq!(crate::describe::format_from_extension("data.json"), Some(crate::describe::Format::Json));
+    assert_eq!(crate::describe::format_from_extension("data.jsonl.bz2"), Some(crate::describe::Format::Json));
+    assert_eq!(crate::describe::format_from_extension("data.parquet"), Some(crate::describe::Format::Parquet));
+    assert_eq!(crate::describe::format_from_extension("data.txt"), None);
+    assert_eq!(crate::describe::format_from_extension("data.log.gz"), None);
+}
+
+#[test]
+fn compressed_extension_detection() {
+    assert!(crate::describe::is_compressed("file.csv.gz"));
+    assert!(crate::describe::is_compressed("file.zst"));
+    assert!(crate::describe::is_compressed("file.bz2"));
+    assert!(crate::describe::is_compressed("file.xz"));
+    assert!(!crate::describe::is_compressed("file.csv"));
+    assert!(!crate::describe::is_compressed("file.txt"));
+}

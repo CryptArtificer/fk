@@ -20,6 +20,7 @@ pub struct Args {
     pub input_mode: InputMode,
     pub header_mode: bool,
     pub program_file: Option<String>,
+    pub describe: bool,
 }
 
 pub fn parse_args() -> Args {
@@ -33,6 +34,7 @@ pub fn parse_args() -> Args {
     let mut input_mode = InputMode::Line;
     let mut header_mode = false;
     let mut program_file: Option<String> = None;
+    let mut describe = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -87,6 +89,8 @@ pub fn parse_args() -> Args {
             program_file = Some(args[i].clone());
         } else if arg == "--repl" {
             repl = true;
+        } else if arg == "--describe" || arg == "-d" {
+            describe = true;
         } else if arg == "-H" || arg == "--header" {
             header_mode = true;
         } else if arg == "-i" {
@@ -124,11 +128,19 @@ pub fn parse_args() -> Args {
         }
     }
 
+    // In describe mode, all positional args are files, not a program
+    if describe
+        && let Some(p) = program.take() {
+            files.insert(0, p);
+    }
+
     let program = match program {
         Some(p) => p,
         None if repl => String::new(),
+        None if describe => String::new(),
         None => {
             eprintln!("usage: fk [-F fs] [-v var=val] [-f progfile] 'program' [file ...]");
+            eprintln!("       fk --describe [file ...]");
             eprintln!("       fk --repl");
             process::exit(1);
         }
@@ -143,6 +155,7 @@ pub fn parse_args() -> Args {
         input_mode,
         header_mode,
         program_file,
+        describe,
     }
 }
 

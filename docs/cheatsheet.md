@@ -5,6 +5,7 @@
 ```sh
 fk [options] 'program' [file ...]
 fk -f progfile [file ...]          # read program from file
+fk --describe [file ...]           # sniff format, show schema & examples
 fk --repl                          # interactive mode
 ```
 
@@ -18,6 +19,7 @@ fk --repl                          # interactive mode
 | `-i json` | JSON lines input mode |
 | `-i parquet` | Apache Parquet input |
 | `-H` | Header mode (first line → `HDR` array + named columns) |
+| `-d`, `--describe` | Describe mode: detect format, infer schema, suggest programs |
 | `--repl` | Interactive REPL |
 
 ## Program structure
