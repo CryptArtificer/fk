@@ -12,8 +12,8 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~8,400 lines of Rust** across 27 source files
-- **264 tests**, zero warnings, clippy clean
+- **~10,100 lines of Rust** across 27 source files
+- **329 tests**, zero warnings, clippy clean
 - **Phases 0–8 complete**
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
@@ -54,7 +54,8 @@ builtins/json.rs     — jpath() with JSON parser, path evaluator, iteration
 - `RecordReader` trait returns `Record { text, fields: Option<Vec<String>> }`
   so structured readers (CSV/JSON) can pre-split fields
 - Builtins that need runtime access (sub, gsub, split, close, gensub, jpath 3-arg, system,
-  stats, bitwise, asort) live in action/builtins_rt.rs; pure builtins go through
+  stats, bitwise, asort, keys, vals, uniq, inv, tidy, shuf, diff, inter, union,
+  seq, samp, slurp) live in action/builtins_rt.rs; pure builtins go through
   builtins::call_builtin
 - Lexer uses O(1) incremental line/col tracking; produces `Spanned` tokens (token + Span)
 - Parser/lexer errors are structured `FkError` (span + message, implements Display + Error)
@@ -102,8 +103,16 @@ Phase 10: Code quality — split action.rs into action/ directory (mod/eval/stmt
 Phase 11: Describe mode (--describe / -d) — auto-detect format, infer schema, suggest
   programs. Transparent decompression (.gz/.zst/.bz2/.xz/.lz4). Auto-detect input mode
   from file extension (.csv → -i csv, .tsv.gz → -i tsv, etc.)
+Phase 12: CSV robustness (single-pass RFC 4180, unclosed quote damage limiting),
+  CLI polish (--help, --version, -F/-i conflict check, file-only default to {print},
+  -v escape interpretation), performance fix (-F prevents auto-detect override)
+Phase 13: !/regex/ (bare regex in expression context), print arr (smart array dump),
+  keys(arr), vals(arr), join(arr) defaults to OFS.
+  Lodash-inspired array builtins: uniq, inv, tidy, shuf, diff, inter, union,
+  seq, samp. String: lpad, rpad. I/O: slurp.
 
 ### Remaining
+- [ ] Skip stdin when program has only BEGIN/END rules and no files (gawk behavior)
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 
@@ -117,6 +126,15 @@ fk is faster than awk (macOS system awk 20200816) on all benchmarks:
 - Computed regex: fk ~0.34s vs awk ~0.65s (fk 1.9× faster)
 - Tight loop (3x): fk ~0.70s vs awk ~0.75s (fk 1.1× faster)
 
+## Documentation & demos
+
+- `docs/fk.1` — full man page
+- `docs/cheatsheet.md` — quick reference
+- `docs/awk-vs-fk.md` — 100 awk programs compared with fk equivalents + poker showcase
+- `examples/` — 7 runnable example scripts (01-basics through 07-array-builtins)
+- `showcase/` — 8 polished demo scripts with colour output, shared test data (_helpers.sh),
+  and optional uplot dashboards (08)
+
 ## Tooling
 
 - `make` — shows all targets
@@ -129,3 +147,11 @@ fk is faster than awk (macOS system awk 20200816) on all benchmarks:
 ## Commit conventions
 
 - Commit in logical, coherent pieces (one feature or concern per commit)
+- Commit at sane intervals without being asked (do NOT push unless told)
+- NEVER add Co-authored-by trailers. Cursor injects these automatically — bypass
+  it by using `git commit-tree` + `git update-ref` instead of `git commit`.
+
+## Working style
+
+- Default to ADDING, not replacing. When asked to update, assume appending
+  unless explicitly told to replace. We can always remove later.
