@@ -3,7 +3,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 
 use crate::builtins::format_printf;
-use crate::parser::{Block, FuncDef, Redirect, Statement};
+use crate::parser::{Block, Expr, FuncDef, Redirect, Statement};
 use crate::runtime::Value;
 
 use super::{Executor, Signal, MAX_CALL_DEPTH};
@@ -23,7 +23,13 @@ impl<'a> Executor<'a> {
             Statement::Print(exprs, redir) => {
                 if redir.is_none() {
                     if exprs.len() == 1 {
-                        self.print_expr_fast(&exprs[0]);
+                        if let Expr::Var(name) = &exprs[0]
+                            && self.rt.has_array(name) {
+                                self.print_array(name);
+                        } else {
+                            self.print_expr_fast(&exprs[0]);
+                            let _ = self.stdout.write_all(self.rt.ors().as_bytes());
+                        }
                     } else {
                         let ofs = self.rt.ofs().to_owned();
                         for (i, e) in exprs.iter().enumerate() {
@@ -32,8 +38,8 @@ impl<'a> Executor<'a> {
                             }
                             self.print_expr_fast(e);
                         }
+                        let _ = self.stdout.write_all(self.rt.ors().as_bytes());
                     }
-                    let _ = self.stdout.write_all(self.rt.ors().as_bytes());
                 } else {
                     let ofs = self.rt.ofs().to_owned();
                     let ors = self.rt.ors().to_owned();

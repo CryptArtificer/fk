@@ -855,6 +855,13 @@ impl Parser {
                 let expr = self.parse_unary()?;
                 Ok(Expr::Field(Box::new(expr)))
             }
+            Token::Regex(pat) => {
+                self.advance();
+                Ok(Expr::Match(
+                    Box::new(Expr::Field(Box::new(Expr::NumberLit(0.0)))),
+                    Box::new(Expr::StringLit(pat)),
+                ))
+            }
             Token::Ident(name) => {
                 self.advance();
 

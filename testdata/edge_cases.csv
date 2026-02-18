@@ -1,0 +1,18 @@
+id,name,comment
+1,John Doe,"Simple entry"
+2,"Jane, A.","Contains comma in name"
+3,Bob Smith,"Unclosed quote example
+4,Alice,"Embedded ""double quotes"" inside"
+5, Charlie ," Leading and trailing spaces "
+6,,Missing name field
+7,Élodie,"UTF-8 accented character"
+8,=SUM(A1:A3),"Potential formula injection"
+9,"Multi
+Line","Comment with
+embedded newline"
+10,"Quoted, Name",Unquoted comment with, extra comma
+11,"Escaped ""quote"" test","All good here"
+12,"Mixed line ending test","CRLF follows"
+13,"Tab	Inside","Contains	tab character"
+14," ","Whitespace-only name"
+15,NULL,"Literal NULL string"

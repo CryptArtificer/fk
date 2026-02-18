@@ -222,10 +222,10 @@ impl<'a> Executor<'a> {
         }
     }
 
-    /// join(arr, sep) — join array values into a string.
+    /// join(arr [, sep]) — join array values into a string. Defaults to OFS.
     pub(crate) fn builtin_join(&mut self, args: &[Expr]) -> Value {
-        if args.len() < 2 {
-            eprintln!("fk: join requires 2 arguments (array, separator)");
+        if args.is_empty() {
+            eprintln!("fk: join requires at least 1 argument (array [, separator])");
             return Value::default();
         }
         let array_name = match &args[0] {
@@ -235,7 +235,11 @@ impl<'a> Executor<'a> {
                 return Value::default();
             }
         };
-        let sep = self.eval_string(&args[1]);
+        let sep = if args.len() >= 2 {
+            self.eval_string(&args[1])
+        } else {
+            self.rt.ofs().to_owned()
+        };
         let mut keys: Vec<String> = self.rt.array_keys(&array_name);
         keys.sort_by(|a, b| {
             a.parse::<f64>().unwrap_or(f64::MAX)
@@ -247,6 +251,281 @@ impl<'a> Executor<'a> {
             .map(|k| self.rt.get_array(&array_name, k))
             .collect();
         Value::from_string(parts.join(&sep))
+    }
+
+    /// keys(arr) — return sorted keys joined by ORS.
+    pub(crate) fn builtin_keys(&mut self, args: &[Expr]) -> Value {
+        if args.is_empty() {
+            eprintln!("fk: keys requires 1 argument (array)");
+            return Value::default();
+        }
+        let array_name = match &args[0] {
+            Expr::Var(name) => name.clone(),
+            _ => {
+                eprintln!("fk: keys: argument must be an array name");
+                return Value::default();
+            }
+        };
+        let mut keys = self.rt.array_keys(&array_name);
+        smart_sort_keys(&mut keys);
+        let sep = self.rt.ors().to_owned();
+        Value::from_string(keys.join(&sep))
+    }
+
+    /// vals(arr) — return values joined by ORS, sorted by key.
+    pub(crate) fn builtin_vals(&mut self, args: &[Expr]) -> Value {
+        if args.is_empty() {
+            eprintln!("fk: vals requires 1 argument (array)");
+            return Value::default();
+        }
+        let array_name = match &args[0] {
+            Expr::Var(name) => name.clone(),
+            _ => {
+                eprintln!("fk: vals: argument must be an array name");
+                return Value::default();
+            }
+        };
+        let mut keys = self.rt.array_keys(&array_name);
+        smart_sort_keys(&mut keys);
+        let vals: Vec<String> = keys.iter()
+            .map(|k| self.rt.get_array(&array_name, k))
+            .collect();
+        let sep = self.rt.ors().to_owned();
+        Value::from_string(vals.join(&sep))
+    }
+
+    /// Print array contents directly to stdout (used by `print arr`).
+    /// Sequential arrays (1..N) print values; associative arrays print keys.
+    pub(crate) fn print_array(&mut self, name: &str) {
+        let mut keys = self.rt.array_keys(name);
+        if keys.is_empty() { return; }
+        smart_sort_keys(&mut keys);
+        let sequential = is_sequential(&keys);
+        let ors = self.rt.ors().to_owned();
+        for (i, k) in keys.iter().enumerate() {
+            if i > 0 {
+                let _ = self.stdout.write_all(ors.as_bytes());
+            }
+            if sequential {
+                let v = self.rt.get_array(name, k);
+                let _ = self.stdout.write_all(v.as_bytes());
+            } else {
+                let _ = self.stdout.write_all(k.as_bytes());
+            }
+        }
+        let _ = self.stdout.write_all(ors.as_bytes());
+    }
+
+    /// uniq(arr) — deduplicate values, re-key 1..N. Returns new count.
+    pub(crate) fn builtin_uniq(&mut self, args: &[Expr]) -> Value {
+        let array_name = match extract_array_name(args) {
+            Some(n) => n,
+            None => { eprintln!("fk: uniq: argument must be an array name"); return Value::from_number(0.0); }
+        };
+        let mut keys = self.rt.array_keys(&array_name);
+        smart_sort_keys(&mut keys);
+        let mut seen = std::collections::HashSet::new();
+        let mut unique: Vec<String> = Vec::new();
+        for k in &keys {
+            let v = self.rt.get_array(&array_name, k);
+            if seen.insert(v.clone()) {
+                unique.push(v);
+            }
+        }
+        let count = unique.len();
+        self.rt.delete_array_all(&array_name);
+        for (i, v) in unique.into_iter().enumerate() {
+            self.rt.set_array(&array_name, &(i + 1).to_string(), &v);
+        }
+        Value::from_number(count as f64)
+    }
+
+    /// inv(arr) — swap keys and values in place. Returns count.
+    pub(crate) fn builtin_invert(&mut self, args: &[Expr]) -> Value {
+        let array_name = match extract_array_name(args) {
+            Some(n) => n,
+            None => { eprintln!("fk: inv: argument must be an array name"); return Value::from_number(0.0); }
+        };
+        let keys = self.rt.array_keys(&array_name);
+        let pairs: Vec<(String, String)> = keys.iter()
+            .map(|k| (k.clone(), self.rt.get_array(&array_name, k)))
+            .collect();
+        let count = pairs.len();
+        self.rt.delete_array_all(&array_name);
+        for (k, v) in pairs {
+            self.rt.set_array(&array_name, &v, &k);
+        }
+        Value::from_number(count as f64)
+    }
+
+    /// tidy(arr) — remove entries with empty or zero values. Returns remaining count.
+    pub(crate) fn builtin_compact(&mut self, args: &[Expr]) -> Value {
+        let array_name = match extract_array_name(args) {
+            Some(n) => n,
+            None => { eprintln!("fk: tidy: argument must be an array name"); return Value::from_number(0.0); }
+        };
+        let keys = self.rt.array_keys(&array_name);
+        let mut to_remove = Vec::new();
+        for k in &keys {
+            let v = self.rt.get_array_value(&array_name, k);
+            if !v.is_truthy() {
+                to_remove.push(k.clone());
+            }
+        }
+        for k in &to_remove {
+            self.rt.delete_array(&array_name, k);
+        }
+        Value::from_number(self.rt.array_len(&array_name) as f64)
+    }
+
+    /// shuf(arr) — randomize order, re-key 1..N. Returns count.
+    pub(crate) fn builtin_shuffle(&mut self, args: &[Expr]) -> Value {
+        let array_name = match extract_array_name(args) {
+            Some(n) => n,
+            None => { eprintln!("fk: shuf: argument must be an array name"); return Value::from_number(0.0); }
+        };
+        let keys = self.rt.array_keys(&array_name);
+        let mut vals: Vec<String> = keys.iter()
+            .map(|k| self.rt.get_array(&array_name, k))
+            .collect();
+        for i in (1..vals.len()).rev() {
+            let j = (builtins::math::rng_next() * (i + 1) as f64) as usize;
+            vals.swap(i, j.min(i));
+        }
+        let count = vals.len();
+        self.rt.delete_array_all(&array_name);
+        for (i, v) in vals.into_iter().enumerate() {
+            self.rt.set_array(&array_name, &(i + 1).to_string(), &v);
+        }
+        Value::from_number(count as f64)
+    }
+
+    /// diff(a, b) — remove from a any key present in b. Returns remaining count.
+    pub(crate) fn builtin_set_op(&mut self, op: &str, args: &[Expr]) -> Value {
+        if args.len() < 2 {
+            eprintln!("fk: {} requires 2 arguments (array, array)", op);
+            return Value::from_number(0.0);
+        }
+        let name_a = match &args[0] {
+            Expr::Var(n) => n.clone(),
+            _ => { eprintln!("fk: {}: arguments must be array names", op); return Value::from_number(0.0); }
+        };
+        let name_b = match &args[1] {
+            Expr::Var(n) => n.clone(),
+            _ => { eprintln!("fk: {}: arguments must be array names", op); return Value::from_number(0.0); }
+        };
+        let keys_a: std::collections::HashSet<String> = self.rt.array_keys(&name_a).into_iter().collect();
+        let keys_b: std::collections::HashSet<String> = self.rt.array_keys(&name_b).into_iter().collect();
+
+        match op {
+            "diff" => {
+                for k in keys_a.intersection(&keys_b) {
+                    self.rt.delete_array(&name_a, k);
+                }
+            }
+            "inter" => {
+                for k in keys_a.difference(&keys_b) {
+                    self.rt.delete_array(&name_a, &k.clone());
+                }
+            }
+            "union" => {
+                for k in &keys_b {
+                    if !keys_a.contains(k) {
+                        let v = self.rt.get_array(&name_b, k);
+                        self.rt.set_array(&name_a, k, &v);
+                    }
+                }
+            }
+            _ => {}
+        }
+        Value::from_number(self.rt.array_len(&name_a) as f64)
+    }
+
+    /// seq(arr, from, to) — fill arr with from..to, keyed 1..N. Returns count.
+    pub(crate) fn builtin_seq(&mut self, args: &[Expr]) -> Value {
+        if args.len() < 3 {
+            eprintln!("fk: seq requires 3 arguments (array, from, to)");
+            return Value::from_number(0.0);
+        }
+        let array_name = match &args[0] {
+            Expr::Var(n) => n.clone(),
+            _ => { eprintln!("fk: seq: first argument must be an array name"); return Value::from_number(0.0); }
+        };
+        let from = self.eval_expr(&args[1]).to_number() as i64;
+        let to = self.eval_expr(&args[2]).to_number() as i64;
+        self.rt.delete_array_all(&array_name);
+        let step: i64 = if from <= to { 1 } else { -1 };
+        let mut i = from;
+        let mut idx = 1;
+        loop {
+            self.rt.set_array(&array_name, &idx.to_string(), &i.to_string());
+            if i == to { break; }
+            i += step;
+            idx += 1;
+            if idx > 1_000_000 { break; }
+        }
+        Value::from_number(idx as f64)
+    }
+
+    /// samp(arr, n) — keep n random elements, re-key 1..n. Returns n.
+    pub(crate) fn builtin_sample(&mut self, args: &[Expr]) -> Value {
+        if args.len() < 2 {
+            eprintln!("fk: samp requires 2 arguments (array, n)");
+            return Value::from_number(0.0);
+        }
+        let array_name = match &args[0] {
+            Expr::Var(n) => n.clone(),
+            _ => { eprintln!("fk: samp: first argument must be an array name"); return Value::from_number(0.0); }
+        };
+        let n = self.eval_expr(&args[1]).to_number() as usize;
+        let keys = self.rt.array_keys(&array_name);
+        let mut vals: Vec<String> = keys.iter()
+            .map(|k| self.rt.get_array(&array_name, k))
+            .collect();
+        // Fisher-Yates partial shuffle for first n elements
+        let take = n.min(vals.len());
+        for i in 0..take {
+            let j = i + (builtins::math::rng_next() * (vals.len() - i) as f64) as usize;
+            let j = j.min(vals.len() - 1);
+            vals.swap(i, j);
+        }
+        vals.truncate(take);
+        self.rt.delete_array_all(&array_name);
+        for (i, v) in vals.into_iter().enumerate() {
+            self.rt.set_array(&array_name, &(i + 1).to_string(), &v);
+        }
+        Value::from_number(take as f64)
+    }
+
+    /// slurp(file [, arr]) — read file into string, or into arr lines. Returns string or line count.
+    pub(crate) fn builtin_slurp(&mut self, args: &[Expr]) -> Value {
+        if args.is_empty() {
+            eprintln!("fk: slurp requires at least 1 argument (filename)");
+            return Value::default();
+        }
+        let filename = self.eval_string(&args[0]);
+        let contents = match std::fs::read_to_string(&filename) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("fk: slurp: {}: {}", filename, e);
+                return if args.len() >= 2 { Value::from_number(0.0) } else { Value::default() };
+            }
+        };
+        if args.len() >= 2 {
+            let array_name = match &args[1] {
+                Expr::Var(n) => n.clone(),
+                _ => { eprintln!("fk: slurp: second argument must be an array name"); return Value::from_number(0.0); }
+            };
+            self.rt.delete_array_all(&array_name);
+            let mut count = 0;
+            for line in contents.lines() {
+                count += 1;
+                self.rt.set_array(&array_name, &count.to_string(), line);
+            }
+            Value::from_number(count as f64)
+        } else {
+            Value::from_string(contents)
+        }
     }
 
     /// typeof(x) — return type name of a variable.
@@ -522,4 +801,33 @@ impl<'a> Executor<'a> {
             Err(_) => Value::from_number(-1.0),
         }
     }
+}
+
+fn extract_array_name(args: &[Expr]) -> Option<String> {
+    if args.is_empty() { return None; }
+    match &args[0] {
+        Expr::Var(name) => Some(name.clone()),
+        _ => None,
+    }
+}
+
+/// Sort keys numeric-first (1, 2, 10 before "apple", "banana").
+fn smart_sort_keys(keys: &mut [String]) {
+    keys.sort_by(|a, b| {
+        let na = a.parse::<f64>();
+        let nb = b.parse::<f64>();
+        match (na, nb) {
+            (Ok(x), Ok(y)) => x.partial_cmp(&y).unwrap_or(std::cmp::Ordering::Equal),
+            (Ok(_), Err(_)) => std::cmp::Ordering::Less,
+            (Err(_), Ok(_)) => std::cmp::Ordering::Greater,
+            (Err(_), Err(_)) => a.cmp(b),
+        }
+    });
+}
+
+/// Check if sorted keys are sequential 1..N.
+fn is_sequential(sorted_keys: &[String]) -> bool {
+    sorted_keys.iter().enumerate().all(|(i, k)| {
+        k.parse::<usize>().is_ok_and(|n| n == i + 1)
+    })
 }

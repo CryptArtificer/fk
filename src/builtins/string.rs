@@ -84,6 +84,30 @@ pub fn call(name: &str, args: &[String]) -> String {
             let n = args.first().map(|s| to_number(s) as i64).unwrap_or(0);
             format!("{:#x}", n)
         }
+        "lpad" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            let width = args.get(1).map(|s| to_number(s) as usize).unwrap_or(0);
+            let pad = args.get(2).and_then(|s| s.chars().next()).unwrap_or(' ');
+            let chars: usize = s.chars().count();
+            if chars >= width { s.to_string() } else {
+                let mut out = String::with_capacity(width);
+                for _ in 0..(width - chars) { out.push(pad); }
+                out.push_str(s);
+                out
+            }
+        }
+        "rpad" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            let width = args.get(1).map(|s| to_number(s) as usize).unwrap_or(0);
+            let pad = args.get(2).and_then(|s| s.chars().next()).unwrap_or(' ');
+            let chars: usize = s.chars().count();
+            if chars >= width { s.to_string() } else {
+                let mut out = String::with_capacity(width);
+                out.push_str(s);
+                for _ in 0..(width - chars) { out.push(pad); }
+                out
+            }
+        }
         _ => String::new(),
     }
 }

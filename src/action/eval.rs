@@ -129,6 +129,16 @@ impl<'a> Executor<'a> {
                     "typeof" => return self.builtin_typeof(args),
                     "asort" => return self.builtin_asort(args, false),
                     "asorti" => return self.builtin_asort(args, true),
+                    "keys" => return self.builtin_keys(args),
+                    "vals" => return self.builtin_vals(args),
+                    "uniq" => return self.builtin_uniq(args),
+                    "inv" => return self.builtin_invert(args),
+                    "tidy" => return self.builtin_compact(args),
+                    "shuf" => return self.builtin_shuffle(args),
+                    "diff" | "inter" | "union" => return self.builtin_set_op(name, args),
+                    "seq" => return self.builtin_seq(args),
+                    "samp" => return self.builtin_sample(args),
+                    "slurp" => return self.builtin_slurp(args),
                     "and" | "or" | "xor" | "lshift" | "rshift" | "compl" => {
                         return self.builtin_bitwise(name, args);
                     }

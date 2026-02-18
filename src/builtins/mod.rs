@@ -65,7 +65,8 @@ pub fn call_builtin(name: &str, args: &[String]) -> String {
     match name {
         "length" | "substr" | "index" | "tolower" | "toupper" |
         "trim" | "ltrim" | "rtrim" | "startswith" | "endswith" |
-        "repeat" | "reverse" | "chr" | "ord" | "hex" => string::call(name, args),
+        "repeat" | "reverse" | "chr" | "ord" | "hex" |
+        "lpad" | "rpad" => string::call(name, args),
         "int" | "sin" | "cos" | "sqrt" | "log" | "exp" |
         "atan2" | "abs" | "ceil" | "floor" | "round" | "log2" | "log10" |
         "min" | "max" | "rand" | "srand" => math::call(name, args),

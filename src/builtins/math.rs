@@ -14,7 +14,7 @@ fn splitmix64(x: u64) -> u64 {
     z ^ (z >> 31)
 }
 
-fn rng_next() -> f64 {
+pub fn rng_next() -> f64 {
     RNG_STATE.with(|state| {
         RNG_SEEDED.with(|seeded| {
             if !seeded.get() {

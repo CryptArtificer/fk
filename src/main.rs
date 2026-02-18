@@ -111,8 +111,12 @@ fn main() {
         process::exit(code);
     }
 
-    // Auto-detect input mode from first file extension when user didn't specify -i
-    let effective_mode = if args.input_mode == cli::InputMode::Line && !args.files.is_empty() {
+    // Auto-detect input mode from first file extension when user didn't
+    // specify -i *and* didn't specify -F (explicit -F implies line mode).
+    let effective_mode = if args.input_mode == cli::InputMode::Line
+        && args.field_separator.is_none()
+        && !args.files.is_empty()
+    {
         if let Some(fmt) = describe::format_from_extension(&args.files[0]) {
             match fmt {
                 describe::Format::Csv => cli::InputMode::Csv,

@@ -1,4 +1,5 @@
 use crate::{action, input, lexer, parser, runtime};
+use crate::input::RecordReader;
 
 /// Helper: parse and run a program, return the runtime state for inspection.
 fn eval(program_text: &str, input_lines: &[&str]) -> runtime::Runtime {
@@ -2020,4 +2021,314 @@ fn compressed_extension_detection() {
     assert!(crate::describe::is_compressed("file.xz"));
     assert!(!crate::describe::is_compressed("file.csv"));
     assert!(!crate::describe::is_compressed("file.txt"));
+}
+
+// ── Compressed CSV integration test ─────────────────────────────
+
+#[test]
+fn compressed_csv_gz_reads_correctly() {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("testdata")
+        .join("problematic.csv.gz");
+    if !fixture.exists() {
+        panic!("testdata/problematic.csv.gz not found — run: cp ~/Desktop/problematic.csv.gz testdata/");
+    }
+
+    let path = fixture.to_str().unwrap();
+    let reader_box = crate::describe::open_maybe_compressed(path)
+        .expect("failed to decompress .csv.gz");
+    let mut buf = std::io::BufReader::new(reader_box);
+    let mut csv = crate::input::csv::CsvReader::comma();
+
+    let mut records: Vec<Vec<String>> = Vec::new();
+    while let Some(rec) = csv.next_record(&mut buf).expect("read error") {
+        records.push(rec.fields.unwrap());
+    }
+
+    // Header row present
+    assert_eq!(records[0], vec!["id", "name", "comment"]);
+
+    // Spot-check well-formed rows
+    let row1 = records.iter().find(|r| r[0] == "1").unwrap();
+    assert_eq!(row1[1], "John Doe");
+    assert_eq!(row1[2], "Simple entry");
+
+    let row2 = records.iter().find(|r| r[0] == "2").unwrap();
+    assert_eq!(row2[1], "Jane, A.");
+
+    let row7 = records.iter().find(|r| r[0] == "7").unwrap();
+    assert_eq!(row7[1], "Élodie");
+
+    // Multi-line field survived decompression
+    let row9 = records.iter().find(|r| r[0] == "9").unwrap();
+    assert_eq!(row9[1], "Multi\nLine");
+    assert_eq!(row9[2], "Comment with\nembedded newline");
+
+    // Escaped quotes survived decompression
+    let row11 = records.iter().find(|r| r[0] == "11").unwrap();
+    assert_eq!(row11[1], "Escaped \"quote\" test");
+
+    // Rows after the malformed unclosed-quote row are intact
+    let row15 = records.iter().find(|r| r[0] == "15").unwrap();
+    assert_eq!(row15[1], "NULL");
+    assert_eq!(row15[2], "Literal NULL string");
+}
+
+#[test]
+fn compressed_csv_gz_auto_detects_format() {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("testdata")
+        .join("problematic.csv.gz");
+    if !fixture.exists() {
+        return;
+    }
+    let path = fixture.to_str().unwrap();
+    let fmt = crate::describe::format_from_extension(path);
+    assert_eq!(fmt, Some(crate::describe::Format::Csv));
+    assert!(crate::describe::is_compressed(path));
+}
+
+#[test]
+fn edge_csv_file_reads_correctly() {
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("testdata")
+        .join("edge_cases.csv");
+    if !fixture.exists() {
+        panic!("testdata/edge_cases.csv not found");
+    }
+
+    let path = fixture.to_str().unwrap();
+    let file = std::fs::File::open(path).expect("open edge_cases.csv");
+    let mut buf = std::io::BufReader::new(file);
+    let mut csv = crate::input::csv::CsvReader::comma();
+
+    let mut records: Vec<Vec<String>> = Vec::new();
+    while let Some(rec) = csv.next_record(&mut buf).expect("read error") {
+        records.push(rec.fields.unwrap());
+    }
+
+    assert_eq!(records[0], vec!["id", "name", "comment"]);
+
+    let ids: Vec<&str> = records.iter().map(|r| r[0].as_str()).collect();
+    assert!(ids.contains(&"id"));
+    assert!(ids.contains(&"1"));
+    assert!(ids.contains(&"2"));
+    // Row 3 merges with row 4 (unclosed quote), so "4" won't be a standalone id
+    assert!(ids.contains(&"5"));
+    assert!(ids.contains(&"9"));
+    assert!(ids.contains(&"15"));
+}
+
+// --- keys(), vals(), print arr ---
+
+#[test]
+fn keys_returns_sorted_keys() {
+    let rt = eval(
+        r#"BEGIN { a["cherry"]=1; a["apple"]=2; a["banana"]=3; result = keys(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "apple\nbanana\ncherry");
+}
+
+#[test]
+fn keys_numeric_keys_sorted_numerically() {
+    let rt = eval(
+        r#"BEGIN { a[10]=1; a[2]=1; a[1]=1; result = keys(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "1\n2\n10");
+}
+
+#[test]
+fn vals_returns_values_sorted_by_key() {
+    let rt = eval(
+        r#"BEGIN { a[1]="x"; a[2]="y"; a[3]="z"; result = vals(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "x\ny\nz");
+}
+
+#[test]
+fn vals_associative_keys_sorted_alphabetically() {
+    let rt = eval(
+        r#"BEGIN { a["b"]="two"; a["a"]="one"; a["c"]="three"; result = vals(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "one\ntwo\nthree");
+}
+
+#[test]
+fn negated_bare_regex_pattern() {
+    let rt = eval(
+        r#"!/^#/ { result = result $0 "," }"#,
+        &["# comment", "root", "nobody"],
+    );
+    assert_eq!(rt.get_var("result"), "root,nobody,");
+}
+
+#[test]
+fn bare_regex_in_expression_context() {
+    let rt = eval(
+        r#"{ if (/^ok/) result = result $0 "," }"#,
+        &["ok fine", "nope", "ok great"],
+    );
+    assert_eq!(rt.get_var("result"), "ok fine,ok great,");
+}
+
+// --- uniq, invert, compact ---
+
+#[test]
+fn uniq_deduplicates_values() {
+    let rt = eval(
+        r#"{ a[NR]=$1 } END { n=uniq(a); result=n ":" a[1] "," a[2] "," a[3] }"#,
+        &["x", "y", "x", "z", "y"],
+    );
+    assert_eq!(rt.get_var("result"), "3:x,y,z");
+}
+
+#[test]
+fn invert_swaps_keys_values() {
+    let rt = eval(
+        r#"BEGIN { a["k1"]="v1"; a["k2"]="v2"; inv(a); result=a["v1"] "," a["v2"] }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "k1,k2");
+}
+
+#[test]
+fn compact_removes_falsy() {
+    let rt = eval(
+        r#"BEGIN { a[1]="hi"; a[2]=""; a[3]=0; a[4]="ok"; n=tidy(a); result=n }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "2");
+}
+
+// --- set operations ---
+
+#[test]
+fn diff_removes_common_keys() {
+    let rt = eval(
+        r#"BEGIN { a["x"]=1; a["y"]=1; a["z"]=1; b["y"]=1; diff(a,b); result=keys(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "x\nz");
+}
+
+#[test]
+fn inter_keeps_common_keys() {
+    let rt = eval(
+        r#"BEGIN { a["x"]=1; a["y"]=1; a["z"]=1; b["y"]=1; b["z"]=1; inter(a,b); result=keys(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "y\nz");
+}
+
+#[test]
+fn union_merges_keys() {
+    let rt = eval(
+        r#"BEGIN { a["x"]=1; b["y"]=2; b["z"]=3; union(a,b); result=keys(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "x\ny\nz");
+}
+
+// --- seq, sample ---
+
+#[test]
+fn seq_fills_range() {
+    let rt = eval(
+        r#"BEGIN { n=seq(a,3,7); result=n ":" join(a,",") }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "5:3,4,5,6,7");
+}
+
+#[test]
+fn seq_reverse_range() {
+    let rt = eval(
+        r#"BEGIN { seq(a,5,1); result=join(a,",") }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "5,4,3,2,1");
+}
+
+#[test]
+fn sample_reduces_array() {
+    let rt = eval(
+        r#"BEGIN { srand(42); seq(a,1,100); n=samp(a,5); result=n }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "5");
+}
+
+// --- lpad, rpad ---
+
+#[test]
+fn lpad_pads_left() {
+    let rt = eval(
+        r#"BEGIN { result = lpad("hi", 6, ".") }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "....hi");
+}
+
+#[test]
+fn rpad_pads_right() {
+    let rt = eval(
+        r#"BEGIN { result = rpad("hi", 6) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "hi    ");
+}
+
+#[test]
+fn lpad_no_truncate() {
+    let rt = eval(
+        r#"BEGIN { result = lpad("hello", 3) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "hello");
+}
+
+// --- shuffle ---
+
+#[test]
+fn shuffle_preserves_elements() {
+    let rt = eval(
+        r#"BEGIN { srand(1); a[1]="a"; a[2]="b"; a[3]="c"; shuf(a); result=length(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "3");
+}
+
+// --- slurp ---
+
+#[test]
+fn slurp_into_string() {
+    let rt = eval(
+        r#"BEGIN { s = slurp("/etc/shells"); result = (length(s) > 0) ? "ok" : "empty" }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "ok");
+}
+
+#[test]
+fn slurp_into_array() {
+    let rt = eval(
+        r#"BEGIN { n = slurp("/etc/shells", a); result = (n > 0) ? "ok" : "empty" }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "ok");
+}
+
+// --- join defaults to OFS ---
+
+#[test]
+fn join_defaults_to_ofs() {
+    let rt = eval(
+        r#"BEGIN { OFS=","; a[1]="x"; a[2]="y"; a[3]="z"; result=join(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "x,y,z");
 }
