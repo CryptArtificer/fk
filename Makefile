@@ -96,7 +96,7 @@ $(BENCH_DATA)/large.csv:
 
 bench-compare: release bench-data
 	@$(CARGO) build --release 2>/dev/null || true
-	@./scripts/bench-compare.sh $(BINARY) $(BENCH_DATA)/large.csv $(BENCH_LINES)
+	@./benches/compare.sh $(BINARY) $(BENCH_DATA)/large.csv $(BENCH_LINES)
 
 # ── Install / Uninstall ─────────────────────────────────────────
 
@@ -135,12 +135,12 @@ suite-perf: release
 .PHONY: examples showcase
 
 examples: release
-	@for f in examples/*.sh; do \
+	@for f in examples/0*.sh; do \
 		echo "" && echo "═══ Running $$f ═══" && echo "" && bash "$$f"; \
 	done
 
 showcase: release
-	@for f in showcase/[0-9]*.sh; do \
+	@for f in examples/1*.sh; do \
 		echo "" && echo "═══ Running $$f ═══" && echo "" && bash "$$f"; \
 	done
 
@@ -249,8 +249,8 @@ help:
 	@echo "Run:"
 	@echo "  make repl         Start interactive REPL"
 	@echo "  make run ARGS=..  Run fk with arguments"
-	@echo "  make showcase     Run showcase scripts (showcase/)"
-	@echo "  make examples     Run basic example scripts (examples/)"
+	@echo "  make examples     Run tutorial scripts (examples/01-07)"
+	@echo "  make showcase     Run showcase scripts (examples/11-18)"
 	@echo ""
 	@echo "Other:"
 	@echo "  make ci           Full CI check (fmt, clippy, test)"

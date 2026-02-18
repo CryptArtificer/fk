@@ -440,7 +440,7 @@ mod tests {
         assert_eq!(fields, vec!["a", "b\tc", "d"]);
     }
 
-    // ── Full edge-case CSV (same content as testdata/edge_cases.csv) ────
+    // ── Full edge-case CSV (same content as tests/data/edge_cases.csv) ────
 
     fn read_all_records(csv: &str) -> Vec<Vec<String>> {
         let mut cursor = Cursor::new(csv.as_bytes());

@@ -2028,10 +2028,10 @@ fn compressed_extension_detection() {
 #[test]
 fn compressed_csv_gz_reads_correctly() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("testdata")
+        .join("tests/data")
         .join("problematic.csv.gz");
     if !fixture.exists() {
-        panic!("testdata/problematic.csv.gz not found — run: cp ~/Desktop/problematic.csv.gz testdata/");
+        panic!("tests/data/problematic.csv.gz not found");
     }
 
     let path = fixture.to_str().unwrap();
@@ -2077,7 +2077,7 @@ fn compressed_csv_gz_reads_correctly() {
 #[test]
 fn compressed_csv_gz_auto_detects_format() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("testdata")
+        .join("tests/data")
         .join("problematic.csv.gz");
     if !fixture.exists() {
         return;
@@ -2091,10 +2091,10 @@ fn compressed_csv_gz_auto_detects_format() {
 #[test]
 fn edge_csv_file_reads_correctly() {
     let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("testdata")
+        .join("tests/data")
         .join("edge_cases.csv");
     if !fixture.exists() {
-        panic!("testdata/edge_cases.csv not found");
+        panic!("tests/data/edge_cases.csv not found");
     }
 
     let path = fixture.to_str().unwrap();

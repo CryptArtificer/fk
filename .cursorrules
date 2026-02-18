@@ -168,9 +168,7 @@ fk is faster than awk (macOS system awk 20200816) on all benchmarks:
 - `docs/fk.1` — full man page
 - `docs/cheatsheet.md` — quick reference
 - `docs/awk-vs-fk.md` — 100 awk programs compared with fk equivalents + poker showcase
-- `examples/` — 7 runnable example scripts (01-basics through 07-array-builtins)
-- `showcase/` — 8 polished demo scripts with colour output, shared test data (_helpers.sh),
-  and optional uplot dashboards (08)
+- `examples/` — tutorials (01-07) and showcases (11-18) with shared _helpers.sh
 
 ## Tooling
 
