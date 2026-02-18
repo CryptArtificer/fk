@@ -434,87 +434,6 @@ pub fn print_description(schema: &Schema, row_count: Option<usize>) {
     eprintln!();
 }
 
-/// Print suggested fk programs.
-pub fn print_suggestions(schema: &Schema, file_hint: &str) {
-    let flags = build_flags(schema);
-    let file_part = if file_hint.is_empty() { String::new() } else { format!(" {}", file_hint) };
-
-    // Find interesting columns: use lowest-cardinality string for categories,
-    // prefer floats for aggregation, last numeric for "measure" heuristic.
-    let best_str = pick_best_category(schema);
-    let first_float = schema.columns.iter().enumerate()
-        .find(|(i, _)| schema.types.get(*i) == Some(&ColType::Float))
-        .map(|(_, c)| c.as_str());
-    let last_num = schema.columns.iter().enumerate()
-        .rev()
-        .find(|(i, _)| matches!(schema.types.get(*i), Some(ColType::Int | ColType::Float)))
-        .map(|(_, c)| c.as_str());
-    let first_num = first_float.or(last_num);
-    let second_str = schema.columns.iter().enumerate()
-        .filter(|(i, _)| schema.types.get(*i) == Some(&ColType::String))
-        .map(|(_, c)| c.as_str())
-        .find(|s| Some(*s) != best_str);
-
-    eprintln!("  \x1b[1mexamples:\x1b[0m");
-    eprintln!();
-
-    // 1. Select columns
-    if schema.columns.len() >= 2 {
-        let c1 = col_ref(&schema.columns[0]);
-        let c2 = col_ref(&schema.columns[1]);
-        suggestion(&flags, &format!("{{ print {}, {} }}", c1, c2), "select columns", &file_part);
-    }
-
-    // 2. Filter rows
-    if let Some(s) = best_str {
-        let cr = col_ref(s);
-        suggestion(&flags, &format!("{} ~ /pattern/", cr), "filter rows (regex)", &file_part);
-    }
-
-    // 3. Count rows
-    suggestion(&flags, "{ n++ } END { print n }", "count rows", &file_part);
-
-    // 4. Sum a numeric column
-    if let Some(n) = first_num {
-        let cr = col_ref(n);
-        suggestion(&flags, &format!("{{ s += {} }} END {{ print s }}", cr), &format!("sum {}", n), &file_part);
-    }
-
-    // 5. Group by
-    if let (Some(s), Some(n)) = (best_str, first_num) {
-        let sr = col_ref(s);
-        let nr = col_ref(n);
-        suggestion(&flags,
-            &format!("{{ a[{}] += {} }} END {{ for (k in a) print k, a[k] }}", sr, nr),
-            &format!("group by {}", s), &file_part);
-    }
-
-    // 6. Statistics
-    if let Some(n) = first_num {
-        let nr = col_ref(n);
-        suggestion(&flags,
-            &format!("{{ a[NR] = {} }} END {{ printf \"mean=%.2f median=%.2f p95=%.2f\\n\", mean(a), median(a), p(a,95) }}", nr),
-            &format!("stats on {}", n), &file_part);
-    }
-
-    // 7. Unique values
-    if let Some(s) = best_str {
-        let sr = col_ref(s);
-        suggestion(&flags, &format!("{{ a[{}] }} END {{ for (k in a) print k }}", sr),
-            &format!("unique {}", s), &file_part);
-    }
-
-    // 8. Top N by frequency
-    if let Some(s) = second_str.or(best_str) {
-        let sr = col_ref(s);
-        suggestion(&flags,
-            &format!("{{ a[{}]++ }} END {{ for (k in a) print a[k], k }}", sr),
-            &format!("frequency of {} (pipe to sort -rn | head)", s), &file_part);
-    }
-
-    eprintln!();
-}
-
 fn build_flags(schema: &Schema) -> String {
     let mut parts = Vec::new();
     if schema.has_header {
@@ -529,13 +448,6 @@ fn build_flags(schema: &Schema) -> String {
     } else {
         parts.join(" ")
     }
-}
-
-fn suggestion(flags: &str, program: &str, comment: &str, file_part: &str) {
-    let flag_part = if flags.is_empty() { String::new() } else { format!(" {}", flags) };
-    eprintln!("  \x1b[32mfk{} '{}'{}\x1b[0m", flag_part, program, file_part);
-    eprintln!("  \x1b[90m# {}\x1b[0m", comment);
-    eprintln!();
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -764,8 +676,6 @@ pub fn run_describe(files: &[String], suggest: bool) {
         print_description(&schema, None);
         if suggest {
             print_suggest(&schema, "");
-        } else {
-            print_suggestions(&schema, "");
         }
     } else {
         for path in files {
@@ -785,8 +695,6 @@ pub fn run_describe(files: &[String], suggest: bool) {
             print_description(&schema, None);
             if suggest {
                 print_suggest(&schema, path);
-            } else {
-                print_suggestions(&schema, path);
             }
         }
     }
