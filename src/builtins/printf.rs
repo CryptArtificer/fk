@@ -86,7 +86,39 @@ pub fn format_printf(fmt: &str, args: &[String]) -> String {
             }
             let conv = chars[i];
             i += 1;
-            let flags = parse_flags(&spec);
+
+            // Resolve dynamic width/precision: %*d, %.*f, %*.*f
+            let resolved = if spec.contains('*') {
+                let mut buf = String::new();
+                let mut after_dot = false;
+                for ch in spec.chars() {
+                    if ch == '.' {
+                        after_dot = true;
+                        buf.push('.');
+                    } else if ch == '*' {
+                        let w = args.get(arg_idx).map(|s| to_number(s)).unwrap_or(0.0) as i64;
+                        arg_idx += 1;
+                        if after_dot {
+                            if w >= 0 {
+                                buf.push_str(&w.to_string());
+                            } else {
+                                buf.pop(); // negative precision: drop the '.'
+                            }
+                        } else if w < 0 {
+                            buf.push('-');
+                            buf.push_str(&(-w).to_string());
+                        } else {
+                            buf.push_str(&w.to_string());
+                        }
+                    } else {
+                        buf.push(ch);
+                    }
+                }
+                buf
+            } else {
+                spec.clone()
+            };
+            let flags = parse_flags(&resolved);
             match conv {
                 '%' => result.push('%'),
                 'd' | 'i' => {

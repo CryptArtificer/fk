@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use crate::builtins::{self, format_printf};
 use crate::parser::{BinOp, Expr};
 use crate::runtime::Value;
@@ -58,10 +60,20 @@ impl<'a> Executor<'a> {
                 bool_val(!self.regex_is_match(&pat, &val))
             }
             Expr::Concat(left, right) => {
-                let mut l = self.eval_expr(left).into_string();
+                let l = self.eval_expr(left);
                 let r = self.eval_expr(right);
-                r.write_to_string(&mut l);
-                Value::from_string(l)
+                let convfmt = self.rt.convfmt();
+                let mut s = if l.is_numeric_only() && convfmt != "%.6g" {
+                    builtins::format_number_fmt(l.to_number(), convfmt)
+                } else {
+                    l.into_string()
+                };
+                if r.is_numeric_only() && convfmt != "%.6g" {
+                    s.push_str(&builtins::format_number_fmt(r.to_number(), convfmt));
+                } else {
+                    r.write_to_string(&mut s);
+                }
+                Value::from_string(s)
             }
             Expr::Assign(target, value) => {
                 let val = self.eval_expr(value);
@@ -202,6 +214,14 @@ impl<'a> Executor<'a> {
                 return;
         }
         let val = self.eval_expr(expr);
+        if val.is_numeric_only() {
+            let ofmt = self.rt.ofmt();
+            if ofmt != "%.6g" {
+                let s = builtins::format_number_fmt(val.to_number(), ofmt);
+                let _ = self.stdout.write_all(s.as_bytes());
+                return;
+            }
+        }
         val.write_to(&mut self.stdout);
     }
 

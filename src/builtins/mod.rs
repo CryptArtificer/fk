@@ -42,6 +42,15 @@ pub fn to_number(s: &str) -> f64 {
     }
 }
 
+/// Format a number using a printf-style format string (OFMT/CONVFMT).
+/// Fast path for the default "%.6g".
+pub fn format_number_fmt(n: f64, fmt: &str) -> String {
+    if fmt == "%.6g" {
+        return format_number(n);
+    }
+    printf::format_printf(fmt, &[format_number(n)])
+}
+
 /// Format a number for output (integer form when exact, otherwise up to 6 decimals).
 pub fn format_number(n: f64) -> String {
     if n.is_nan() {

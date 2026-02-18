@@ -235,9 +235,13 @@ impl<'a> Executor<'a> {
             None if !self.info.needs_fields && !self.info.needs_nf => {
                 self.rt.set_record_nosplit(&record.text);
             }
-            // A3 (capped split) deferred: $0 reconstruction requires all
-            // fields, so max_field_hint is only safe once we store
-            // record_text alongside the capped field vec.
+            None if !self.info.needs_nf => {
+                if let Some(limit) = self.info.max_field {
+                    self.rt.set_record_capped(&record.text, limit);
+                } else {
+                    self.rt.set_record(&record.text);
+                }
+            }
             None => self.rt.set_record(&record.text),
         }
 
@@ -308,7 +312,7 @@ pub(crate) fn is_valid_ident(s: &str) -> bool {
 pub(crate) fn is_builtin_var(name: &str) -> bool {
     matches!(name,
         "NR" | "NF" | "FNR" | "FS" | "OFS" | "RS" | "ORS" | "SUBSEP" |
-        "OFMT" | "FILENAME" | "RSTART" | "RLENGTH" | "ARGC" | "ARGV" |
+        "OFMT" | "CONVFMT" | "FILENAME" | "RSTART" | "RLENGTH" | "ARGC" | "ARGV" |
         "ENVIRON" | "BEGIN" | "END" | "HDR"
     )
 }

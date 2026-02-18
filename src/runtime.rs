@@ -93,6 +93,12 @@ impl Value {
         self.flags & NUM_VALID != 0
     }
 
+    /// True if this value is a pure number with no string representation
+    /// (needs OFMT/CONVFMT formatting when converted to string).
+    pub fn is_numeric_only(&self) -> bool {
+        self.flags == NUM_VALID
+    }
+
     /// Check if this value looks numeric (for comparison semantics).
     pub fn looks_numeric(&self) -> bool {
         if self.flags & NUM_VALID != 0 { return true; }
@@ -111,7 +117,8 @@ pub struct Runtime {
     arrays: HashMap<String, HashMap<String, Value>>,
     pub(crate) fields: Vec<String>,
     record_text: String,
-    nosplit: bool,
+    record_text_valid: bool,
+    fields_dirty: bool,
     nr: u64,
     nf: usize,
     fnr: u64,
@@ -121,12 +128,13 @@ pub struct Runtime {
     ors: String,
     subsep: String,
     ofmt: String,
+    convfmt: String,
     filename: String,
 }
 
 /// Names that are stored as dedicated fields rather than in the HashMap.
 const INTERNED_NAMES: &[&str] = &[
-    "FILENAME", "FNR", "FS", "NF", "NR", "OFS", "OFMT", "ORS", "RS", "SUBSEP",
+    "CONVFMT", "FILENAME", "FNR", "FS", "NF", "NR", "OFS", "OFMT", "ORS", "RS", "SUBSEP",
 ];
 
 impl Default for Runtime {
@@ -142,7 +150,8 @@ impl Runtime {
             arrays: HashMap::new(),
             fields: Vec::new(),
             record_text: String::new(),
-            nosplit: false,
+            record_text_valid: false,
+            fields_dirty: false,
             nr: 0,
             nf: 0,
             fnr: 0,
@@ -152,6 +161,7 @@ impl Runtime {
             ors: "\n".to_string(),
             subsep: "\x1c".to_string(),
             ofmt: "%.6g".to_string(),
+            convfmt: "%.6g".to_string(),
             filename: String::new(),
         }
     }
@@ -168,6 +178,7 @@ impl Runtime {
             "ORS" => Value::from_str_ref(&self.ors),
             "SUBSEP" => Value::from_str_ref(&self.subsep),
             "OFMT" => Value::from_str_ref(&self.ofmt),
+            "CONVFMT" => Value::from_str_ref(&self.convfmt),
             "FILENAME" => Value::from_str_ref(&self.filename),
             _ => self.variables.get(name).cloned().unwrap_or_default(),
         }
@@ -185,6 +196,7 @@ impl Runtime {
             "ORS" => self.ors = val.into_string(),
             "SUBSEP" => self.subsep = val.into_string(),
             "OFMT" => self.ofmt = val.into_string(),
+            "CONVFMT" => self.convfmt = val.into_string(),
             "FILENAME" => self.filename = val.into_string(),
             _ => { self.variables.insert(name.to_string(), val); }
         }
@@ -217,6 +229,7 @@ impl Runtime {
             "ORS" => self.ors = "\n".to_string(),
             "SUBSEP" => self.subsep = "\x1c".to_string(),
             "OFMT" => self.ofmt = "%.6g".to_string(),
+            "CONVFMT" => self.convfmt = "%.6g".to_string(),
             "FILENAME" => self.filename = String::new(),
             _ => { self.variables.remove(name); }
         }
@@ -238,9 +251,13 @@ impl Runtime {
     /// Borrow ORS directly (avoids clone in hot print path).
     pub fn ors(&self) -> &str { &self.ors }
 
+    pub fn ofmt(&self) -> &str { &self.ofmt }
+
+    pub fn convfmt(&self) -> &str { &self.convfmt }
+
     pub fn get_field(&self, idx: usize) -> String {
         if idx == 0 {
-            if self.nosplit {
+            if self.record_text_valid && !self.fields_dirty {
                 return self.record_text.clone();
             }
             return self.fields.join(&self.ofs);
@@ -254,7 +271,7 @@ impl Runtime {
     /// Write a field directly to a writer without cloning (zero-copy print).
     pub fn write_field_to(&self, idx: usize, w: &mut impl std::io::Write) {
         if idx == 0 {
-            if self.nosplit {
+            if self.record_text_valid && !self.fields_dirty {
                 let _ = w.write_all(self.record_text.as_bytes());
                 return;
             }
@@ -268,12 +285,16 @@ impl Runtime {
     }
 
     pub fn set_field(&mut self, idx: usize, value: &str) {
-        self.nosplit = false;
         if idx == 0 {
+            self.record_text.clear();
+            self.record_text.push_str(value);
+            self.record_text_valid = true;
+            self.fields_dirty = false;
             self.fields = field::split(value, &self.fs);
             self.nf = self.fields.len();
             return;
         }
+        self.fields_dirty = true;
         let idx = idx - 1;
         while self.fields.len() <= idx {
             self.fields.push(String::new());
@@ -283,7 +304,10 @@ impl Runtime {
     }
 
     pub fn set_record(&mut self, line: &str) {
-        self.nosplit = false;
+        self.record_text.clear();
+        self.record_text.push_str(line);
+        self.record_text_valid = true;
+        self.fields_dirty = false;
         field::split_into(&mut self.fields, line, &self.fs);
         self.nf = self.fields.len();
     }
@@ -291,23 +315,28 @@ impl Runtime {
     /// Store the record text without field splitting (used when the
     /// program never accesses $1…$N).
     pub fn set_record_nosplit(&mut self, line: &str) {
-        self.nosplit = true;
         self.record_text.clear();
         self.record_text.push_str(line);
+        self.record_text_valid = true;
+        self.fields_dirty = false;
     }
 
     /// Split only the first `limit` fields (used when max_field_hint
-    /// is known and NF is not needed).
+    /// is known and NF is not needed).  $0 is served from record_text.
     pub fn set_record_capped(&mut self, line: &str, limit: usize) {
-        self.nosplit = false;
+        self.record_text.clear();
+        self.record_text.push_str(line);
+        self.record_text_valid = true;
+        self.fields_dirty = false;
         field::split_into_limit(&mut self.fields, line, &self.fs, limit);
         self.nf = self.fields.len();
     }
 
     /// Set the record with pre-split fields (used by CSV/TSV/JSON readers).
-    pub fn set_record_fields(&mut self, text: &str, fields: Vec<String>) {
-        self.nosplit = false;
-        let _ = text;
+    /// $0 is reconstructed from fields via OFS (no raw text available).
+    pub fn set_record_fields(&mut self, _text: &str, fields: Vec<String>) {
+        self.record_text_valid = false;
+        self.fields_dirty = false;
         self.nf = fields.len();
         self.fields = fields;
     }
