@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 08 — fk + uplot: terminal dashboards from AWS-style logs
+# 18 — fk + uplot: terminal dashboards from AWS-style logs
 #
 # Generates realistic ALB & Lambda log data with fk, then aggregates
 # and pipes to uplot for terminal visualisation. No Python, no R — just pipes.

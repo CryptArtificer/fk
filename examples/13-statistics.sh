@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 03 — Built-in statistics: mean, median, stddev, percentiles, IQM
+# 13 — Built-in statistics: mean, median, stddev, percentiles, IQM
 set -euo pipefail
 source "$(dirname "$0")/_helpers.sh"
 setup_data

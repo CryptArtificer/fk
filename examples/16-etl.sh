@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 06 — Mini ETL: CSV → aggregate → report + stats
+# 16 — Mini ETL: CSV → aggregate → report + stats
 set -euo pipefail
 source "$(dirname "$0")/_helpers.sh"
 setup_data
