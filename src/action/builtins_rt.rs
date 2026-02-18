@@ -747,47 +747,78 @@ impl<'a> Executor<'a> {
     }
 
     pub(crate) fn exec_getline(&mut self, var: Option<&str>, source: Option<&Expr>) -> Value {
-        let line = if let Some(src_expr) = source {
+        if let Some(src_expr) = source {
             let path = self.eval_string(src_expr);
-            match std::fs::File::open(&path) {
-                Ok(file) => {
-                    let mut reader = std::io::BufReader::new(file);
-                    let mut line = String::new();
-                    match reader.read_line(&mut line) {
-                        Ok(0) => return Value::from_number(0.0),
-                        Ok(_) => {
-                            if line.ends_with('\n') { line.pop(); }
-                            if line.ends_with('\r') { line.pop(); }
-                            line
-                        }
-                        Err(_) => return Value::from_number(-1.0),
-                    }
+            return self.getline_from_file(&path, var);
+        }
+
+        // No source: read the next record from the current input stream
+        let record = {
+            if let Some(ref mut inp) = self.input {
+                match inp.next_record() {
+                    Ok(Some(r)) => Some(r),
+                    Ok(None) => return Value::from_number(0.0),
+                    Err(_) => return Value::from_number(-1.0),
                 }
-                Err(_) => return Value::from_number(-1.0),
-            }
-        } else {
-            let mut line = String::new();
-            match std::io::stdin().read_line(&mut line) {
-                Ok(0) => return Value::from_number(0.0),
-                Ok(_) => {
-                    if line.ends_with('\n') { line.pop(); }
-                    if line.ends_with('\r') { line.pop(); }
-                    line
-                }
-                Err(_) => return Value::from_number(-1.0),
+            } else {
+                None
             }
         };
 
-        match var {
-            Some(name) => {
-                self.rt.set_var(name, &line);
+        if let Some(rec) = record {
+            match var {
+                Some(name) => self.rt.set_var(name, &rec.text),
+                None => {
+                    match &rec.fields {
+                        Some(fields) => self.rt.set_record_fields(&rec.text, fields.clone()),
+                        None => self.rt.set_record(&rec.text),
+                    }
+                }
             }
-            None => {
-                self.rt.set_record(&line);
-            }
+            self.rt.increment_nr();
+            return Value::from_number(1.0);
         }
-        self.rt.increment_nr();
-        Value::from_number(1.0)
+
+        // Fallback: no attached input (e.g. in BEGIN), read raw stdin
+        let mut line = String::new();
+        match std::io::stdin().read_line(&mut line) {
+            Ok(0) => Value::from_number(0.0),
+            Ok(_) => {
+                if line.ends_with('\n') { line.pop(); }
+                if line.ends_with('\r') { line.pop(); }
+                match var {
+                    Some(name) => self.rt.set_var(name, &line),
+                    None => self.rt.set_record(&line),
+                }
+                self.rt.increment_nr();
+                Value::from_number(1.0)
+            }
+            Err(_) => Value::from_number(-1.0),
+        }
+    }
+
+    fn getline_from_file(&mut self, path: &str, var: Option<&str>) -> Value {
+        match std::fs::File::open(path) {
+            Ok(file) => {
+                let mut reader = std::io::BufReader::new(file);
+                let mut line = String::new();
+                match reader.read_line(&mut line) {
+                    Ok(0) => Value::from_number(0.0),
+                    Ok(_) => {
+                        if line.ends_with('\n') { line.pop(); }
+                        if line.ends_with('\r') { line.pop(); }
+                        match var {
+                            Some(name) => self.rt.set_var(name, &line),
+                            None => self.rt.set_record(&line),
+                        }
+                        self.rt.increment_nr();
+                        Value::from_number(1.0)
+                    }
+                    Err(_) => Value::from_number(-1.0),
+                }
+            }
+            Err(_) => Value::from_number(-1.0),
+        }
     }
 
     pub(crate) fn exec_getline_pipe(&mut self, cmd: &str, var: Option<&str>) -> Value {

@@ -10,7 +10,7 @@ use std::time::Instant;
 
 use regex::Regex;
 
-use crate::input::Record;
+use crate::input::{self, Record};
 use crate::parser::{FuncDef, Pattern, Program};
 use crate::runtime::{Runtime, Value};
 
@@ -56,6 +56,7 @@ pub struct Executor<'a> {
     pub(crate) regex_cache: HashMap<String, Regex>,
     pub(crate) epoch: Instant,
     pub(crate) timers: HashMap<String, Instant>,
+    pub(crate) input: Option<input::Input>,
 }
 
 impl<'a> Executor<'a> {
@@ -77,6 +78,7 @@ impl<'a> Executor<'a> {
             regex_cache: HashMap::new(),
             epoch: Instant::now(),
             timers: HashMap::new(),
+            input: None,
         }
     }
 
@@ -136,6 +138,35 @@ impl<'a> Executor<'a> {
 
     pub fn reset_fnr(&mut self) {
         self.rt.reset_fnr();
+    }
+
+    /// Attach an Input source for the main record loop. This allows
+    /// `getline` (no source) to read from the current input stream.
+    pub fn set_input(&mut self, input: input::Input) {
+        self.input = Some(input);
+    }
+
+    /// Read the next record from the attached Input.
+    pub fn next_record(&mut self) -> io::Result<Option<Record>> {
+        match self.input {
+            Some(ref mut inp) => inp.next_record(),
+            None => Ok(None),
+        }
+    }
+
+    /// Current filename from the attached Input.
+    pub fn current_filename(&self) -> &str {
+        match self.input {
+            Some(ref inp) => inp.current_filename(),
+            None => "",
+        }
+    }
+
+    /// Skip the current source in the attached Input.
+    pub fn skip_input_source(&mut self) {
+        if let Some(ref mut inp) = self.input {
+            inp.skip_source();
+        }
     }
 
     pub fn run_begin(&mut self) {

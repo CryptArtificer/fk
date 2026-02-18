@@ -111,11 +111,12 @@ pub enum BinOp {
 pub struct Parser {
     tokens: Vec<Spanned>,
     pos: usize,
+    in_print_expr: bool,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Spanned>) -> Self {
-        Parser { tokens, pos: 0 }
+        Parser { tokens, pos: 0, in_print_expr: false }
     }
 
     fn current(&self) -> &Token {
@@ -328,11 +329,14 @@ impl Parser {
         Ok(Statement::Printf(args, redir))
     }
 
-    /// Parse an expression for print/printf arguments. Parses up to but not
-    /// including `>`, `>>`, or `|` at the top level, so they are consumed as
-    /// redirection operators. Comparisons work inside parens: `print ($0 > 5)`.
+    /// Parse an expression for print/printf arguments. Includes ternary,
+    /// logical, match, and `in` operators, but `>` and `>=` are reserved for
+    /// redirection at this level. Comparisons with `>` work inside parens.
     fn parse_non_redirect_expr(&mut self) -> Result<Expr, FkError> {
-        self.parse_concatenation()
+        self.in_print_expr = true;
+        let result = self.parse_ternary();
+        self.in_print_expr = false;
+        result
     }
 
     fn parse_redirect(&mut self) -> Result<Option<Redirect>, FkError> {
@@ -686,8 +690,8 @@ impl Parser {
                 Token::Ne => BinOp::Ne,
                 Token::Lt => BinOp::Lt,
                 Token::Le => BinOp::Le,
-                Token::Gt => BinOp::Gt,
-                Token::Ge => BinOp::Ge,
+                Token::Gt if !self.in_print_expr => BinOp::Gt,
+                Token::Ge if !self.in_print_expr => BinOp::Ge,
                 _ => break,
             };
             self.advance();
@@ -926,7 +930,10 @@ impl Parser {
             }
             Token::LParen => {
                 self.advance();
+                let saved_print = self.in_print_expr;
+                self.in_print_expr = false;
                 let expr = self.parse_expr()?;
+                self.in_print_expr = saved_print;
                 if self.check(&Token::Comma) {
                     // (expr, expr, ...) in array — multi-dimensional key
                     let mut parts = vec![expr];

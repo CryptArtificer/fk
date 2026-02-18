@@ -111,6 +111,15 @@ fn main() {
         process::exit(code);
     }
 
+    // BEGIN/END-only programs with no files: skip stdin (gawk behaviour)
+    if program.rules.is_empty() && args.files.is_empty() {
+        exec.run_end();
+        if let Some(code) = exec.should_exit() {
+            process::exit(code);
+        }
+        return;
+    }
+
     // Auto-detect input mode from first file extension when user didn't
     // specify -i *and* didn't specify -F (explicit -F implies line mode).
     let effective_mode = if args.input_mode == cli::InputMode::Line
@@ -166,15 +175,16 @@ fn main() {
             }
         };
 
-        let mut inp = input::Input::with_reader(&args.files, reader);
+        let inp = input::Input::with_reader(&args.files, reader);
+        exec.set_input(inp);
         let mut first_record = true;
         let mut prev_filename = String::new();
         loop {
-            match inp.next_record() {
+            match exec.next_record() {
                 Ok(Some(record)) => {
-                    let cur_filename = inp.current_filename();
+                    let cur_filename = exec.current_filename().to_owned();
                     if cur_filename != prev_filename {
-                        prev_filename = cur_filename.to_owned();
+                        prev_filename = cur_filename;
                         exec.set_var("FILENAME", &prev_filename);
                         exec.reset_fnr();
                     }
@@ -195,7 +205,7 @@ fn main() {
                         break;
                     }
                     if exec.take_next_file() {
-                        inp.skip_source();
+                        exec.skip_input_source();
                         first_record = true;
                     }
                 }

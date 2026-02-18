@@ -114,10 +114,9 @@ Phase 14: Awk compat fixes — `in` operator for any expr (`$0 in a`,
   `($1,$2) in arr`), regex literals in sub/gsub/match/split, printf %c
   with numeric arg, bare `length` / `length()` defaults to $0.
   Diagnostics: dump(x [,file]), clk(), tic([id]), toc([id]).
-
-### Remaining
-- [ ] Skip stdin when program has only BEGIN/END rules and no files (gawk behavior)
-- [ ] Plain getline reads from current input (needs shared reader refactor)
+Phase 15: Ternary/logical/in operators in print args, BEGIN/END-only
+  programs skip stdin, getline from current input (Input moved into
+  Executor), getline into var preserves $0.
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 
