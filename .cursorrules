@@ -192,3 +192,6 @@ fk is faster than awk (macOS system awk 20200816) on all benchmarks:
 
 - Default to ADDING, not replacing. When asked to update, assume appending
   unless explicitly told to replace. We can always remove later.
+- Keep README.md, docs/progress.md, and .cursorrules updated as you go.
+  Don't let them fall behind — update them in the same commit as the
+  feature or fix they describe.
