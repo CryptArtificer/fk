@@ -2332,3 +2332,152 @@ fn join_defaults_to_ofs() {
     );
     assert_eq!(rt.get_var("result"), "x,y,z");
 }
+
+// --- diagnostics: clock, start, elapsed ---
+
+#[test]
+fn clock_returns_positive() {
+    let rt = eval(r#"BEGIN { result = (clock() >= 0) ? "ok" : "bad" }"#, &[]);
+    assert_eq!(rt.get_var("result"), "ok");
+}
+
+#[test]
+fn start_elapsed_basic() {
+    let rt = eval(
+        r#"BEGIN { start("t"); for(i=0;i<10000;i++){} result = (elapsed("t") >= 0) ? "ok" : "bad" }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "ok");
+}
+
+#[test]
+fn elapsed_without_start_uses_epoch() {
+    let rt = eval(
+        r#"BEGIN { result = (elapsed() >= 0) ? "ok" : "bad" }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "ok");
+}
+
+#[test]
+fn multiple_timers() {
+    let rt = eval(
+        r#"BEGIN {
+            start("a"); start("b")
+            for(i=0;i<10000;i++){}
+            ea = elapsed("a"); eb = elapsed("b")
+            result = (ea >= 0 && eb >= 0) ? "ok" : "bad"
+        }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "ok");
+}
+
+// --- diagnostics: dump ---
+
+#[test]
+fn dump_returns_one() {
+    let rt = eval(r#"BEGIN { x = "hello"; result = dump(x) }"#, &[]);
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+#[test]
+fn dump_array_returns_one() {
+    let rt = eval(
+        r#"BEGIN { a[1]="x"; a[2]="y"; result = dump(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "1");
+}
+
+#[test]
+fn dump_to_file() {
+    let rt = eval(
+        r#"BEGIN { x = 42; dump(x, "/tmp/fk_test_dump.txt"); result = "ok" }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "ok");
+    let content = std::fs::read_to_string("/tmp/fk_test_dump.txt").unwrap_or_default();
+    assert!(content.contains("dump:"), "dump file should contain output");
+    let _ = std::fs::remove_file("/tmp/fk_test_dump.txt");
+}
+
+// --- in operator ---
+
+#[test]
+fn in_operator_with_field() {
+    let rt = eval(r#"BEGIN{a["x"]=1} {if($0 in a) result="yes"}"#, &["x", "y"]);
+    assert_eq!(rt.get_var("result"), "yes");
+}
+
+#[test]
+fn in_operator_negated() {
+    let rt = eval(r#"BEGIN{a["x"]=1} !($0 in a) {result=result $0}"#, &["x", "y"]);
+    assert_eq!(rt.get_var("result"), "y");
+}
+
+#[test]
+fn multidim_in_operator() {
+    let rt = eval(
+        r#"BEGIN{a["x",1]=1} {if(($1,$2) in a) result="yes"; else result="no"}"#,
+        &["x 1"],
+    );
+    assert_eq!(rt.get_var("result"), "yes");
+}
+
+#[test]
+fn multidim_in_operator_miss() {
+    let rt = eval(
+        r#"BEGIN{a["x",1]=1} {if(($1,$2) in a) result="yes"; else result="no"}"#,
+        &["y 2"],
+    );
+    assert_eq!(rt.get_var("result"), "no");
+}
+
+// --- regex literal in sub/gsub ---
+
+#[test]
+fn sub_regex_literal() {
+    let rt = eval(r#"{sub(/foo/,"bar"); result=$0}"#, &["foo baz foo"]);
+    assert_eq!(rt.get_var("result"), "bar baz foo");
+}
+
+#[test]
+fn gsub_regex_literal() {
+    let rt = eval(r#"{gsub(/foo/,"bar"); result=$0}"#, &["foo baz foo"]);
+    assert_eq!(rt.get_var("result"), "bar baz bar");
+}
+
+#[test]
+fn match_regex_literal() {
+    let rt = eval(r#"{match($0, /(\w+)=(\d+)/, m); result=m[1] ":" m[2]}"#, &["key=42"]);
+    assert_eq!(rt.get_var("result"), "key:42");
+}
+
+// --- printf %c ---
+
+#[test]
+fn printf_percent_c_numeric() {
+    let rt = eval(r#"BEGIN{result=sprintf("%c%c%c", 72, 105, 33)}"#, &[]);
+    assert_eq!(rt.get_var("result"), "Hi!");
+}
+
+#[test]
+fn printf_percent_c_string() {
+    let rt = eval(r#"BEGIN{result=sprintf("%c", "A")}"#, &[]);
+    assert_eq!(rt.get_var("result"), "A");
+}
+
+// --- length bare / length() ---
+
+#[test]
+fn length_bare() {
+    let rt = eval(r#"{result=length}"#, &["hello"]);
+    assert_eq!(rt.get_var("result"), "5");
+}
+
+#[test]
+fn length_empty_parens() {
+    let rt = eval(r#"{result=length()}"#, &["hello"]);
+    assert_eq!(rt.get_var("result"), "5");
+}

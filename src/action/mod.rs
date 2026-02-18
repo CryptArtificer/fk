@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::process::Child;
+use std::time::Instant;
 
 use regex::Regex;
 
@@ -53,6 +54,8 @@ pub struct Executor<'a> {
     pub(crate) next_file: bool,
     pub(crate) exit_code: Option<i32>,
     pub(crate) regex_cache: HashMap<String, Regex>,
+    pub(crate) epoch: Instant,
+    pub(crate) timers: HashMap<String, Instant>,
 }
 
 impl<'a> Executor<'a> {
@@ -72,6 +75,8 @@ impl<'a> Executor<'a> {
             next_file: false,
             exit_code: None,
             regex_cache: HashMap::new(),
+            epoch: Instant::now(),
+            timers: HashMap::new(),
         }
     }
 

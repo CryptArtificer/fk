@@ -177,5 +177,39 @@ out="$($FK -v pat="error|warn" '$0 ~ pat' "$W/mixlog.txt")"
 expected="$(printf "error: disk full\nwarn: slow\nerror: timeout")"
 assert_eq "D30" "computed regex" "$out" "$expected"
 
+# ── Diagnostics ──────────────────────────────────────────────────
+
+section "Diagnostics (dump, clock, start, elapsed)"
+
+# D31 dump scalar to stderr
+out="$($FK '{dump($0)}' <<< "hello" 2>&1 1>/dev/null)"
+assert_match "D31" "dump scalar" "$out" "dump:.*hello"
+
+# D32 dump array to stderr
+out="$(printf "a 1\nb 2\n" | $FK '{arr[$1]=$2} END{dump(arr)}' 2>&1 1>/dev/null)"
+assert_match "D32" "dump array" "$out" "array.*2 elements"
+
+# D33 dump to file
+tmpf="$W/dump_out.txt"
+printf "test\n" | $FK "{dump(\$0, \"$tmpf\")}" 2>/dev/null
+out="$(cat "$tmpf" 2>/dev/null)"
+assert_match "D33" "dump to file" "$out" "dump:.*test"
+
+# D34 clock returns non-negative
+out="$(echo | $FK '{c=clock(); r=(c >= 0) ? "ok" : "bad"; print r}')"
+assert_eq "D34" "clock" "$out" "ok"
+
+# D35 start/elapsed
+out="$(seq 1 50000 | $FK 'BEGIN{start("t")} {s+=$1} END{r=(elapsed("t") >= 0) ? "ok" : "bad"; print r}')"
+assert_eq "D35" "start/elapsed" "$out" "ok"
+
+# D36 elapsed without start (uses program epoch)
+out="$(echo | $FK '{r=(elapsed() >= 0) ? "ok" : "bad"; print r}')"
+assert_eq "D36" "elapsed no start" "$out" "ok"
+
+# D37 multiple named timers
+out="$(seq 1 10000 | $FK 'BEGIN{start("a"); start("b")} END{ea=elapsed("a"); eb=elapsed("b"); r=(ea>=0 && eb>=0) ? "ok" : "bad"; print r}')"
+assert_eq "D37" "multiple timers" "$out" "ok"
+
 # ════════════════════════════════════════════════════════════════════
 print_summary "fk_only"

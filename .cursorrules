@@ -12,8 +12,8 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~10,100 lines of Rust** across 27 source files
-- **329 tests**, zero warnings, clippy clean
+- **~10,400 lines of Rust** across 27 source files
+- **347 Rust + 152 shell tests**, zero warnings, clippy clean
 - **Phases 0–8 complete**
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
@@ -110,9 +110,14 @@ Phase 13: !/regex/ (bare regex in expression context), print arr (smart array du
   keys(arr), vals(arr), join(arr) defaults to OFS.
   Lodash-inspired array builtins: uniq, inv, tidy, shuf, diff, inter, union,
   seq, samp. String: lpad, rpad. I/O: slurp.
+Phase 14: Awk compat fixes — `in` operator for any expr (`$0 in a`,
+  `($1,$2) in arr`), regex literals in sub/gsub/match/split, printf %c
+  with numeric arg, bare `length` / `length()` defaults to $0.
+  Diagnostics: dump(x [,file]), clock(), start([id]), elapsed([id]).
 
 ### Remaining
 - [ ] Skip stdin when program has only BEGIN/END rules and no files (gawk behavior)
+- [ ] Plain getline reads from current input (needs shared reader refactor)
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 

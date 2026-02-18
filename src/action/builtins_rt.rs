@@ -1,5 +1,6 @@
 use std::io::{BufRead, Write};
 use std::process::{Command, Stdio};
+use std::time::Instant;
 
 use crate::builtins::{self, string_replace};
 use crate::parser::Expr;
@@ -814,6 +815,92 @@ impl<'a> Executor<'a> {
             }
             Err(_) => Value::from_number(-1.0),
         }
+    }
+    // ── Diagnostics ─────────────────────────────────────────────────
+
+    /// dump(x [, file]) — write detailed variable/array info to stderr or file.
+    pub(crate) fn builtin_dump(&mut self, args: &[Expr]) -> Value {
+        if args.is_empty() {
+            eprintln!("fk: dump requires at least 1 argument");
+            return Value::from_number(0.0);
+        }
+
+        let mut buf = String::new();
+        let label = match &args[0] {
+            Expr::Var(name) => name.clone(),
+            Expr::ArrayRef(name, _) => name.clone(),
+            Expr::Field(idx) => format!("${}", self.eval_field_idx(idx)),
+            _ => "expr".to_string(),
+        };
+
+        if let Expr::Var(name) = &args[0]
+            && self.rt.has_array(name)
+        {
+            let mut keys = self.rt.array_keys(name);
+            smart_sort_keys(&mut keys);
+            let sequential = is_sequential(&keys);
+            buf.push_str(&format!("dump: {} = array ({} elements{})\n",
+                name, keys.len(),
+                if sequential { ", sequential" } else { "" }));
+            for k in &keys {
+                let v = self.rt.get_array(name, k);
+                buf.push_str(&format!("  [{}] = \"{}\"\n", k, v));
+            }
+            return self.dump_output(&buf, args);
+        }
+
+        let val = self.eval_expr(&args[0]);
+        let type_str = if val.is_numeric() { "number" } else { "string" };
+        let num = val.to_number();
+        let s = val.to_string_val();
+        buf.push_str(&format!("dump: {} = ({}) \"{}\"\n", label, type_str, s));
+        if !val.is_numeric() && num != 0.0 {
+            buf.push_str(&format!("  numeric coercion = {}\n", num));
+        }
+        buf.push_str(&format!("  length = {}\n", s.chars().count()));
+
+        self.dump_output(&buf, args)
+    }
+
+    fn dump_output(&mut self, buf: &str, args: &[Expr]) -> Value {
+        if args.len() >= 2 {
+            let filename = self.eval_string(&args[1]);
+            match std::fs::OpenOptions::new().create(true).append(true).open(&filename) {
+                Ok(mut f) => { let _ = f.write_all(buf.as_bytes()); }
+                Err(e) => eprintln!("fk: dump: {}: {}", filename, e),
+            }
+        } else {
+            eprint!("{}", buf);
+        }
+        Value::from_number(1.0)
+    }
+
+    /// clock() — monotonic seconds since program start.
+    pub(crate) fn builtin_clock(&self) -> Value {
+        let elapsed = self.epoch.elapsed();
+        Value::from_number(elapsed.as_secs_f64())
+    }
+
+    /// start([id]) — start or restart a named timer. Returns 0.
+    pub(crate) fn builtin_start(&mut self, args: &[Expr]) -> Value {
+        let id = if args.is_empty() {
+            String::new()
+        } else {
+            self.eval_string(&args[0])
+        };
+        self.timers.insert(id, Instant::now());
+        Value::from_number(0.0)
+    }
+
+    /// elapsed([id]) — seconds since start(id). Falls back to program start.
+    pub(crate) fn builtin_elapsed(&mut self, args: &[Expr]) -> Value {
+        let id = if args.is_empty() {
+            String::new()
+        } else {
+            self.eval_string(&args[0])
+        };
+        let t = self.timers.get(&id).unwrap_or(&self.epoch);
+        Value::from_number(t.elapsed().as_secs_f64())
     }
 }
 
