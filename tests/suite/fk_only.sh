@@ -159,8 +159,8 @@ assert_nonzero "D26" "describe mode" "$out"
 section "D. Pattern & expression features"
 # ════════════════════════════════════════════════════════════════════
 
-# D27 match with capture groups (string pattern — regex literals in match are a known gap)
-out="$($FK '{if(match($0, "(\\w+)=(\\d+)", m)) print m[1], m[2]}' "$W/kv.txt")"
+# D27 match with capture groups (regex literal)
+out="$($FK '{if(match($0, /(\w+)=(\d+)/, m)) print m[1], m[2]}' "$W/kv.txt")"
 assert_eq "D27" "match capture groups" "$out" "$(printf "port 8080\ntimeout 30")"
 
 # D28 bitwise operations

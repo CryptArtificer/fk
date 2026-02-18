@@ -8,13 +8,30 @@ use crate::runtime::Value;
 use super::{percentile_sorted, Executor};
 
 impl<'a> Executor<'a> {
+    /// Extract a regex pattern string from an expression that may be a bare
+    /// `/regex/` literal (which the parser turns into `$0 ~ "pattern"`).
+    fn extract_regex_or_eval(&mut self, expr: &Expr) -> String {
+        if let Expr::Match(lhs, rhs) = expr {
+            if let Expr::Field(idx) = lhs.as_ref() {
+                if let Expr::NumberLit(n) = idx.as_ref() {
+                    if *n == 0.0 {
+                        if let Expr::StringLit(pat) = rhs.as_ref() {
+                            return pat.clone();
+                        }
+                    }
+                }
+            }
+        }
+        self.eval_string(expr)
+    }
+
     /// sub/gsub: these need runtime access to modify lvalues.
     pub(crate) fn builtin_sub(&mut self, args: &[Expr], global: bool) -> Value {
         if args.len() < 2 {
             eprintln!("fk: sub/gsub requires at least 2 arguments");
             return Value::from_number(0.0);
         }
-        let pattern = self.eval_string(&args[0]);
+        let pattern = self.extract_regex_or_eval(&args[0]);
         let replacement = self.eval_string(&args[1]);
 
         let target_expr = if args.len() >= 3 {
@@ -37,7 +54,7 @@ impl<'a> Executor<'a> {
             return Value::from_number(0.0);
         }
         let s = self.eval_string(&args[0]);
-        let pattern = self.eval_string(&args[1]);
+        let pattern = self.extract_regex_or_eval(&args[1]);
 
         let capture_arr = if args.len() >= 3 {
             match &args[2] {
@@ -119,7 +136,7 @@ impl<'a> Executor<'a> {
             }
         };
         let fs = if args.len() >= 3 {
-            self.eval_string(&args[2])
+            self.extract_regex_or_eval(&args[2])
         } else {
             self.rt.get_var("FS")
         };
@@ -184,7 +201,7 @@ impl<'a> Executor<'a> {
             eprintln!("fk: gensub requires at least 3 arguments");
             return Value::default();
         }
-        let pattern = self.eval_string(&args[0]);
+        let pattern = self.extract_regex_or_eval(&args[0]);
         let replacement = self.eval_string(&args[1]);
         let how = self.eval_string(&args[2]);
 

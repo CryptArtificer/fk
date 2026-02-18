@@ -112,8 +112,8 @@ bench "B7" "gsub" \
     "fk"  "$FK  '{gsub(/user/,\"USER\")}1' $W/large.txt"
 
 bench "B8" "NR==FNR join" \
-    "awk" "$AWK 'NR==FNR{a[\$2]=\$3;next} a[\$2]!=\"\"{print \$0,a[\$2]}' $W/large.txt $W/large.txt" \
-    "fk"  "$FK  'NR==FNR{a[\$2]=\$3;next} a[\$2]!=\"\"{print \$0,a[\$2]}' $W/large.txt $W/large.txt"
+    "awk" "$AWK 'NR==FNR{a[\$2]=\$3;next} \$2 in a{print \$0,a[\$2]}' $W/large.txt $W/large.txt" \
+    "fk"  "$FK  'NR==FNR{a[\$2]=\$3;next} \$2 in a{print \$0,a[\$2]}' $W/large.txt $W/large.txt"
 
 # ════════════════════════════════════════════════════════════════════
 section "Performance: fk vs tools ($BENCH_LINES lines)"

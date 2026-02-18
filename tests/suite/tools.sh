@@ -146,12 +146,12 @@ section "S. Sed equivalents"
 
 # S1. sub first occurrence
 tool_out="$(sed 's/foo/bar/' "$W/subst.txt")"
-fk_out="$($FK '{sub("foo","bar")} {print}' "$W/subst.txt")"
+fk_out="$($FK '{sub(/foo/,"bar")} {print}' "$W/subst.txt")"
 assert_eq "S1" "sed s/foo/bar/" "$fk_out" "$tool_out"
 
 # S2. gsub all occurrences
 tool_out="$(sed 's/foo/bar/g' "$W/subst.txt")"
-fk_out="$($FK '{gsub("foo","bar")} {print}' "$W/subst.txt")"
+fk_out="$($FK '{gsub(/foo/,"bar")} {print}' "$W/subst.txt")"
 assert_eq "S2" "sed s/foo/bar/g" "$fk_out" "$tool_out"
 
 # S3. delete blank lines

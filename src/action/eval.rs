@@ -18,8 +18,9 @@ impl<'a> Executor<'a> {
                 let key = self.eval_expr(key_expr).into_string();
                 self.rt.get_array_value(name, &key)
             }
-            Expr::ArrayIn(key, array) => {
-                bool_val(self.rt.array_has_key(array, key))
+            Expr::ArrayIn(key_expr, array) => {
+                let key = self.eval_expr(key_expr).into_string();
+                bool_val(self.rt.array_has_key(array, &key))
             }
             Expr::BinOp(left, op, right) => {
                 let l = self.eval_expr(left);

@@ -140,7 +140,7 @@ section "4. Set operations"
 # ════════════════════════════════════════════════════════════════════
 
 compat "20" "lines in f1 not f2" \
-    'NR==FNR{a[$0]=1;next} !a[$0]' "$W/f2.txt" "$W/f1.txt"
+    'NR==FNR{a[$0]=1;next} !($0 in a)' "$W/f2.txt" "$W/f1.txt"
 
 compat "22" "union (unique lines)" \
     '!seen[$0]++' "$W/f1.txt" "$W/f2.txt"
@@ -167,7 +167,7 @@ section "7. File and I/O"
 # ════════════════════════════════════════════════════════════════════
 
 compat "45" "lookup join" \
-    'NR==FNR{a[$1]=$2;next} a[$1]!=""{print $0, a[$1]}' "$W/lookup.txt" "$W/words.txt"
+    'NR==FNR{a[$1]=$2;next} ($1 in a){print $0, a[$1]}' "$W/lookup.txt" "$W/words.txt"
 
 # ════════════════════════════════════════════════════════════════════
 section "8. String formatting"
@@ -190,7 +190,7 @@ compat_sorted "60" "pivot group-collect" \
     '{ a[$1]=a[$1] (a[$1]?",":"") $2 } END { for(k in a) print k, a[k] }' "$W/scores.txt"
 
 compat "65" "replace via lookup map" \
-    'NR==FNR{m[$1]=$2;next} {for(i=1;i<=NF;i++) if(m[$i]!="") $i=m[$i]; print}' "$W/prices.txt" "$W/words.txt"
+    'NR==FNR{m[$1]=$2;next} {for(i=1;i<=NF;i++) if($i in m) $i=m[$i]; print}' "$W/prices.txt" "$W/words.txt"
 
 compat "67" "build CSV from arrays" \
     '{ a[NR]=$1; b[NR]=$2 } END { for(i=1;i<=NR;i++) print a[i]","b[i] }' "$W/scores.txt"
@@ -200,13 +200,13 @@ section "10. Multi-file processing"
 # ════════════════════════════════════════════════════════════════════
 
 compat "68" "enrich from lookup" \
-    'NR==FNR { lu[$1]=$2; next } { print $0, (lu[$1]!="" ? lu[$1] : "N/A") }' "$W/prices.txt" "$W/orders.txt"
+    'NR==FNR { lu[$1]=$2; next } { print $0, ($1 in lu ? lu[$1] : "N/A") }' "$W/prices.txt" "$W/orders.txt"
 
 compat "69" "anti-join" \
-    'NR==FNR{a[$0]=1;next} !a[$0]' "$W/f2.txt" "$W/f1.txt"
+    'NR==FNR{a[$0]=1;next} !($0 in a)' "$W/f2.txt" "$W/f1.txt"
 
 compat "70" "semi-join" \
-    'NR==FNR{a[$1]=1;next} a[$1]' "$W/f2.txt" "$W/f1.txt"
+    'NR==FNR{a[$1]=1;next} $1 in a' "$W/f2.txt" "$W/f1.txt"
 
 compat_sorted "72" "compare configs" \
     'NR==FNR{a[$1]=$2;next} $1 in a && a[$1]!=$2{print $1,"old="a[$1],"new="$2}' "$W/config.txt" "$W/config.txt"
@@ -326,16 +326,16 @@ compat "P26" "right-align 79 cols" \
     '{printf "%79s\n", $0}' "$W/words.txt"
 
 compat "P27" "sub first foo" \
-    '{sub("foo","bar")} {print}' "$W/subst.txt"
+    '{sub(/foo/,"bar")} {print}' "$W/subst.txt"
 
 compat "P28" "gsub all foo" \
-    '{gsub("foo","bar")} {print}' "$W/subst.txt"
+    '{gsub(/foo/,"bar")} {print}' "$W/subst.txt"
 
 compat "P30" "sub on lines with baz" \
-    '/baz/{gsub("foo", "bar")} {print}' "$W/subst.txt"
+    '/baz/{gsub(/foo/, "bar")} {print}' "$W/subst.txt"
 
 compat "P31" "sub on lines without baz" \
-    '!/baz/{gsub("foo", "bar")} {print}' "$W/subst.txt"
+    '!/baz/{gsub(/foo/, "bar")} {print}' "$W/subst.txt"
 
 compat "P32" "multi-pattern gsub" \
     '{gsub(/scarlet|ruby|puce/, "red")}; 1' "$W/text.txt"
@@ -422,16 +422,16 @@ compat "C1" "lookup join" \
     'NR==FNR{price[$1]=$2; next} {print $0, price[$1]+0}' "$W/prices.txt" "$W/orders.txt"
 
 compat "C2" "anti-join" \
-    'NR==FNR{skip[$1]=1; next} !skip[$1]' "$W/f2.txt" "$W/f1.txt"
+    'NR==FNR{skip[$1]=1; next} !($1 in skip)' "$W/f2.txt" "$W/f1.txt"
 
 compat "C3" "semi-join" \
-    'NR==FNR{keep[$1]=1; next} keep[$1]' "$W/f2.txt" "$W/f1.txt"
+    'NR==FNR{keep[$1]=1; next} $1 in keep' "$W/f2.txt" "$W/f1.txt"
 
 compat "C4" "diff — lines in f1 not f2" \
-    'NR==FNR{a[$0]=1; next} !a[$0]' "$W/f2.txt" "$W/f1.txt"
+    'NR==FNR{a[$0]=1; next} !($0 in a)' "$W/f2.txt" "$W/f1.txt"
 
 compat "C5" "update from second file" \
-    'NR==FNR{a[$1]=$2; next} {if(a[$1]!="") $2=a[$1]; print}' "$W/lookup.txt" "$W/scores.txt"
+    'NR==FNR{a[$1]=$2; next} {if($1 in a) $2=a[$1]; print}' "$W/lookup.txt" "$W/scores.txt"
 
 # ════════════════════════════════════════════════════════════════════
 print_summary "compat"

@@ -70,7 +70,7 @@ pub enum Expr {
     StringLit(String),
     Var(String),
     ArrayRef(String, Box<Expr>),
-    ArrayIn(String, String),
+    ArrayIn(Box<Expr>, String),
     BinOp(Box<Expr>, BinOp, Box<Expr>),
     LogicalAnd(Box<Expr>, Box<Expr>),
     LogicalOr(Box<Expr>, Box<Expr>),
@@ -603,12 +603,30 @@ impl Parser {
     }
 
     fn parse_logical_and(&mut self) -> Result<Expr, FkError> {
-        let mut left = self.parse_match_expr()?;
+        let mut left = self.parse_in_expr()?;
 
         while self.check(&Token::And) {
             self.advance();
-            let right = self.parse_match_expr()?;
+            let right = self.parse_in_expr()?;
             left = Expr::LogicalAnd(Box::new(left), Box::new(right));
+        }
+
+        Ok(left)
+    }
+
+    /// `expr in array` — array membership test. Precedence between
+    /// logical-and and match (~, !~).
+    fn parse_in_expr(&mut self) -> Result<Expr, FkError> {
+        let left = self.parse_match_expr()?;
+
+        if self.check(&Token::In) {
+            self.advance();
+            if let Token::Ident(arr) = self.current().clone() {
+                self.advance();
+                return Ok(Expr::ArrayIn(Box::new(left), arr));
+            } else {
+                return Err(FkError::new(self.current_span(), "expected array name after 'in'"));
+            }
         }
 
         Ok(left)
@@ -871,17 +889,6 @@ impl Parser {
                         return self.parse_sprintf_args();
                     }
                     return self.parse_func_call(name);
-                }
-
-                // Check for `var in array` (used in conditions)
-                if self.check(&Token::In) {
-                    self.advance();
-                    if let Token::Ident(arr) = self.current().clone() {
-                        self.advance();
-                        return Ok(Expr::ArrayIn(name, arr));
-                    } else {
-                        return Err(FkError::new(self.current_span(), "expected array name after 'in'"));
-                    }
                 }
 
                 Ok(Expr::Var(name))
