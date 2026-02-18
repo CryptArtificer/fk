@@ -30,7 +30,7 @@ END {
 
 section "2. Per-column stats from CSV with named columns"
 
-show $FK -i csv -H '{
+show $FK -H '{
     cpu[NR] = $"cpu-usage" + 0
     mem[NR] = $"mem-usage" + 0
 }
@@ -41,12 +41,13 @@ END {
 
 section "3. Revenue stats with named columns"
 
-show $FK -i csv -H '{
+show $FK -H '{
     rev[$region] += $revenue
     all[NR] = $revenue + 0
 }
 END {
-    for (r in rev) printf "  %-6s $%.0f\n", r, rev[r]
+    for (r in rev) out[r] = sprintf("  %s $%.0f", rpad(r, 6), rev[r])
+    asort(out); print out
     printf "\n  Revenue stats:  mean=$%.0f  median=$%.0f  stddev=$%.0f  p95=$%.0f\n", mean(all), median(all), stddev(all), p(all, 95)
 }' "$TMPDIR/sales.csv"
 

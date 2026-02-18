@@ -8,11 +8,11 @@ section "1. asort — sort array values"
 # awk: no built-in sort. fk: asort (by value), asorti (by key), join.
 
 echo "Sort values alphabetically:"
-show $FK '{ a[NR] = $0 } END { asort(a); for (i=1; i<=NR; i++) printf "  %s\n", a[i] }' "$TMPDIR/fruits.txt"
+show $FK '{ a[NR] = $0 } END { asort(a); print join(a, "\n") }' "$TMPDIR/fruits.txt"
 
 section "2. Sort CSV by revenue (descending)"
 
-show $FK -i csv -H '{
+show $FK -H '{
     rev[NR] = $revenue + 0
     line[NR] = sprintf("%-8s %-8s $%s", $region, $product, $revenue)
 }
@@ -33,7 +33,7 @@ show_pipe "echo 'cherry apple banana date' | $FK '{ for (i=1;i<=NF;i++) a[i]=\$i
 section "4. Date parsing + formatting"
 # POSIX awk: no date functions at all. fk: parsedate, strftime, mktime.
 
-show $FK -i csv -H '{
+show $FK -H '{
     ts = parsedate($date, "%Y-%m-%d %H:%M:%S")
     dow = strftime("%A", ts)
     short = strftime("%b %d", ts)

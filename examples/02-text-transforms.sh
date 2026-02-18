@@ -39,11 +39,11 @@ echo "$LOGS" | $FK '/ERROR/ { print $1, $2, substr($0, index($0, "ERROR") + 6) }
 echo ""
 
 # ── Frequency count ──────────────────────────────────────────────
-echo "3) Count log levels:"
-echo "$LOGS" | $FK '
-    { count[$3]++ }
-    END { for (level in count) print level, count[level] }
-'
+echo "3) Count log levels (print arr = sorted keys):"
+echo "$LOGS" | $FK '{ count[$3]++ } END { for (k in count) print k, count[k] }'
+echo ""
+echo "   Just the level names:"
+echo "$LOGS" | $FK '{ count[$3]++ } END { print count }'
 echo ""
 
 # ── Field reordering ─────────────────────────────────────────────
@@ -54,16 +54,17 @@ echo ""
 # ── Deduplication ────────────────────────────────────────────────
 echo "5) Unique departments from CSV:"
 echo "$CSV" | $FK -F, 'NR > 1 && !seen[$2]++ { print $2 }'
+echo "   (or: collect then print sorted):"
+echo "$CSV" | $FK -F, 'NR > 1 { dept[$2]++ } END { print dept }'
 echo ""
 
 # ── Word frequency ───────────────────────────────────────────────
 echo "6) Word frequency in text:"
 TEXT="the quick brown fox jumps over the lazy dog the fox the dog"
 echo "$TEXT" | $FK '{
-    n = split($0, words, " ")
-    for (i = 1; i <= n; i++) freq[words[i]]++
+    for (i = 1; i <= NF; i++) freq[$i]++
 }
-END { for (w in freq) printf "%3d %s\n", freq[w], w }
+END { for (w in freq) printf "  %s %s\n", lpad(freq[w], 3), w }
 '
 echo ""
 

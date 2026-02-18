@@ -5,9 +5,10 @@ source "$(dirname "$0")/_helpers.sh"
 setup_data
 
 section "Mini ETL — CSV → aggregate → report + stats"
-# Combines: -i csv, -H, named columns, parsedate, strftime, trim, stats.
+# Combines: -H, named columns, parsedate, strftime, trim, stats.
+# Format auto-detected from .csv extension.
 
-show $FK -i csv -H '
+show $FK -H '
 {
     ts = parsedate($created_at, "%Y-%m-%d %H:%M:%S")
     month = strftime("%Y-%m", ts)
@@ -21,9 +22,11 @@ show $FK -i csv -H '
 END {
     printf "  Total: $%.2f across %d orders\n\n", total, count
     print "  By customer:"
-    for (c in by_cust) printf "    %-16s %d orders  $%8.2f\n", c, n_cust[c], by_cust[c]
+    for (c in by_cust) cl[c] = sprintf("    %s %d orders  $%8.2f", rpad(c, 16), n_cust[c], by_cust[c])
+    asort(cl); print cl
     print "\n  By month:"
-    for (m in by_month) printf "    %s  $%8.2f\n", m, by_month[m]
+    for (m in by_month) ml[m] = sprintf("    %s  $%8.2f", m, by_month[m])
+    asort(ml); print ml
     printf "\n  Largest: #%s by %s ($%.2f)\n", mx_id, mx_who, mx
     printf "\n  Order stats:\n"
     printf "    mean=$%.2f  median=$%.2f  stddev=$%.2f\n", mean(amounts), median(amounts), stddev(amounts)

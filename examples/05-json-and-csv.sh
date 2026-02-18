@@ -98,3 +98,24 @@ echo "$EVENTS" | $FK -i json '
             printf "  %-8s %d orders  $%.2f total\n", user, orders[user], spent[user]
     }
 '
+echo ""
+
+# ── CSV with header mode + named columns ─────────────────────────
+echo "9) CSV + named columns — filter and aggregate:"
+SALES=$(cat <<'EOF'
+region,product,units,price
+West,Widget,100,9.99
+East,Gadget,50,24.95
+West,Gadget,75,24.95
+East,Widget,200,9.99
+West,Gizmo,30,4.50
+EOF
+)
+echo "$SALES" | $FK -i csv -H '
+    { rev[$region] += $units * $price }
+    END { for (r in rev) printf "  %-6s $%.2f\n", r, rev[r] }
+'
+echo ""
+
+echo "10) JSON lines — collect and print sorted keys:"
+echo "$JSONL" | $FK -i json '{ roles[$2]++ } END { asorti(roles); print "  Roles:", join(roles, ", ") }'

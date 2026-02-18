@@ -77,9 +77,8 @@ echo ""
 # ── Unicode-aware string functions ───────────────────────────────
 echo "9) Unicode-aware string operations:"
 echo "café résumé naïve" | $FK '{
-    for (i = 1; i <= NF; i++) {
-        printf "  %-10s length=%d  substr(1,3)=%s\n", $i, length($i), substr($i, 1, 3)
-    }
+    for (i = 1; i <= NF; i++)
+        printf "  %-10s  len=%d  substr(1,3)=%s\n", $i, length($i), substr($i, 1, 3)
 }'
 echo ""
 
@@ -167,3 +166,19 @@ echo "x" | $FK 'BEGIN {
         print ""
     }
 }'
+echo ""
+
+# ── Negated bare regex ──────────────────────────────────────────
+echo "19) Negated bare regex (!/pattern/):"
+printf "alice\n# comment\nbob\n# another\ncarol\n" | $FK '!/^#/ { print "  " $0 }'
+echo ""
+
+# ── Statistical builtins ────────────────────────────────────────
+echo "20) Statistical builtins:"
+printf "10\n20\n30\n40\n50\n60\n70\n80\n90\n100\n" | $FK '
+    { a[NR]=$1 }
+    END {
+        printf "  sum=%s mean=%.1f median=%.1f\n", sum(a), mean(a), median(a)
+        printf "  stddev=%.2f p50=%.1f p90=%.1f\n", stddev(a), p(a,50), p(a,90)
+    }
+'

@@ -4,10 +4,12 @@
 
 ```sh
 fk [options] 'program' [file ...]
+fk [options] file ...              # defaults to { print }
 fk -f progfile [file ...]          # read program from file
 fk --describe [file ...]           # sniff format, show schema & examples
 fk --suggest  [file ...]           # schema + smart tailored programs
 fk --repl                          # interactive mode
+fk --help / fk --version
 ```
 
 | Flag | Description |
@@ -128,6 +130,8 @@ print ... > "/dev/stderr"   # write to stderr
 | `reverse(s)` | Reverse a string (unicode-aware) |
 | `chr(n)` / `ord(s)` | Character ↔ codepoint |
 | `hex(n)` | Format number as hexadecimal |
+| `lpad(s, width [, char])` | Left-pad to width (default: space) |
+| `rpad(s, width [, char])` | Right-pad to width (default: space) |
 
 ### Math
 | Function | Description |
@@ -158,13 +162,27 @@ print ... > "/dev/stderr"   # write to stderr
 | `system(cmd)` | Run shell command, return exit status |
 | `fflush()` | Flush stdout |
 | `close(name)` | Close an output file or pipe |
+| `slurp(file)` | Read entire file into string |
+| `slurp(file, arr)` | Read file lines into array, return count |
 
 ### Arrays (fk extensions)
 | Function | Description |
 |----------|-------------|
+| `print arr` | Smart print: values (sequential) or keys (associative) |
+| `keys(arr)` | Sorted keys as string (joined by ORS) |
+| `vals(arr)` | Values sorted by key as string (joined by ORS) |
 | `asort(arr)` | Sort by values, re-key 1..N |
 | `asorti(arr)` | Sort by keys, store as values 1..N |
-| `join(arr, sep)` | Join array values into string |
+| `join(arr [, sep])` | Join array values into string (default: OFS) |
+| `uniq(arr)` | Deduplicate values, re-key 1..N |
+| `inv(arr)` | Swap keys ↔ values |
+| `tidy(arr)` | Remove empty/zero entries |
+| `shuf(arr)` | Randomize order, re-key 1..N |
+| `diff(a, b)` | Set difference: remove from `a` keys in `b` |
+| `inter(a, b)` | Set intersection: keep in `a` only keys also in `b` |
+| `union(a, b)` | Set union: merge keys from `b` into `a` |
+| `seq(arr, from, to)` | Fill with integer range, re-key 1..N |
+| `samp(arr, n)` | Random n elements, re-key 1..n |
 
 ### Statistics (fk extensions)
 | Function | Description |
@@ -335,6 +353,36 @@ fk '{ a[NR]=$1 } END { print "iqm:", iqm(a) }' measurements.txt
 
 # Zero-padded output
 fk '{ printf "%08d\n", $1 }' ids.txt
+
+# ── Array operations (fk-only) ──
+
+# Quick view of a CSV
+fk data.csv
+fk -H -v 'OFS=\t' data.csv
+
+# Sorted unique values
+fk '{ u[$1]++ } END { print u }' file
+
+# Set difference — users in a.txt but not b.txt
+fk 'NR==FNR{a[$1];next}{b[$1]} END { diff(a,b); print a }' a.txt b.txt
+
+# Deduplicate array values
+fk '{ a[NR]=$1 } END { uniq(a); print a }' file
+
+# Random sample of 10 lines
+fk '{ a[NR]=$0 } END { samp(a, 10); print a }' file
+
+# Generate a sequence and shuffle
+fk 'BEGIN { seq(a, 1, 52); shuf(a); print a }'
+
+# Read a lookup file, then enrich
+fk 'BEGIN { slurp("lookup.csv", lu) } { print $0, lu[$1] }' data.txt
+
+# Left-padded table
+fk '{ print lpad($1, 12), rpad($2, 20), $3 }' report.txt
+
+# Invert a mapping
+fk 'BEGIN { a["US"]="United States"; a["UK"]="United Kingdom"; inv(a); print a }'
 ```
 
 ## REPL commands

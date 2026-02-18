@@ -45,7 +45,7 @@ show() {
     done
 
     printf "\n  ${C_DIM}\$${C_RESET} ${C_CYAN}${C_BOLD}fk${C_RESET}%s" "$flags"
-    [[ -n "$files" ]] && printf " %b" "$files"
+    [[ -n "$files" ]] && printf "%b" "$files"
 
     if [[ -n "$prog" ]]; then
         printf " ${C_YEL}'${C_RESET}\n"

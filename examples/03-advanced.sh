@@ -119,3 +119,17 @@ printf "$RECORDS" | $FK -v "dir=$TMPDIR" '{ print $2 >> (dir "/" $1 ".txt") }'
 for f in "$TMPDIR"/A.txt "$TMPDIR"/B.txt "$TMPDIR"/C.txt; do
     echo "  $(basename "$f"): $(cat "$f" | tr '\n' ' ')"
 done
+echo ""
+
+# ── Set operations on arrays ────────────────────────────────────
+echo "7) Set operations — diff, inter, union:"
+echo "x" | $FK 'BEGIN {
+    split("apple banana cherry", a, " "); for(i in a) s1[a[i]]=1
+    split("banana date cherry",  b, " "); for(i in b) s2[b[i]]=1
+}
+{
+    for(k in s1) d[k]=1; for(k in s1) n[k]=1; for(k in s1) u[k]=1
+    diff(d, s2);   asorti(d);  print "  only in s1:", join(d, " ")
+    inter(n, s2);  asorti(n);  print "  common:    ", join(n, " ")
+    union(u, s2);  asorti(u);  print "  union:     ", join(u, " ")
+}'

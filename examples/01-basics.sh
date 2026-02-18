@@ -47,18 +47,21 @@ echo "5) Number of students:"
 echo "$DATA" | $FK 'END { print "Count:", NR }'
 echo ""
 
-# ── Average ──────────────────────────────────────────────────────
+# ── Average (manual vs builtin) ──────────────────────────────────
 echo "6) Average score:"
 echo "$DATA" | $FK '{ sum += $2 } END { printf "Average: %.1f\n", sum / NR }'
+echo "   (or with builtins):"
+echo "$DATA" | $FK '{ a[NR]=$2 } END { printf "Average: %.1f\n", mean(a) }'
 echo ""
 
 # ── Min and max ──────────────────────────────────────────────────
 echo "7) Highest and lowest score:"
-echo "$DATA" | $FK '
-    NR == 1 { min = max = $2; min_name = max_name = $1 }
-    $2 > max { max = $2; max_name = $1 }
-    $2 < min { min = $2; min_name = $1 }
-    END { print "High:", max_name, max; print "Low:", min_name, min }
+echo "$DATA" | $FK '{ scores[NR]=$2; names[NR]=$1 }
+    END {
+        hi=1; lo=1
+        for(i=2;i<=NR;i++) { if(scores[i]>scores[hi]) hi=i; if(scores[i]<scores[lo]) lo=i }
+        print "High:", names[hi], scores[hi]; print "Low:", names[lo], scores[lo]
+    }
 '
 echo ""
 
@@ -70,3 +73,8 @@ echo ""
 # ── Numbered output ──────────────────────────────────────────────
 echo "9) Add line numbers:"
 echo "$DATA" | $FK '{ printf "%2d. %s %s (%s)\n", NR, $1, $2, $3 }'
+echo ""
+
+# ── Full summary stats ──────────────────────────────────────────
+echo "10) Summary stats (fk builtins):"
+echo "$DATA" | $FK '{ a[NR]=$2 } END { printf "  n=%d mean=%.1f median=%.1f stddev=%.1f min=%s max=%s\n", length(a), mean(a), median(a), stddev(a), min(a), max(a) }'

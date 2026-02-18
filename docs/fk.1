@@ -14,6 +14,10 @@ fk \(em filter-kernel: a modern awk for humans
 .IR program\~
 .RI [ file\~ .\|.\|.]
 .br
+.B fk
+.RB [ options ]
+.IR file\~ .\|.\|.
+.br
 .B fk \-\-describe
 .RI [ file\~ .\|.\|.]
 .br
@@ -43,6 +47,13 @@ Filter lines
 Sum a column
 .nf
 \fBfk '{ s += $1 } END { print s }' numbers.txt\fR
+.fi
+.
+.TP
+View a CSV file
+.nf
+\fBfk data.csv\fR
+\fBfk \-H \-v 'OFS=\\t' data.csv\fR
 .fi
 .
 .TP
@@ -81,6 +92,15 @@ and negative field indexes.
 If no files are given, \fBfk\fR reads stdin.
 A filename of \fB\-\fR also means stdin.
 .
+.PP
+\fBFile-only mode:\fR when all positional arguments are existing files
+(detected by the presence of \fB/\fR or \fB.\fR in the name), the program
+defaults to \fB{ print }\fR.
+This makes \fBfk data.csv\fR work as a quick viewer.
+Fields from structured readers (CSV, TSV, JSON) are joined by \fBOFS\fR
+(default: space); use \fB\-v 'OFS=\\t'\fR for tab output or
+\fB\-v 'OFS=,'\fR to preserve CSV.
+.
 .\" ─────────────────────────────────────────────────────────────
 .SH OPTIONS
 .
@@ -99,6 +119,9 @@ becomes a file operand.
 .TP
 \fB\-v\fR \fIvar\fR=\fIval\fR
 Assign a variable before the program runs.
+C-style escape sequences in the value are interpreted:
+\fB\\t\fR (tab), \fB\\n\fR (newline), \fB\\r\fR, \fB\\a\fR, \fB\\b\fR, \fB\\f\fR,
+\fB\\v\fR, \fB\\\\\fR, \fB\\"\fR, \fB\\xHH\fR, \fB\\uHHHH\fR.
 Can be repeated.
 .
 .TP
@@ -143,6 +166,35 @@ Start an interactive session.
 Each line you type is parsed and executed immediately.
 State persists across lines.
 Type \fB:q\fR to quit, \fB:vars\fR to inspect, \fB:reset\fR to clear.
+.
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print a usage summary and exit.
+.
+.TP
+\fB\-\-version\fR
+Print the version number and exit.
+.
+.\" ─────────────────────────────────────────────────────────────
+.SH INPUT MODE PRECEDENCE
+.
+When opening files, \fBfk\fR determines the input mode as follows:
+.
+.IP 1. 4
+\fB\-i\fR (explicit) always wins.
+Combining \fB\-F\fR with \fB\-i\fR is an error.
+.IP 2. 4
+\fB\-F\fR (explicit field separator) forces line mode.
+Auto-detection from file extensions is skipped.
+.IP 3. 4
+\fBAuto-detection\fR from the first file's extension:
+\fB.csv\fR \(-> CSV, \fB.tsv\fR/\fB.tab\fR \(-> TSV,
+\fB.json\fR/\fB.jsonl\fR/\fB.ndjson\fR \(-> JSON,
+\fB.parquet\fR \(-> Parquet.
+Compression wrappers (\fB.gz\fR, \fB.zst\fR, \fB.bz2\fR, \fB.xz\fR, \fB.lz4\fR)
+are stripped before matching.
+.IP 4. 4
+Default: line mode with whitespace splitting.
 .
 .\" ─────────────────────────────────────────────────────────────
 .SH PROGRAM STRUCTURE
@@ -340,6 +392,14 @@ Convert between character and codepoint. \fI[fk]\fR
 .TP
 \fBhex(\fIn\fB)\fR
 Format a number as hexadecimal (e.g. \fB0xff\fR). \fI[fk]\fR
+.TP
+\fBlpad(\fIs\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR]\fB)\fR
+Left-pad \fIs\fR to \fIwidth\fR characters (default pad: space).
+Never truncates. \fI[fk]\fR
+.TP
+\fBrpad(\fIs\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR]\fB)\fR
+Right-pad \fIs\fR to \fIwidth\fR characters (default pad: space).
+Never truncates. \fI[fk]\fR
 .
 .SS Math
 .TP
@@ -397,6 +457,13 @@ Flush stdout.
 \fBclose(\fIname\fB)\fR
 Close an output file or pipe opened by redirection.
 Returns 0 on success, \-1 if not found.
+.TP
+\fBslurp(\fIfile\fB)\fR
+Read the entire contents of \fIfile\fR and return as a string. \fI[fk]\fR
+.TP
+\fBslurp(\fIfile\fB,\fR \fIarr\fB)\fR
+Read \fIfile\fR line by line into \fIarr\fR[1], \fIarr\fR[2], etc.
+Returns the line count. \fI[fk]\fR
 .
 .SS String replacement
 .TP
@@ -408,15 +475,59 @@ Default target is \fB$0\fR.
 .
 .SS Arrays \fI[fk extensions]\fR
 .TP
+\fBprint\fR \fIarr\fR
+Print array contents, one entry per line (separated by ORS).
+If the array has sequential integer keys (1..N), prints \fBvalues\fR
+in order; otherwise prints \fBkeys\fR sorted.
+This makes \fB{ u[$1]++ } END { print u }\fR print sorted unique values.
+.TP
+\fBkeys(\fIarr\fB)\fR
+Return all keys as a string, sorted and joined by ORS. \fI[fk]\fR
+.TP
+\fBvals(\fIarr\fB)\fR
+Return all values as a string, sorted by key and joined by ORS. \fI[fk]\fR
+.TP
 \fBasort(\fIarr\fB)\fR
 Sort array by values, re-key with 1..N. Returns element count.
 .TP
 \fBasorti(\fIarr\fB)\fR
 Sort array by keys, store sorted keys as values with 1..N.
 .TP
-\fBjoin(\fIarr\fB,\fR \fIsep\fB)\fR
-Join array values into a string, separated by \fIsep\fR.
+\fBjoin(\fIarr\fR [\fB,\fR \fIsep\fR]\fB)\fR
+Join array values into a string, separated by \fIsep\fR (default: OFS).
 Numeric keys are joined in order.
+.TP
+\fBuniq(\fIarr\fB)\fR
+Deduplicate values, re-key as 1..N. Returns new count.
+.TP
+\fBinv(\fIarr\fB)\fR
+Swap keys and values in place. Returns count.
+.TP
+\fBtidy(\fIarr\fB)\fR
+Remove entries with empty or zero values. Returns remaining count.
+.TP
+\fBshuf(\fIarr\fB)\fR
+Randomize order, re-key as 1..N. Returns count.
+.TP
+\fBdiff(\fIa\fB,\fR \fIb\fB)\fR
+Set difference: remove from \fIa\fR any key present in \fIb\fR.
+Returns remaining count of \fIa\fR.
+.TP
+\fBinter(\fIa\fB,\fR \fIb\fB)\fR
+Set intersection: remove from \fIa\fR any key not in \fIb\fR.
+Returns remaining count of \fIa\fR.
+.TP
+\fBunion(\fIa\fB,\fR \fIb\fB)\fR
+Set union: copy keys from \fIb\fR into \fIa\fR (without overwriting).
+Returns total count of \fIa\fR.
+.TP
+\fBseq(\fIarr\fB,\fR \fIfrom\fB,\fR \fIto\fB)\fR
+Fill \fIarr\fR with integers from \fIfrom\fR to \fIto\fR, keyed 1..N.
+Direction is automatic. Returns count.
+.TP
+\fBsamp(\fIarr\fB,\fR \fIn\fB)\fR
+Keep \fIn\fR random elements, re-key as 1..\fIn\fR.
+Uses Fisher\-Yates partial shuffle. Returns \fIn\fR.
 .
 .SS Statistics \fI[fk extensions]\fR
 .PP
@@ -689,11 +800,14 @@ Notably:
 .IP \(bu 2
 \fBmatch()\fR with capture groups (3rd argument)
 .IP \(bu 2
+\fBprint arr\fR (smart array dump), \fBkeys()\fR, \fBvals()\fR,
+\fBuniq()\fR, \fBinv()\fR, \fBtidy()\fR, \fBshuf()\fR, \fBsamp()\fR,
+\fBdiff()\fR, \fBinter()\fR, \fBunion()\fR, \fBseq()\fR,
 \fBasort()\fR, \fBasorti()\fR, \fBjoin()\fR, \fBtypeof()\fR
 .IP \(bu 2
 \fBsum()\fR, \fBmean()\fR, \fBmedian()\fR, \fBstddev()\fR, \fBvariance()\fR, \fBp()\fR, \fBiqm()\fR, \fBquantile()\fR
 .IP \(bu 2
-\fBtrim()\fR, \fBltrim()\fR, \fBrtrim()\fR, \fBstartswith()\fR, \fBendswith()\fR, \fBrepeat()\fR, \fBreverse()\fR
+\fBtrim()\fR, \fBltrim()\fR, \fBrtrim()\fR, \fBstartswith()\fR, \fBendswith()\fR, \fBrepeat()\fR, \fBreverse()\fR, \fBlpad()\fR, \fBrpad()\fR
 .IP \(bu 2
 \fBabs()\fR, \fBceil()\fR, \fBfloor()\fR, \fBround()\fR, \fBmin()\fR, \fBmax()\fR, \fBlog2()\fR, \fBlog10()\fR
 .IP \(bu 2
@@ -704,6 +818,8 @@ Bitwise: \fBand()\fR, \fBor()\fR, \fBxor()\fR, \fBlshift()\fR, \fBrshift()\fR, \
 \fB\-\-repl\fR interactive mode
 .IP \(bu 2
 \fB\-\-describe\fR auto-detect format, infer schema, suggest programs
+.IP \(bu 2
+\fBslurp()\fR for reading files into strings or arrays
 .IP \(bu 2
 Transparent decompression of .gz, .zst, .bz2, .xz, .lz4 files
 .IP \(bu 2

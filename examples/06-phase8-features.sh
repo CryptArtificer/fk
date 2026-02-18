@@ -30,29 +30,23 @@ echo ""
 # ── asort / asorti ──────────────────────────────────────────────
 echo "3) asort — sort array by values:"
 printf "banana\napple\ncherry\ndate\n" | $FK '
-{ a[NR] = $0 }
-END {
-    asort(a)
-    printf "  Sorted: "
-    for (i=1; i<=NR; i++) printf "%s ", a[i]
-    print ""
-}'
+    { a[NR] = $0 }
+    END { asort(a); print "  Sorted:", join(a, " ") }
+'
 echo ""
 
 echo "   asorti — sort by keys:"
 printf "c:3\na:1\nb:2\n" | $FK -F: '
-{ a[$1] = $2 }
-END {
-    n = asorti(a)
-    printf "  Keys: "
-    for (i = 1; i <= n; i++) printf "%s ", a[i]
-    print ""
-}'
+    { a[$1] = $2 }
+    END { n = asorti(a); print "  Keys:", join(a, " ") }
+'
 echo ""
 
 # ── join() ──────────────────────────────────────────────────────
 echo "4) join() — concatenate array values:"
 echo "x" | $FK 'BEGIN { a[1]="hello"; a[2]="beautiful"; a[3]="world"; print "  " join(a, " ") }'
+echo "   join(a) with no separator uses OFS:"
+echo "x" | $FK -v 'OFS=|' 'BEGIN { a[1]="A"; a[2]="B"; a[3]="C"; print "  " join(a) }'
 echo ""
 
 # ── typeof() ────────────────────────────────────────────────────

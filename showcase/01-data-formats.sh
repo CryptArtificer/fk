@@ -6,19 +6,20 @@ setup_data
 
 section "1. CSV with named columns — no csvkit, no counting fields"
 # awk needs: csvkit to parse, then count which column is which.
-# fk: -i csv -H gives you $column_name directly.
+# fk: -H gives you $column_name; format auto-detected from .csv extension.
 
-show $FK -i csv -H '{
+show $FK -H '{
     rev[$region] += $revenue
 }
 END {
-    for (r in rev) printf "  %-6s $%.0f\n", r, rev[r]
+    for (r in rev) out[r] = sprintf("  %s $%.0f", rpad(r, 6), rev[r])
+    asort(out); print out
 }' "$TMPDIR/sales.csv"
 
 section "2. Quoted column names — hyphens, dots, anything"
 # awk: impossible. fk: $"col-name" for any header.
 
-show $FK -i csv -H '{
+show $FK -H '{
     cpu = $"cpu-usage" + 0; mem = $"mem-usage" + 0
     status = "OK"
     if (cpu > 90 || mem > 90) status = "CRITICAL"

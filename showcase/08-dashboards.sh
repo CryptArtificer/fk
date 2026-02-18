@@ -113,10 +113,7 @@ END {
     for (path in n) {
         count = n[path]
         for (i = 1; i <= count; i++) vals[i] = data[path, i] + 0
-        asort(vals)
-        p95 = int(count * 0.95)
-        if (p95 < 1) p95 = 1
-        printf "%s\t%d\n", path, vals[p95]
+        printf "%s\t%.0f\n", path, p(vals, 95)
         delete vals
     }
 }' "$TMPDIR/alb.tsv" | sort -t$'\t' -k2 -n -r | \
