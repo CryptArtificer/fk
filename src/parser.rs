@@ -891,6 +891,11 @@ impl Parser {
                     return self.parse_func_call(name);
                 }
 
+                // Bare `length` without parens → length($0)
+                if name == "length" {
+                    return Ok(Expr::FuncCall(name, vec![Expr::Field(Box::new(Expr::NumberLit(0.0)))]));
+                }
+
                 Ok(Expr::Var(name))
             }
             Token::Getline => {
@@ -922,6 +927,26 @@ impl Parser {
             Token::LParen => {
                 self.advance();
                 let expr = self.parse_expr()?;
+                if self.check(&Token::Comma) {
+                    // (expr, expr, ...) in array — multi-dimensional key
+                    let mut parts = vec![expr];
+                    while self.check(&Token::Comma) {
+                        self.advance();
+                        parts.push(self.parse_expr()?);
+                    }
+                    self.expect(&Token::RParen)?;
+                    let key = Self::join_subsep(parts);
+                    if self.check(&Token::In) {
+                        self.advance();
+                        if let Token::Ident(arr) = self.current().clone() {
+                            self.advance();
+                            return Ok(Expr::ArrayIn(Box::new(key), arr));
+                        } else {
+                            return Err(FkError::new(self.current_span(), "expected array name after 'in'"));
+                        }
+                    }
+                    return Err(FkError::new(self.current_span(), "(expr, expr) requires 'in array'"));
+                }
                 self.expect(&Token::RParen)?;
                 Ok(expr)
             }
@@ -959,6 +984,22 @@ impl Parser {
         }
         self.expect(&Token::RParen)?;
         Ok(Expr::FuncCall(name, args))
+    }
+
+    /// Build a SUBSEP-concatenated key from multiple expressions.
+    fn join_subsep(parts: Vec<Expr>) -> Expr {
+        let mut iter = parts.into_iter();
+        let mut key = iter.next().unwrap();
+        for part in iter {
+            key = Expr::Concat(
+                Box::new(Expr::Concat(
+                    Box::new(key),
+                    Box::new(Expr::Var("SUBSEP".to_string())),
+                )),
+                Box::new(part),
+            );
+        }
+        key
     }
 
     // --- helpers ---

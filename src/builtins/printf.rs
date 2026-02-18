@@ -172,10 +172,16 @@ pub fn format_printf(fmt: &str, args: &[String]) -> String {
                     result.push_str(&apply_width(val, &flags, ' '));
                 }
                 'c' => {
-                    if let Some(s) = args.get(arg_idx)
-                        && let Some(ch) = s.chars().next() {
+                    if let Some(s) = args.get(arg_idx) {
+                        let n = to_number(s);
+                        if n != 0.0 || s == "0" {
+                            if let Some(ch) = char::from_u32(n as u32) {
+                                result.push(ch);
+                            }
+                        } else if let Some(ch) = s.chars().next() {
                             result.push(ch);
                         }
+                    }
                     arg_idx += 1;
                 }
                 _ => {

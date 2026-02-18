@@ -11,16 +11,13 @@ impl<'a> Executor<'a> {
     /// Extract a regex pattern string from an expression that may be a bare
     /// `/regex/` literal (which the parser turns into `$0 ~ "pattern"`).
     fn extract_regex_or_eval(&mut self, expr: &Expr) -> String {
-        if let Expr::Match(lhs, rhs) = expr {
-            if let Expr::Field(idx) = lhs.as_ref() {
-                if let Expr::NumberLit(n) = idx.as_ref() {
-                    if *n == 0.0 {
-                        if let Expr::StringLit(pat) = rhs.as_ref() {
-                            return pat.clone();
-                        }
-                    }
-                }
-            }
+        if let Expr::Match(lhs, rhs) = expr
+            && let Expr::Field(idx) = lhs.as_ref()
+            && let Expr::NumberLit(n) = idx.as_ref()
+            && *n == 0.0
+            && let Expr::StringLit(pat) = rhs.as_ref()
+        {
+            return pat.clone();
         }
         self.eval_string(expr)
     }
