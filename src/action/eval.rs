@@ -231,7 +231,7 @@ impl<'a> Executor<'a> {
         if i >= 0 {
             i as usize
         } else {
-            let nf = self.rt.fields.len() as isize;
+            let nf = self.rt.nf() as isize;
             let resolved = nf + 1 + i;
             if resolved < 0 { 0 } else { resolved as usize }
         }

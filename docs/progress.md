@@ -184,3 +184,11 @@
 - [x] Multiple `-f` files: `-f a.fk -f b.fk` concatenates program sources
 - [x] BEGINFILE / ENDFILE blocks: fire at start/end of each input file
 - [x] `typeof()` returns `"uninitialized"` for unset array elements (not just variables)
+
+#### Phase 18 — Lazy field storage (E3)
+- [x] `split_offsets()` / `split_offsets_limit()` in field.rs — byte-range pairs, zero String allocation
+- [x] `Runtime` stores `field_offsets: Vec<(usize, usize)>` + `fields_lazy` flag
+- [x] `write_field_to()` writes directly from `record_text[start..end]` — zero-copy hot path
+- [x] `get_field()` slices record_text on demand; `set_field()` materializes all before modifying
+- [x] `set_record()` and `set_record_capped()` now use offset path by default
+- [x] print $2: 0.13s → 0.10s (6.4× faster than awk); sum: 0.24s → 0.17s (3.4× faster)

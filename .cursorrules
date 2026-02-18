@@ -129,6 +129,9 @@ Phase B — Resource lifecycle: ✓ (B1-B4 done)
 Phase C — Awk compat: ✓ (C1-C5 done)
   C1 CONVFMT, C2 dynamic printf width, C3 multiple -f files,
   C4 BEGINFILE/ENDFILE, C5 uninitialized variable distinction (typeof)
+Phase E3 — Lazy field storage: ✓
+  Offset-based splitting (no String allocation), zero-copy write_field_to,
+  materialize only on field modification
 
 Phase D — Annotated program representation:
   D1. ProgramInfo from AST pre-analysis: flags, pre-compiled regex,
@@ -141,20 +144,18 @@ Phase E — Memory:
   E2. Arena allocation for Values (batch-free per record)
   E3. Lazy field storage: $0 + split offsets, materialize on access
 
-Order: A1-A3 ✓ → B1-B4 ✓ → D1 ✓ → C1-C5 ✓ → E3 → D2 → E1-E2
+Order: A1-A3 ✓ → B1-B4 ✓ → D1 ✓ → C1-C5 ✓ → E3 ✓ → D2 → E1-E2
 
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 
 ### Performance (from user-time benchmarks on 1M lines, Apple M3 Pro):
 fk is faster than awk (macOS system awk 20200816) on all benchmarks:
-- `print $2`: fk ~0.13s vs awk ~0.61s (fk 4.7× faster) ← capped split
-- Sum column: fk ~0.22s vs awk ~0.61s (fk 2.8× faster)
-- Pattern matching: fk ~0.17s vs awk ~0.73s (fk 4.3× faster) ← nosplit
-- Field arithmetic: fk ~0.29s vs awk ~0.62s (fk 2.1× faster)
-- Associative arrays: fk ~0.34s vs awk ~0.70s (fk 2.1× faster)
-- Computed regex: fk ~0.30s vs awk ~0.66s (fk 2.2× faster)
-- Tight loop (3x): fk ~0.75s vs awk ~0.77s (fk 1.0× faster)
+- `print $2`: fk ~0.10s vs awk ~0.64s (fk 6.4× faster) ← lazy offsets
+- Sum column: fk ~0.17s vs awk ~0.58s (fk 3.4× faster) ← lazy offsets
+- Pattern matching: fk ~0.55s vs awk ~0.63s (fk 1.1× faster) ← nosplit
+- Field arithmetic: fk ~0.21s vs awk ~0.83s (fk 4.0× faster) ← lazy offsets
+- NF-dependent: fk ~0.11s (lazy offsets + capped when possible)
 
 ## Documentation & demos
 

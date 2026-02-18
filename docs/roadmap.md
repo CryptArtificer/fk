@@ -98,13 +98,14 @@ allocated thousands of times. Small intern pool saves alloc pressure.
 **E2. Arena allocation** — per-record arena for Values. Batch-free instead
 of individual String drops.
 
-**E3. Lazy field storage** — store `$0` as a single string + split offsets
-(byte positions). Only materialize individual field Strings on access.
-Combined with A1/A3 this eliminates most allocation in the hot path.
+**E3. Lazy field storage** ✓ — `split_offsets()` computes byte-range pairs
+into record_text without allocating Strings. `write_field_to()` writes
+directly from the slice (zero-copy). Fields materialized only on modification.
+print $2: 0.10s (was 0.13s), sum $5: 0.17s (was 0.24s), 1M lines.
 
 ## Execution order
 
-    A1-A3 ✓ → B1-B4 ✓ → D1 ✓ → C1-C5 ✓
-      → E3 → D2 (if profiling justifies) → E1-E2
+    A1-A3 ✓ → B1-B4 ✓ → D1 ✓ → C1-C5 ✓ → E3 ✓
+      → D2 (if profiling justifies) → E1-E2
 
-Remaining: E3 (lazy field storage), D2/E1-E2 (advanced).
+Remaining: D2 (flat instruction stream), E1-E2 (string interning, arena alloc).

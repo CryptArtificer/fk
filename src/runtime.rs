@@ -116,6 +116,8 @@ pub struct Runtime {
     variables: HashMap<String, Value>,
     arrays: HashMap<String, HashMap<String, Value>>,
     pub(crate) fields: Vec<String>,
+    field_offsets: Vec<(usize, usize)>,
+    fields_lazy: bool,
     record_text: String,
     record_text_valid: bool,
     fields_dirty: bool,
@@ -149,6 +151,8 @@ impl Runtime {
             variables: HashMap::new(),
             arrays: HashMap::new(),
             fields: Vec::new(),
+            field_offsets: Vec::new(),
+            fields_lazy: false,
             record_text: String::new(),
             record_text_valid: false,
             fields_dirty: false,
@@ -251,6 +255,8 @@ impl Runtime {
     /// Borrow ORS directly (avoids clone in hot print path).
     pub fn ors(&self) -> &str { &self.ors }
 
+    pub fn nf(&self) -> usize { self.nf }
+
     pub fn ofmt(&self) -> &str { &self.ofmt }
 
     pub fn convfmt(&self) -> &str { &self.convfmt }
@@ -260,7 +266,13 @@ impl Runtime {
             if self.record_text_valid && !self.fields_dirty {
                 return self.record_text.clone();
             }
+            if self.fields_lazy {
+                return self.join_from_offsets();
+            }
             return self.fields.join(&self.ofs);
+        }
+        if self.fields_lazy {
+            return self.field_from_offset(idx - 1);
         }
         self.fields
             .get(idx - 1)
@@ -275,9 +287,22 @@ impl Runtime {
                 let _ = w.write_all(self.record_text.as_bytes());
                 return;
             }
+            if self.fields_lazy {
+                let rt = self.record_text.as_bytes();
+                for (i, &(start, end)) in self.field_offsets.iter().enumerate() {
+                    if i > 0 { let _ = w.write_all(self.ofs.as_bytes()); }
+                    let _ = w.write_all(&rt[start..end]);
+                }
+                return;
+            }
             for (i, f) in self.fields.iter().enumerate() {
                 if i > 0 { let _ = w.write_all(self.ofs.as_bytes()); }
                 let _ = w.write_all(f.as_bytes());
+            }
+        } else if self.fields_lazy {
+            let fi = idx - 1;
+            if let Some(&(start, end)) = self.field_offsets.get(fi) {
+                let _ = w.write_all(&self.record_text.as_bytes()[start..end]);
             }
         } else if let Some(f) = self.fields.get(idx - 1) {
             let _ = w.write_all(f.as_bytes());
@@ -290,9 +315,13 @@ impl Runtime {
             self.record_text.push_str(value);
             self.record_text_valid = true;
             self.fields_dirty = false;
+            self.fields_lazy = false;
             self.fields = field::split(value, &self.fs);
             self.nf = self.fields.len();
             return;
+        }
+        if self.fields_lazy {
+            self.materialize_fields();
         }
         self.fields_dirty = true;
         let idx = idx - 1;
@@ -308,8 +337,9 @@ impl Runtime {
         self.record_text.push_str(line);
         self.record_text_valid = true;
         self.fields_dirty = false;
-        field::split_into(&mut self.fields, line, &self.fs);
-        self.nf = self.fields.len();
+        self.fields_lazy = true;
+        field::split_offsets(&mut self.field_offsets, line, &self.fs);
+        self.nf = self.field_offsets.len();
     }
 
     /// Store the record text without field splitting (used when the
@@ -319,6 +349,7 @@ impl Runtime {
         self.record_text.push_str(line);
         self.record_text_valid = true;
         self.fields_dirty = false;
+        self.fields_lazy = false;
     }
 
     /// Split only the first `limit` fields (used when max_field_hint
@@ -328,8 +359,9 @@ impl Runtime {
         self.record_text.push_str(line);
         self.record_text_valid = true;
         self.fields_dirty = false;
-        field::split_into_limit(&mut self.fields, line, &self.fs, limit);
-        self.nf = self.fields.len();
+        self.fields_lazy = true;
+        field::split_offsets_limit(&mut self.field_offsets, line, &self.fs, limit);
+        self.nf = self.field_offsets.len();
     }
 
     /// Set the record with pre-split fields (used by CSV/TSV/JSON readers).
@@ -337,8 +369,35 @@ impl Runtime {
     pub fn set_record_fields(&mut self, _text: &str, fields: Vec<String>) {
         self.record_text_valid = false;
         self.fields_dirty = false;
+        self.fields_lazy = false;
         self.nf = fields.len();
         self.fields = fields;
+    }
+
+    fn field_from_offset(&self, fi: usize) -> String {
+        if let Some(&(start, end)) = self.field_offsets.get(fi) {
+            self.record_text[start..end].to_string()
+        } else {
+            String::new()
+        }
+    }
+
+    fn join_from_offsets(&self) -> String {
+        let mut out = String::new();
+        let rt = &self.record_text;
+        for (i, &(start, end)) in self.field_offsets.iter().enumerate() {
+            if i > 0 { out.push_str(&self.ofs); }
+            out.push_str(&rt[start..end]);
+        }
+        out
+    }
+
+    fn materialize_fields(&mut self) {
+        self.fields.clear();
+        for &(start, end) in &self.field_offsets {
+            self.fields.push(self.record_text[start..end].to_string());
+        }
+        self.fields_lazy = false;
     }
 
     pub fn increment_nr(&mut self) {
