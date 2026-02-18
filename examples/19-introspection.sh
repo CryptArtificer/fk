@@ -1,111 +1,108 @@
 #!/usr/bin/env bash
-# 19 — Introspection: dump, typeof, timing, BEGINFILE/ENDFILE
+# 19 — Introspection: typeof, dump, timing, per-file hooks
+#
+# Story: you're debugging a data pipeline. These tools let you
+# inspect values, trace execution, and measure performance —
+# all from inside your fk program.
 set -euo pipefail
 source "$(dirname "$0")/_helpers.sh"
 setup_data
 
-section "1. typeof — runtime type inspection"
+section "1. typeof — know what you're working with"
 
-show $FK 'BEGIN {
-    x = 42
-    y = "hello"
-    split("a:b:c", arr, ":")
-    printf "  typeof(x)       = %s\n", typeof(x)
-    printf "  typeof(y)       = %s\n", typeof(y)
-    printf "  typeof(arr)     = %s\n", typeof(arr)
-    printf "  typeof(unknown) = %s\n", typeof(unknown)
-    printf "  typeof(arr[1])  = %s\n", typeof(arr[1])
-    printf "  typeof(arr[99]) = %s\n", typeof(arr[99])
-}'
-
-section "2. dump — inspect any value or array"
-
-echo "Dump a scalar:"
-show $FK 'BEGIN { x = 3.14; dump(x) }'
+echo "Check types before operating on them:"
+show $FK -H '{
+    printf "  %-10s  revenue=%-12s type=%-14s  units=%-8s type=%s\n", $region, $revenue, typeof($revenue), $units, typeof($units)
+}' "$TMPDIR/sales.csv"
 
 echo ""
-echo "Dump an array:"
+echo "Detect uninitialized values (useful for defensive coding):"
 show $FK 'BEGIN {
-    a["name"] = "Alice"
-    a["age"]  = 30
-    a["role"] = "engineer"
-    dump(a)
+    x = 42; split("a:b:c", arr, ":")
+    printf "  assigned var:     %s\n", typeof(x)
+    printf "  assigned element: %s\n", typeof(arr[1])
+    printf "  missing var:      %s\n", typeof(ghost)
+    printf "  missing element:  %s\n", typeof(arr[99])
+    printf "  array itself:     %s\n", typeof(arr)
 }'
 
-echo ""
-echo "Dump from live data (first 3 records):"
-show $FK -H 'NR <= 4 { dump($0) }' "$TMPDIR/sales.csv"
+section "2. dump — inspect values and arrays"
 
-section "3. clk — wall-clock time"
-
+echo "Dump reveals the internal representation:"
 show $FK 'BEGIN {
-    printf "  Program started at clock = %.4f seconds\n", clk()
-}'
-
-section "4. tic / toc — stopwatch timers"
-
-echo "Basic timing:"
-show $FK 'BEGIN {
-    tic()
-    for (i = 0; i < 100000; i++) x += i
-    printf "  100k iterations: %.4f seconds\n", toc()
+    x = 3.14
+    dump(x)
+    split("alice bob carol", team, " ")
+    dump(team)
 }'
 
 echo ""
-echo "Named timers (run multiple in parallel):"
-show $FK 'BEGIN {
-    tic("setup")
-    for (i = 0; i < 50000; i++) a[i] = i * 2
-    printf "  setup: %.4f sec\n", toc("setup")
+echo "Dump to a file — debug without cluttering output:"
+show_pipe "echo 'hello world' | $FK '{ dump(\$0, \"$TMPDIR/debug.txt\"); print \"output:\", \$0 }'"
+echo "  debug.txt contains:"
+printf "  "; cat "$TMPDIR/debug.txt"; echo ""
 
-    tic("search")
-    for (i = 0; i < 50000; i++) { if (a[i] > 99998) found++ }
-    printf "  search: %.4f sec\n", toc("search")
-}'
+section "3. BEGINFILE / ENDFILE — per-file processing"
 
-echo ""
-echo "Per-file timing with BEGINFILE / ENDFILE:"
-printf "1\n2\n3\n" > "$TMPDIR/small.txt"
-seq 1 10000 > "$TMPDIR/big.txt"
-show $FK '
-BEGINFILE { tic(FILENAME) }
-ENDFILE   { printf "  %-12s %6d records  %.4f sec\n", FILENAME, FNR, toc(FILENAME) }
-{ sum += $1 }
-END { printf "\n  total sum = %d\n", sum }
-' "$TMPDIR/small.txt" "$TMPDIR/big.txt"
+printf "apple\nbanana\ncherry\n" > "$TMPDIR/fruit.txt"
+printf "carrot\ncelery\nkale\npea\n" > "$TMPDIR/veg.txt"
 
-section "5. BEGINFILE / ENDFILE — per-file hooks"
-
-echo "Print a banner around each file's output:"
-printf "apple\nbanana\n" > "$TMPDIR/fruit.txt"
-printf "carrot\ncelery\n" > "$TMPDIR/veg.txt"
+echo "Wrap each file in a visual frame:"
 show $FK '
 BEGINFILE { printf "  ┌── %s ──\n", FILENAME }
           { printf "  │ %s\n", $0 }
-ENDFILE   { printf "  └── %d records ──\n\n", FNR }
+ENDFILE   { printf "  └── %d lines ──\n\n", FNR }
 ' "$TMPDIR/fruit.txt" "$TMPDIR/veg.txt"
 
-section "6. dump to file — save diagnostics without cluttering output"
+echo "Per-file stats with a grand total:"
+show $FK -H '
+BEGINFILE { file_sum = 0 }
+          { file_sum += $revenue }
+ENDFILE   { printf "  %-12s  total revenue: $%d\n", FILENAME, file_sum }
+END       { printf "\n  All files:    total revenue: $%d\n", grand }
+{ grand += $revenue }
+' "$TMPDIR/sales.csv"
 
-show_pipe "echo 'hello world' | $FK '{ dump(\$0, \"$TMPDIR/debug.txt\"); print \"processed:\", \$0 }'"
-echo ""
-echo "  Contents of debug.txt:"
-printf "  "; cat "$TMPDIR/debug.txt"
-echo ""
+section "4. tic / toc — measure where time goes"
 
-section "7. Putting it together — profiled CSV analysis"
+echo "Time a tight loop:"
+show $FK 'BEGIN {
+    tic()
+    for (i = 0; i < 100000; i++) x += i
+    printf "  100k additions: %.4f sec\n", toc()
+}'
+
+echo ""
+echo "Named timers — profile different phases:"
+show $FK 'BEGIN {
+    tic("build")
+    for (i = 0; i < 50000; i++) a[i] = i * 2
+    printf "  build array: %.4f sec\n", toc("build")
+
+    tic("scan")
+    for (i = 0; i < 50000; i++) { if (a[i] > 99998) found++ }
+    printf "  scan array:  %.4f sec  (found %d)\n", toc("scan"), found
+}'
+
+section "5. Putting it together — profiled multi-file analysis"
+
+echo "Combine timing, per-file hooks, and stats in one program:"
+seq 1 10000 > "$TMPDIR/numbers.txt"
 
 show $FK -H '
-BEGIN { tic("total") }
-{
-    rev[$region] += $revenue
-    units[$region] += $units
-}
-END {
+BEGIN     { tic("total") }
+BEGINFILE { tic(FILENAME) }
+          {
+              rev[$region] += $revenue
+              units[$region] += $units
+          }
+ENDFILE   { printf "  %-12s  %4d rows  %.4f sec\n", FILENAME, FNR, toc(FILENAME) }
+END       {
     elapsed = toc("total")
+    print ""
     for (r in rev)
-        printf "  %-6s  revenue=$%6d  units=%d\n", r, rev[r], units[r]
-    printf "\n  Processed %d records in %.4f sec (%.0f rec/sec)\n", NR-1, elapsed, (NR-1)/elapsed
+        printf "  %-6s  $%6d revenue  %4d units\n", r, rev[r], units[r]
+    printf "\n  Processed %d records in %.4f sec\n", NR-1, elapsed
 }' "$TMPDIR/sales.csv"
 
-printf "\n${C_BOLD}Done.${C_RESET} Introspection: typeof, dump, clk, tic/toc, BEGINFILE/ENDFILE.\n"
+printf "\n${C_BOLD}Done.${C_RESET} typeof, dump, tic/toc, BEGINFILE/ENDFILE — debug and profile from inside fk.\n"
