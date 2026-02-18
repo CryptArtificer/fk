@@ -1,40 +1,31 @@
 # fk roadmap — performance & completeness
 
-## Phase A — Skip unnecessary work
+## Phase A — Skip unnecessary work ✓
 
-The executor currently field-splits and counts NF on every record, even
-when the program never touches fields. A single pre-analysis pass over
-the AST can set flags to skip work.
+**A1. `needs_fields`** ✓ — analyze.rs walks the AST; when the program
+never accesses `$1`…`$N`, `field::split()` is skipped entirely.
+Pattern matching went from 3.2× to 4.3× faster than awk.
 
-**A1. `needs_fields`** — does the program reference `$1`..`$N`, `NF`,
-`split()`, or assign to fields? If not, skip `field::split()` entirely.
-Biggest single win for `/pattern/{print}` and `{gsub(...); print}`.
+**A2. `needs_nf`** ✓ — when NF is never read, the NF counting path
+is also skipped (combined with A1 in the nosplit branch).
 
-**A2. `needs_nf`** — only count fields when NF is actually read.
+**A3. `max_field_hint`** — `split_into_limit` implemented in `field.rs`,
+but wiring deferred: `$0` reconstruction requires all fields unless we
+store record_text alongside the capped field vec. Next step is adding
+`record_text` tracking to Runtime so capped split is safe.
 
-**A3. `max_field_hint`** — if only `$1` and `$2` are used, stop splitting
-after 2 fields (lazy split with a cap).
+## Phase B — Resource lifecycle ✓
 
-Expected impact: 20-40% faster on pattern-match and gsub workloads.
+**B1. Persistent output files** ✓ — was already done (`output_files` HashMap).
 
-## Phase B — Resource lifecycle
+**B2. Persistent getline file handles** ✓ — `input_files: HashMap<String, BufReader<File>>`
+on Executor. `getline < "file"` in a loop reads successive lines.
 
-File handles and pipes are currently opened/closed per call. Awk keeps
-them open across the program's lifetime until `close()`.
+**B3. Persistent getline pipes** ✓ — `"cmd" | getline var` spawns the
+command once and reads successive lines from its stdout.
 
-**B1. Persistent output files** — `print > "file"` in a loop should open
-once, write many, close at END. The `output_files` HashMap exists but
-isn't wired into print's `>` redirect path.
-
-**B2. Persistent getline file handles** — `getline line < "file"` in a
-loop should read successive lines, not reopen from the start. Add
-`input_files: HashMap<String, BufReader<File>>` to Executor.
-
-**B3. Persistent getline pipes** — `"cmd" | getline var` keeps the pipe
-open across calls. Same approach as B2.
-
-**B4. `close()` for input handles** — already works for output; extend to
-input file handles and pipes from B2/B3.
+**B4. `close()` for input handles** ✓ — `close(name)` now closes input
+file handles and input pipes in addition to output handles.
 
 ## Phase C — Awk compat
 
@@ -111,10 +102,9 @@ Combined with A1/A3 this eliminates most allocation in the hot path.
 
 ## Execution order
 
-    A1-A3 → B1-B3 → D1 → measure
-      → C1-C2 → E3 → B4 → C3-C5
-      → D2 (if profiling justifies) → E1-E2
+    A1-A2 ✓ → B1-B4 ✓ → D1 ✓ → measure ✓
+      → A3 (needs record_text) → C1-C2 → E3
+      → C3-C5 → D2 (if profiling justifies) → E1-E2
 
-First line is the performance-critical path. Second line is
-feature/polish that can interleave. D2 is contingent on profiling
-results after D1.
+First line complete. Second line is feature/polish. D2 is contingent
+on profiling results.

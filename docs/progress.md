@@ -164,3 +164,13 @@
 - [x] BEGIN/END-only programs skip stdin (gawk behaviour)
 - [x] `getline` (no source) reads from current input stream, not raw stdin
 - [x] `getline var` preserves `$0` while reading into named variable
+
+#### Phase 16 — Performance: AST analysis & resource lifecycle
+- [x] `analyze.rs`: static AST walker produces `ProgramInfo` (needs_fields, needs_nf, max_field hint, regex literals)
+- [x] Skip field splitting when program never accesses `$1`…`$N` or NF (nosplit path in Runtime)
+- [x] Pre-compile all regex patterns from the AST at startup (eliminates cold-start penalty)
+- [x] Persistent `getline < "file"` handles: reads successive lines, not line 1 each time
+- [x] Persistent `"cmd" | getline` pipes: command spawned once, reads successive lines
+- [x] `close()` now closes input file handles and pipes (not just output)
+- [x] Capped field split (`split_into_limit`) implemented, deferred pending `$0` record_text tracking
+- [x] Pattern matching: 3.2× → 4.3× faster than awk (1M lines, Apple M3 Pro)

@@ -12,9 +12,9 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~10,400 lines of Rust** across 27 source files
-- **347 Rust + 152 shell tests**, zero warnings, clippy clean
-- **Phases 0–8 complete**
+- **~10,800 lines of Rust** across 28 source files
+- **361 Rust + 152 shell tests**, zero warnings, clippy clean
+- **Phases 0–16 complete**
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
 
@@ -23,6 +23,7 @@ incrementally as a learning exercise. The user values:
 ```
 main.rs               — CLI dispatch, record loop
 cli.rs                — argument parsing (-F, -f, -v, -i, -H, -d, --repl)
+analyze.rs            — static AST analysis → ProgramInfo (field/NF/regex hints)
 describe.rs           — format sniffer, schema inference, suggestions, decompression
 lexer.rs              — tokenizer (Spanned tokens with O(1) line:col tracking)
 parser.rs             — recursive-descent → AST (Program, Rules, Exprs, Stmts)
@@ -117,18 +118,14 @@ Phase 14: Awk compat fixes — `in` operator for any expr (`$0 in a`,
 Phase 15: Ternary/logical/in operators in print args, BEGIN/END-only
   programs skip stdin, getline from current input (Input moved into
   Executor), getline into var preserves $0.
+Phase 16: AST analysis pass (analyze.rs → ProgramInfo), nosplit path
+  for pattern-match workloads (4.3× vs awk), regex pre-compilation,
+  persistent getline file/pipe handles, close() for input handles,
+  capped field split (deferred pending record_text for $0).
 ### Roadmap — performance & completeness
 
-Phase A — Skip unnecessary work (perf):
-  A1. needs_fields flag: skip field::split() when program never touches $1..$N
-  A2. needs_nf flag: skip NF counting when program never reads NF
-  A3. max_field_hint: lazy split — stop after N fields when only $1..$N used
-
-Phase B — Resource lifecycle (compat + perf):
-  B1. Persistent output files: print > "file" opens once, not per-record
-  B2. Persistent getline file handles: getline < "file" reads successive lines
-  B3. Persistent getline pipes: "cmd" | getline keeps pipe open
-  B4. close() for input handles (output already works)
+Phase A — Skip unnecessary work: ✓ (A1-A2 done; A3 implemented but deferred)
+Phase B — Resource lifecycle: ✓ (B1-B4 done)
 
 Phase C — Awk compat:
   C1. CONVFMT (separate from OFMT for implicit coercion)
@@ -153,15 +150,15 @@ Order: A1-A3 → B1-B3 → D1 → measure → C1-C2 → E3 → B4 → C3-C5 → 
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 
-### Performance (from `make bench-compare` on 1M lines, Apple M3 Pro):
+### Performance (from user-time benchmarks on 1M lines, Apple M3 Pro):
 fk is faster than awk (macOS system awk 20200816) on all benchmarks:
-- `print $2`: fk ~0.48s vs awk ~0.58s (fk 1.2× faster)
-- Sum column: fk ~0.24s vs awk ~0.60s (fk 2.5× faster)
-- Pattern matching: fk ~0.24s vs awk ~0.76s (fk 3.2× faster)
-- Field arithmetic: fk ~0.25s vs awk ~0.62s (fk 2.5× faster)
-- Associative arrays: fk ~0.28s vs awk ~0.67s (fk 2.4× faster)
-- Computed regex: fk ~0.34s vs awk ~0.65s (fk 1.9× faster)
-- Tight loop (3x): fk ~0.70s vs awk ~0.75s (fk 1.1× faster)
+- `print $2`: fk ~0.15s vs awk ~0.61s (fk 4.1× faster)
+- Sum column: fk ~0.22s vs awk ~0.61s (fk 2.8× faster)
+- Pattern matching: fk ~0.17s vs awk ~0.73s (fk 4.3× faster) ← nosplit
+- Field arithmetic: fk ~0.29s vs awk ~0.62s (fk 2.1× faster)
+- Associative arrays: fk ~0.34s vs awk ~0.70s (fk 2.1× faster)
+- Computed regex: fk ~0.30s vs awk ~0.66s (fk 2.2× faster)
+- Tight loop (3x): fk ~0.75s vs awk ~0.77s (fk 1.0× faster)
 
 ## Documentation & demos
 
