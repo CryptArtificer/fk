@@ -117,6 +117,39 @@ Phase 14: Awk compat fixes — `in` operator for any expr (`$0 in a`,
 Phase 15: Ternary/logical/in operators in print args, BEGIN/END-only
   programs skip stdin, getline from current input (Input moved into
   Executor), getline into var preserves $0.
+### Roadmap — performance & completeness
+
+Phase A — Skip unnecessary work (perf):
+  A1. needs_fields flag: skip field::split() when program never touches $1..$N
+  A2. needs_nf flag: skip NF counting when program never reads NF
+  A3. max_field_hint: lazy split — stop after N fields when only $1..$N used
+
+Phase B — Resource lifecycle (compat + perf):
+  B1. Persistent output files: print > "file" opens once, not per-record
+  B2. Persistent getline file handles: getline < "file" reads successive lines
+  B3. Persistent getline pipes: "cmd" | getline keeps pipe open
+  B4. close() for input handles (output already works)
+
+Phase C — Awk compat:
+  C1. CONVFMT (separate from OFMT for implicit coercion)
+  C2. Dynamic printf width: printf "%*d", width, value
+  C3. Multiple -f files (concatenate sources)
+  C4. BEGINFILE / ENDFILE blocks
+  C5. Uninitialized variable distinction
+
+Phase D — Annotated program representation:
+  D1. ProgramInfo from AST pre-analysis: flags, pre-compiled regex,
+      output targets, builtin dispatch table. Zero structural change.
+  D2. Flat instruction stream (Vec<Op>): linear layout, index-based
+      var/builtin lookup, jump table dispatch. Evaluate after profiling.
+
+Phase E — Memory:
+  E1. String interning for frequent array keys ("1", "2", ...)
+  E2. Arena allocation for Values (batch-free per record)
+  E3. Lazy field storage: $0 + split offsets, materialize on access
+
+Order: A1-A3 → B1-B3 → D1 → measure → C1-C2 → E3 → B4 → C3-C5 → D2 → E1-E2
+
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io
 
