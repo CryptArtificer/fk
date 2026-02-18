@@ -172,5 +172,10 @@
 - [x] Persistent `getline < "file"` handles: reads successive lines, not line 1 each time
 - [x] Persistent `"cmd" | getline` pipes: command spawned once, reads successive lines
 - [x] `close()` now closes input file handles and pipes (not just output)
-- [x] Capped field split (`split_into_limit`) implemented, deferred pending `$0` record_text tracking
-- [x] Pattern matching: 3.2× → 4.3× faster than awk (1M lines, Apple M3 Pro)
+- [x] Capped field split: `{ print $2 }` only splits 2 of N fields; $0 served from record_text
+- [x] record_text tracking with fields_dirty flag — $0 preserves original whitespace (awk correctness fix)
+- [x] `CONVFMT` variable: controls implicit number-to-string in concatenation (separate from OFMT)
+- [x] OFMT wired into print output path (was stored but unused)
+- [x] Dynamic printf width/precision: `%*d`, `%.*f`, `%*.*f` consume extra args
+- [x] Pattern matching: 3.2× → 4.3× faster than awk (nosplit)
+- [x] Print $2: 0.15s → 0.13s (capped split), 4.7× faster than awk (1M lines, M3 Pro)

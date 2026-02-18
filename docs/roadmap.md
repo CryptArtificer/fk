@@ -9,10 +9,10 @@ Pattern matching went from 3.2× to 4.3× faster than awk.
 **A2. `needs_nf`** ✓ — when NF is never read, the NF counting path
 is also skipped (combined with A1 in the nosplit branch).
 
-**A3. `max_field_hint`** — `split_into_limit` implemented in `field.rs`,
-but wiring deferred: `$0` reconstruction requires all fields unless we
-store record_text alongside the capped field vec. Next step is adding
-`record_text` tracking to Runtime so capped split is safe.
+**A3. `max_field_hint`** ✓ — Runtime now stores `record_text` alongside
+fields with a `fields_dirty` flag. `$0` served from record_text when no
+field was modified; capped split is safe. `{ print $2 }` on a 4-field
+CSV splits only 2 fields (0.15s → 0.13s).
 
 ## Phase B — Resource lifecycle ✓
 
@@ -29,11 +29,11 @@ file handles and input pipes in addition to output handles.
 
 ## Phase C — Awk compat
 
-**C1. CONVFMT** — separate from OFMT, controls implicit number-to-string
-coercion in concatenation context. Small change in `Value::to_string_val()`.
+**C1. CONVFMT** ✓ — interned variable, wired into concatenation path.
+OFMT also wired into print path (was stored but unused).
 
-**C2. Dynamic printf width** — `printf "%*d", width, value`. Parse `*` in
-the format spec and consume an extra argument for the width.
+**C2. Dynamic printf width** ✓ — `%*d`, `%.*f`, `%*.*f` all consume
+extra arguments. Negative dynamic width triggers left-alignment.
 
 **C3. Multiple `-f` files** — concatenate program sources before lexing.
 
@@ -102,9 +102,7 @@ Combined with A1/A3 this eliminates most allocation in the hot path.
 
 ## Execution order
 
-    A1-A2 ✓ → B1-B4 ✓ → D1 ✓ → measure ✓
-      → A3 (needs record_text) → C1-C2 → E3
-      → C3-C5 → D2 (if profiling justifies) → E1-E2
+    A1-A3 ✓ → B1-B4 ✓ → D1 ✓ → C1-C2 ✓
+      → E3 → C3-C5 → D2 (if profiling justifies) → E1-E2
 
-First line complete. Second line is feature/polish. D2 is contingent
-on profiling results.
+Remaining: E3 (lazy field storage), C3-C5 (compat), D2/E1-E2 (advanced).
