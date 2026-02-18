@@ -126,14 +126,9 @@ Phase 16: AST analysis pass (analyze.rs → ProgramInfo), nosplit path
 
 Phase A — Skip unnecessary work: ✓ (A1-A3 done, capped split with record_text)
 Phase B — Resource lifecycle: ✓ (B1-B4 done)
-Phase C — Awk compat (partial): C1 CONVFMT ✓, C2 dynamic printf width ✓
-
-Phase C — Awk compat:
-  C1. CONVFMT (separate from OFMT for implicit coercion)
-  C2. Dynamic printf width: printf "%*d", width, value
-  C3. Multiple -f files (concatenate sources)
-  C4. BEGINFILE / ENDFILE blocks
-  C5. Uninitialized variable distinction
+Phase C — Awk compat: ✓ (C1-C5 done)
+  C1 CONVFMT, C2 dynamic printf width, C3 multiple -f files,
+  C4 BEGINFILE/ENDFILE, C5 uninitialized variable distinction (typeof)
 
 Phase D — Annotated program representation:
   D1. ProgramInfo from AST pre-analysis: flags, pre-compiled regex,
@@ -146,7 +141,7 @@ Phase E — Memory:
   E2. Arena allocation for Values (batch-free per record)
   E3. Lazy field storage: $0 + split offsets, materialize on access
 
-Order: A1-A3 → B1-B3 → D1 → measure → C1-C2 → E3 → B4 → C3-C5 → D2 → E1-E2
+Order: A1-A3 ✓ → B1-B4 ✓ → D1 ✓ → C1-C5 ✓ → E3 → D2 → E1-E2
 
 - [ ] CI pipeline (build, test, lint, clippy)
 - [ ] Publish to crates.io

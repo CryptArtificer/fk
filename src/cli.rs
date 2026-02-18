@@ -19,7 +19,7 @@ pub struct Args {
     pub repl: bool,
     pub input_mode: InputMode,
     pub header_mode: bool,
-    pub program_file: Option<String>,
+    pub program_files: Vec<String>,
     pub describe: bool,
     pub suggest: bool,
 }
@@ -34,7 +34,7 @@ pub fn parse_args() -> Args {
     let mut repl = false;
     let mut input_mode = InputMode::Line;
     let mut header_mode = false;
-    let mut program_file: Option<String> = None;
+    let mut program_files: Vec<String> = Vec::new();
     let mut describe = false;
     let mut suggest = false;
 
@@ -88,7 +88,7 @@ pub fn parse_args() -> Args {
                 eprintln!("fk: -f requires an argument");
                 process::exit(1);
             }
-            program_file = Some(args[i].clone());
+            program_files.push(args[i].clone());
         } else if arg == "--repl" {
             repl = true;
         } else if arg == "--describe" || arg == "-d" {
@@ -138,17 +138,21 @@ pub fn parse_args() -> Args {
     }
 
     // -f takes priority; if both -f and inline program given, inline becomes a file arg
-    if let Some(ref pf) = program_file {
+    if !program_files.is_empty() {
         if let Some(p) = program {
             files.insert(0, p);
         }
-        match std::fs::read_to_string(pf) {
-            Ok(contents) => program = Some(contents),
-            Err(e) => {
-                eprintln!("fk: cannot read program file '{}': {}", pf, e);
-                process::exit(2);
+        let mut parts = Vec::new();
+        for pf in &program_files {
+            match std::fs::read_to_string(pf) {
+                Ok(contents) => parts.push(contents),
+                Err(e) => {
+                    eprintln!("fk: cannot read program file '{}': {}", pf, e);
+                    process::exit(2);
+                }
             }
         }
+        program = Some(parts.join("\n"));
     }
 
     // In describe mode, all positional args are files, not a program
@@ -161,7 +165,7 @@ pub fn parse_args() -> Args {
     // as files and default to `{ print }`.
     // Guard: only trigger when the arg looks path-like (contains '/' or '.')
     // to avoid false positives on short programs like `1` or `NR>5`.
-    if program_file.is_none() && !describe && !repl
+    if program_files.is_empty() && !describe && !repl
         && let Some(ref p) = program
         && (p.contains('/') || p.contains('.'))
         && std::path::Path::new(p).exists()
@@ -188,7 +192,7 @@ pub fn parse_args() -> Args {
         repl,
         input_mode,
         header_mode,
-        program_file,
+        program_files,
         describe,
         suggest,
     }
@@ -203,7 +207,7 @@ fn print_usage() {
     eprintln!("Options:");
     eprintln!("  -F fs            Field separator (implies line mode)");
     eprintln!("  -v var=val       Set variable (e.g. -v 'OFS=\\t')");
-    eprintln!("  -f progfile      Read program from file");
+    eprintln!("  -f progfile      Read program from file (repeatable)");
     eprintln!("  -i mode          Input mode: csv, tsv, json, parquet");
     eprintln!("  -H               Header mode (skip header, enable $name)");
     eprintln!("  -d / -S          Describe / suggest mode");

@@ -13,6 +13,8 @@ fn run_parquet(args: &cli::Args, exec: &mut action::Executor) {
     for path in &args.files {
         exec.set_var("FILENAME", path);
         exec.reset_fnr();
+        exec.run_beginfile();
+        if exec.should_exit().is_some() { return; }
 
         let (columns, rows) = match input::parquet_reader::read_parquet_file(path) {
             Ok(v) => v,
@@ -34,9 +36,12 @@ fn run_parquet(args: &cli::Args, exec: &mut action::Executor) {
                 return;
             }
             if exec.take_next_file() {
+                exec.run_endfile();
                 break;
             }
         }
+        exec.run_endfile();
+        if exec.should_exit().is_some() { return; }
     }
 }
 
@@ -112,7 +117,8 @@ fn main() {
     }
 
     // BEGIN/END-only programs with no files: skip stdin (gawk behaviour)
-    if program.rules.is_empty() && args.files.is_empty() {
+    if program.rules.is_empty() && program.beginfile.is_none() && program.endfile.is_none()
+        && args.files.is_empty() {
         exec.run_end();
         if let Some(code) = exec.should_exit() {
             process::exit(code);
@@ -184,9 +190,15 @@ fn main() {
                 Ok(Some(record)) => {
                     let cur_filename = exec.current_filename().to_owned();
                     if cur_filename != prev_filename {
+                        if !prev_filename.is_empty() {
+                            exec.run_endfile();
+                            if exec.should_exit().is_some() { break; }
+                        }
                         prev_filename = cur_filename;
                         exec.set_var("FILENAME", &prev_filename);
                         exec.reset_fnr();
+                        exec.run_beginfile();
+                        if exec.should_exit().is_some() { break; }
                     }
 
                     if args.header_mode && first_record {
@@ -205,11 +217,19 @@ fn main() {
                         break;
                     }
                     if exec.take_next_file() {
+                        exec.run_endfile();
                         exec.skip_input_source();
                         first_record = true;
+                        prev_filename.clear();
+                        if exec.should_exit().is_some() { break; }
                     }
                 }
-                Ok(None) => break,
+                Ok(None) => {
+                    if !prev_filename.is_empty() {
+                        exec.run_endfile();
+                    }
+                    break;
+                }
                 Err(e) => {
                     eprintln!("{}", e);
                     process::exit(1);

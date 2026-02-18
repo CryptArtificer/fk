@@ -35,14 +35,16 @@ OFMT also wired into print path (was stored but unused).
 **C2. Dynamic printf width** ✓ — `%*d`, `%.*f`, `%*.*f` all consume
 extra arguments. Negative dynamic width triggers left-alignment.
 
-**C3. Multiple `-f` files** — concatenate program sources before lexing.
+**C3. Multiple `-f` files** ✓ — `-f a.fk -f b.fk` concatenates sources
+before lexing. Inline program becomes a file arg when `-f` is present.
 
-**C4. BEGINFILE / ENDFILE** — gawk extension. Two more optional blocks in
-Program, fired in the main loop on source transition.
+**C4. BEGINFILE / ENDFILE** ✓ — new tokens + Program fields. Fired in
+main loop on source transition (including parquet path). ENDFILE fires
+on nextfile and at natural end of each file.
 
-**C5. Uninitialized variable distinction** — awk distinguishes "never
-assigned" from "assigned empty". Affects edge cases with `in` and
-truthiness checks.
+**C5. Uninitialized variable distinction** ✓ — `typeof()` returns
+`"uninitialized"` for unset array elements (ArrayRef) as well as
+never-assigned variables. No spurious creation on `typeof` probe.
 
 ## Phase D — Annotated program representation
 
@@ -102,7 +104,7 @@ Combined with A1/A3 this eliminates most allocation in the hot path.
 
 ## Execution order
 
-    A1-A3 ✓ → B1-B4 ✓ → D1 ✓ → C1-C2 ✓
-      → E3 → C3-C5 → D2 (if profiling justifies) → E1-E2
+    A1-A3 ✓ → B1-B4 ✓ → D1 ✓ → C1-C5 ✓
+      → E3 → D2 (if profiling justifies) → E1-E2
 
-Remaining: E3 (lazy field storage), C3-C5 (compat), D2/E1-E2 (advanced).
+Remaining: E3 (lazy field storage), D2/E1-E2 (advanced).

@@ -7,6 +7,8 @@ pub struct Program {
     pub begin: Option<Block>,
     pub rules: Vec<Rule>,
     pub end: Option<Block>,
+    pub beginfile: Option<Block>,
+    pub endfile: Option<Block>,
     pub functions: Vec<FuncDef>,
 }
 
@@ -135,6 +137,8 @@ impl Parser {
         let mut begin = None;
         let mut rules = Vec::new();
         let mut end = None;
+        let mut beginfile = None;
+        let mut endfile = None;
         let mut functions = Vec::new();
 
         self.skip_terminators();
@@ -153,6 +157,18 @@ impl Parser {
                     let block = self.parse_brace_block()?;
                     end.get_or_insert_with(Vec::new).extend(block);
                 }
+                Token::Beginfile => {
+                    self.advance();
+                    self.skip_terminators();
+                    let block = self.parse_brace_block()?;
+                    beginfile.get_or_insert_with(Vec::new).extend(block);
+                }
+                Token::Endfile => {
+                    self.advance();
+                    self.skip_terminators();
+                    let block = self.parse_brace_block()?;
+                    endfile.get_or_insert_with(Vec::new).extend(block);
+                }
                 Token::Function => {
                     let func = self.parse_func_def()?;
                     functions.push(func);
@@ -165,7 +181,7 @@ impl Parser {
             self.skip_terminators();
         }
 
-        Ok(Program { begin, rules, end, functions })
+        Ok(Program { begin, rules, end, beginfile, endfile, functions })
     }
 
     fn parse_func_def(&mut self) -> Result<FuncDef, FkError> {

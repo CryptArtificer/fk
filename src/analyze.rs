@@ -36,6 +36,12 @@ pub fn analyze(program: &Program) -> ProgramInfo {
     if let Some(block) = &program.end {
         walk_block(block, &mut info);
     }
+    if let Some(block) = &program.beginfile {
+        walk_block(block, &mut info);
+    }
+    if let Some(block) = &program.endfile {
+        walk_block(block, &mut info);
+    }
     for func in &program.functions {
         walk_block(&func.body, &mut info);
     }

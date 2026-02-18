@@ -179,3 +179,8 @@
 - [x] Dynamic printf width/precision: `%*d`, `%.*f`, `%*.*f` consume extra args
 - [x] Pattern matching: 3.2× → 4.3× faster than awk (nosplit)
 - [x] Print $2: 0.15s → 0.13s (capped split), 4.7× faster than awk (1M lines, M3 Pro)
+
+#### Phase 17 — Awk compat: C3-C5
+- [x] Multiple `-f` files: `-f a.fk -f b.fk` concatenates program sources
+- [x] BEGINFILE / ENDFILE blocks: fire at start/end of each input file
+- [x] `typeof()` returns `"uninitialized"` for unset array elements (not just variables)

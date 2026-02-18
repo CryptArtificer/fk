@@ -199,6 +199,20 @@ impl<'a> Executor<'a> {
         self.close_all_handles();
     }
 
+    pub fn run_beginfile(&mut self) {
+        if let Some(ref block) = self.program.beginfile
+            && let Some(Signal::Exit(code)) = self.exec_block(block) {
+                self.exit_code = Some(code);
+            }
+    }
+
+    pub fn run_endfile(&mut self) {
+        if let Some(ref block) = self.program.endfile
+            && let Some(Signal::Exit(code)) = self.exec_block(block) {
+                self.exit_code = Some(code);
+            }
+    }
+
     /// Returns the exit code if `exit` was called, or None.
     pub fn should_exit(&self) -> Option<i32> {
         self.exit_code

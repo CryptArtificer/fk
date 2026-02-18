@@ -17,6 +17,8 @@ pub enum Token {
     // Keywords
     Begin,
     End,
+    Beginfile,
+    Endfile,
     Print,
     Printf,
     If,
@@ -462,6 +464,8 @@ impl Lexer {
         match s.as_str() {
             "BEGIN" => Token::Begin,
             "END" => Token::End,
+            "BEGINFILE" => Token::Beginfile,
+            "ENDFILE" => Token::Endfile,
             "print" => Token::Print,
             "printf" => Token::Printf,
             "if" => Token::If,

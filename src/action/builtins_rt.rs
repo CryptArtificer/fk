@@ -557,32 +557,33 @@ impl<'a> Executor<'a> {
         if args.is_empty() {
             return Value::from_string("uninitialized".to_string());
         }
-        match &args[0] {
+        let ty = match &args[0] {
             Expr::Var(name) => {
                 if self.rt.has_array(name) {
-                    Value::from_string("array".to_string())
+                    "array"
                 } else if !self.rt.has_var(name) {
-                    Value::from_string("uninitialized".to_string())
+                    "uninitialized"
                 } else {
-                    let val = self.rt.get_value(name);
-                    if val.is_numeric() {
-                        Value::from_string("number".to_string())
-                    } else {
-                        Value::from_string("string".to_string())
-                    }
+                    Self::value_type_name(&self.rt.get_value(name))
                 }
             }
-            Expr::NumberLit(_) => Value::from_string("number".to_string()),
-            Expr::StringLit(_) => Value::from_string("string".to_string()),
-            _ => {
-                let val = self.eval_expr(&args[0]);
-                if val.is_numeric() {
-                    Value::from_string("number".to_string())
+            Expr::ArrayRef(name, key_expr) => {
+                let key = self.eval_string(key_expr);
+                if !self.rt.array_has_key(name, &key) {
+                    "uninitialized"
                 } else {
-                    Value::from_string("string".to_string())
+                    Self::value_type_name(&self.rt.get_array_value(name, &key))
                 }
             }
-        }
+            Expr::NumberLit(_) => "number",
+            Expr::StringLit(_) => "string",
+            _ => Self::value_type_name(&self.eval_expr(&args[0])),
+        };
+        Value::from_string(ty.to_string())
+    }
+
+    fn value_type_name(val: &Value) -> &'static str {
+        if val.is_numeric() { "number" } else { "string" }
     }
 
     /// Bitwise operations: and, or, xor, lshift, rshift, compl.
