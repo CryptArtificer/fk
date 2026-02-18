@@ -175,7 +175,7 @@ impl<'a> Executor<'a> {
         }
     }
 
-    /// close(name) — close an output file or pipe by name.
+    /// close(name) — close a file or pipe (output or input) by name.
     pub(crate) fn builtin_close(&mut self, args: &[Expr]) -> Value {
         if args.is_empty() {
             return Value::from_number(-1.0);
@@ -188,6 +188,15 @@ impl<'a> Executor<'a> {
         if let Some(mut child) = self.output_pipes.remove(&name) {
             drop(child.stdin.take());
             let _ = child.wait();
+            return Value::from_number(0.0);
+        }
+        if self.input_files.remove(&name).is_some() {
+            return Value::from_number(0.0);
+        }
+        if self.input_pipe_readers.remove(&name).is_some() {
+            if let Some(mut child) = self.input_pipe_children.remove(&name) {
+                let _ = child.wait();
+            }
             return Value::from_number(0.0);
         }
         Value::from_number(-1.0)
@@ -798,51 +807,67 @@ impl<'a> Executor<'a> {
     }
 
     fn getline_from_file(&mut self, path: &str, var: Option<&str>) -> Value {
-        match std::fs::File::open(path) {
-            Ok(file) => {
-                let mut reader = std::io::BufReader::new(file);
-                let mut line = String::new();
-                match reader.read_line(&mut line) {
-                    Ok(0) => Value::from_number(0.0),
-                    Ok(_) => {
-                        if line.ends_with('\n') { line.pop(); }
-                        if line.ends_with('\r') { line.pop(); }
-                        match var {
-                            Some(name) => self.rt.set_var(name, &line),
-                            None => self.rt.set_record(&line),
-                        }
-                        self.rt.increment_nr();
-                        Value::from_number(1.0)
-                    }
-                    Err(_) => Value::from_number(-1.0),
+        if !self.input_files.contains_key(path) {
+            match std::fs::File::open(path) {
+                Ok(file) => {
+                    self.input_files.insert(
+                        path.to_string(),
+                        std::io::BufReader::new(file),
+                    );
                 }
+                Err(_) => return Value::from_number(-1.0),
+            }
+        }
+        let reader = self.input_files.get_mut(path).unwrap();
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => Value::from_number(0.0),
+            Ok(_) => {
+                if line.ends_with('\n') { line.pop(); }
+                if line.ends_with('\r') { line.pop(); }
+                match var {
+                    Some(name) => self.rt.set_var(name, &line),
+                    None => self.rt.set_record(&line),
+                }
+                self.rt.increment_nr();
+                Value::from_number(1.0)
             }
             Err(_) => Value::from_number(-1.0),
         }
     }
 
     pub(crate) fn exec_getline_pipe(&mut self, cmd: &str, var: Option<&str>) -> Value {
-        match Command::new("sh")
-            .arg("-c")
-            .arg(cmd)
-            .stdout(Stdio::piped())
-            .spawn()
-        {
-            Ok(child) => {
-                let output = child.wait_with_output();
-                match output {
-                    Ok(out) => {
-                        let text = String::from_utf8_lossy(&out.stdout);
-                        let line = text.lines().next().unwrap_or("").to_string();
-                        match var {
-                            Some(name) => self.rt.set_var(name, &line),
-                            None => self.rt.set_record(&line),
-                        }
-                        self.rt.increment_nr();
-                        Value::from_number(1.0)
-                    }
-                    Err(_) => Value::from_number(-1.0),
+        if !self.input_pipe_readers.contains_key(cmd) {
+            match Command::new("sh")
+                .arg("-c")
+                .arg(cmd)
+                .stdout(Stdio::piped())
+                .spawn()
+            {
+                Ok(mut child) => {
+                    let stdout = child.stdout.take().unwrap();
+                    self.input_pipe_readers.insert(
+                        cmd.to_string(),
+                        std::io::BufReader::new(stdout),
+                    );
+                    self.input_pipe_children.insert(cmd.to_string(), child);
                 }
+                Err(_) => return Value::from_number(-1.0),
+            }
+        }
+        let reader = self.input_pipe_readers.get_mut(cmd).unwrap();
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => Value::from_number(0.0),
+            Ok(_) => {
+                if line.ends_with('\n') { line.pop(); }
+                if line.ends_with('\r') { line.pop(); }
+                match var {
+                    Some(name) => self.rt.set_var(name, &line),
+                    None => self.rt.set_record(&line),
+                }
+                self.rt.increment_nr();
+                Value::from_number(1.0)
             }
             Err(_) => Value::from_number(-1.0),
         }

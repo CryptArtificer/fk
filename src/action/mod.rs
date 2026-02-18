@@ -4,8 +4,8 @@ mod stmt;
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{self, BufWriter, Write};
-use std::process::Child;
+use std::io::{self, BufReader, BufWriter, Write};
+use std::process::{Child, ChildStdout};
 use std::time::Instant;
 
 use regex::Regex;
@@ -50,6 +50,9 @@ pub struct Executor<'a> {
     pub(crate) range_active: Vec<bool>,
     pub(crate) output_files: HashMap<String, File>,
     pub(crate) output_pipes: HashMap<String, Child>,
+    pub(crate) input_files: HashMap<String, BufReader<File>>,
+    pub(crate) input_pipe_readers: HashMap<String, BufReader<ChildStdout>>,
+    pub(crate) input_pipe_children: HashMap<String, Child>,
     pub(crate) stdout: BufWriter<io::Stdout>,
     pub(crate) call_depth: usize,
     pub(crate) next_record: bool,
@@ -79,6 +82,9 @@ impl<'a> Executor<'a> {
             program, rt, info, functions, range_active,
             output_files: HashMap::new(),
             output_pipes: HashMap::new(),
+            input_files: HashMap::new(),
+            input_pipe_readers: HashMap::new(),
+            input_pipe_children: HashMap::new(),
             stdout: BufWriter::new(io::stdout()),
             call_depth: 0,
             next_record: false,
@@ -190,7 +196,7 @@ impl<'a> Executor<'a> {
             self.exec_block(block);
         }
         let _ = self.stdout.flush();
-        self.close_outputs();
+        self.close_all_handles();
     }
 
     /// Returns the exit code if `exit` was called, or None.
@@ -198,12 +204,17 @@ impl<'a> Executor<'a> {
         self.exit_code
     }
 
-    fn close_outputs(&mut self) {
+    fn close_all_handles(&mut self) {
         for (_, file) in self.output_files.drain() {
             drop(file);
         }
         for (_, mut child) in self.output_pipes.drain() {
             drop(child.stdin.take());
+            let _ = child.wait();
+        }
+        self.input_files.clear();
+        self.input_pipe_readers.clear();
+        for (_, mut child) in self.input_pipe_children.drain() {
             let _ = child.wait();
         }
     }
