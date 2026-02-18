@@ -2336,24 +2336,24 @@ fn join_defaults_to_ofs() {
 // --- diagnostics: clock, start, elapsed ---
 
 #[test]
-fn clock_returns_positive() {
-    let rt = eval(r#"BEGIN { result = (clock() >= 0) ? "ok" : "bad" }"#, &[]);
+fn clk_returns_positive() {
+    let rt = eval(r#"BEGIN { result = (clk() >= 0) ? "ok" : "bad" }"#, &[]);
     assert_eq!(rt.get_var("result"), "ok");
 }
 
 #[test]
-fn start_elapsed_basic() {
+fn tic_toc_basic() {
     let rt = eval(
-        r#"BEGIN { start("t"); for(i=0;i<10000;i++){} result = (elapsed("t") >= 0) ? "ok" : "bad" }"#,
+        r#"BEGIN { tic("t"); for(i=0;i<10000;i++){} result = (toc("t") >= 0) ? "ok" : "bad" }"#,
         &[],
     );
     assert_eq!(rt.get_var("result"), "ok");
 }
 
 #[test]
-fn elapsed_without_start_uses_epoch() {
+fn toc_without_tic_uses_epoch() {
     let rt = eval(
-        r#"BEGIN { result = (elapsed() >= 0) ? "ok" : "bad" }"#,
+        r#"BEGIN { result = (toc() >= 0) ? "ok" : "bad" }"#,
         &[],
     );
     assert_eq!(rt.get_var("result"), "ok");
@@ -2363,9 +2363,9 @@ fn elapsed_without_start_uses_epoch() {
 fn multiple_timers() {
     let rt = eval(
         r#"BEGIN {
-            start("a"); start("b")
+            tic("a"); tic("b")
             for(i=0;i<10000;i++){}
-            ea = elapsed("a"); eb = elapsed("b")
+            ea = toc("a"); eb = toc("b")
             result = (ea >= 0 && eb >= 0) ? "ok" : "bad"
         }"#,
         &[],

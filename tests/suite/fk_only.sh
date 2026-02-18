@@ -179,7 +179,7 @@ assert_eq "D30" "computed regex" "$out" "$expected"
 
 # ── Diagnostics ──────────────────────────────────────────────────
 
-section "Diagnostics (dump, clock, start, elapsed)"
+section "Diagnostics (dump, clk, tic, toc)"
 
 # D31 dump scalar to stderr
 out="$($FK '{dump($0)}' <<< "hello" 2>&1 1>/dev/null)"
@@ -195,20 +195,20 @@ printf "test\n" | $FK "{dump(\$0, \"$tmpf\")}" 2>/dev/null
 out="$(cat "$tmpf" 2>/dev/null)"
 assert_match "D33" "dump to file" "$out" "dump:.*test"
 
-# D34 clock returns non-negative
-out="$(echo | $FK '{c=clock(); r=(c >= 0) ? "ok" : "bad"; print r}')"
-assert_eq "D34" "clock" "$out" "ok"
+# D34 clk returns non-negative
+out="$(echo | $FK '{c=clk(); r=(c >= 0) ? "ok" : "bad"; print r}')"
+assert_eq "D34" "clk" "$out" "ok"
 
-# D35 start/elapsed
-out="$(seq 1 50000 | $FK 'BEGIN{start("t")} {s+=$1} END{r=(elapsed("t") >= 0) ? "ok" : "bad"; print r}')"
-assert_eq "D35" "start/elapsed" "$out" "ok"
+# D35 tic/toc
+out="$(seq 1 50000 | $FK 'BEGIN{tic("t")} {s+=$1} END{r=(toc("t") >= 0) ? "ok" : "bad"; print r}')"
+assert_eq "D35" "tic/toc" "$out" "ok"
 
-# D36 elapsed without start (uses program epoch)
-out="$(echo | $FK '{r=(elapsed() >= 0) ? "ok" : "bad"; print r}')"
-assert_eq "D36" "elapsed no start" "$out" "ok"
+# D36 toc without tic (uses program epoch)
+out="$(echo | $FK '{r=(toc() >= 0) ? "ok" : "bad"; print r}')"
+assert_eq "D36" "toc no tic" "$out" "ok"
 
 # D37 multiple named timers
-out="$(seq 1 10000 | $FK 'BEGIN{start("a"); start("b")} END{ea=elapsed("a"); eb=elapsed("b"); r=(ea>=0 && eb>=0) ? "ok" : "bad"; print r}')"
+out="$(seq 1 10000 | $FK 'BEGIN{tic("a"); tic("b")} END{ea=toc("a"); eb=toc("b"); r=(ea>=0 && eb>=0) ? "ok" : "bad"; print r}')"
 assert_eq "D37" "multiple timers" "$out" "ok"
 
 # ════════════════════════════════════════════════════════════════════

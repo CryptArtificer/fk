@@ -113,7 +113,7 @@ Phase 13: !/regex/ (bare regex in expression context), print arr (smart array du
 Phase 14: Awk compat fixes — `in` operator for any expr (`$0 in a`,
   `($1,$2) in arr`), regex literals in sub/gsub/match/split, printf %c
   with numeric arg, bare `length` / `length()` defaults to $0.
-  Diagnostics: dump(x [,file]), clock(), start([id]), elapsed([id]).
+  Diagnostics: dump(x [,file]), clk(), tic([id]), toc([id]).
 
 ### Remaining
 - [ ] Skip stdin when program has only BEGIN/END rules and no files (gawk behavior)

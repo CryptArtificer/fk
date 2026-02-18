@@ -145,9 +145,9 @@ impl<'a> Executor<'a> {
                     "samp" => return self.builtin_sample(args),
                     "slurp" => return self.builtin_slurp(args),
                     "dump" => return self.builtin_dump(args),
-                    "clock" => return self.builtin_clock(),
-                    "start" => return self.builtin_start(args),
-                    "elapsed" => return self.builtin_elapsed(args),
+                    "clk" | "clock" => return self.builtin_clock(),
+                    "tic" | "start" => return self.builtin_start(args),
+                    "toc" | "elapsed" => return self.builtin_elapsed(args),
                     "and" | "or" | "xor" | "lshift" | "rshift" | "compl" => {
                         return self.builtin_bitwise(name, args);
                     }
