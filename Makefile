@@ -112,6 +112,24 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/fk
 	rm -f $(DESTDIR)$(PREFIX)/share/man/man1/fk.1
 
+# ── Test suites (shell-based) ────────────────────────────────────
+
+.PHONY: suite suite-compat suite-tools suite-fkonly suite-perf
+
+suite: suite-compat suite-tools suite-fkonly
+
+suite-compat: release
+	@bash tests/suite/compat.sh
+
+suite-tools: release
+	@bash tests/suite/tools.sh
+
+suite-fkonly: release
+	@bash tests/suite/fk_only.sh
+
+suite-perf: release
+	@bash tests/suite/perf.sh
+
 # ── Examples & Showcase ───────────────────────────────────────────
 
 .PHONY: examples showcase
@@ -154,7 +172,7 @@ man:
 
 .PHONY: ci
 
-ci: fmt-check clippy test
+ci: fmt-check clippy test suite
 	@echo ""
 	@echo "✓ All checks passed."
 
@@ -212,6 +230,13 @@ help:
 	@echo "  make fmt-check    Check formatting (no changes)"
 	@echo "  make check        Compile check (no codegen)"
 	@echo "  make clippy       Run clippy lints"
+	@echo ""
+	@echo "Suite:"
+	@echo "  make suite        Run all shell test suites (compat, tools, fk-only)"
+	@echo "  make suite-compat Awk vs fk compatibility tests"
+	@echo "  make suite-tools  fk vs Unix tools (cut, sed, grep, ...)"
+	@echo "  make suite-fkonly fk-only features (stats, arrays, I/O)"
+	@echo "  make suite-perf   Performance benchmarks (fk vs awk vs tools)"
 	@echo ""
 	@echo "Bench:"
 	@echo "  make bench        Run all criterion benchmarks"
