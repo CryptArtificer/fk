@@ -110,6 +110,8 @@ pub struct Runtime {
     variables: HashMap<String, Value>,
     arrays: HashMap<String, HashMap<String, Value>>,
     pub(crate) fields: Vec<String>,
+    record_text: String,
+    nosplit: bool,
     nr: u64,
     nf: usize,
     fnr: u64,
@@ -139,6 +141,8 @@ impl Runtime {
             variables: HashMap::new(),
             arrays: HashMap::new(),
             fields: Vec::new(),
+            record_text: String::new(),
+            nosplit: false,
             nr: 0,
             nf: 0,
             fnr: 0,
@@ -236,6 +240,9 @@ impl Runtime {
 
     pub fn get_field(&self, idx: usize) -> String {
         if idx == 0 {
+            if self.nosplit {
+                return self.record_text.clone();
+            }
             return self.fields.join(&self.ofs);
         }
         self.fields
@@ -247,6 +254,10 @@ impl Runtime {
     /// Write a field directly to a writer without cloning (zero-copy print).
     pub fn write_field_to(&self, idx: usize, w: &mut impl std::io::Write) {
         if idx == 0 {
+            if self.nosplit {
+                let _ = w.write_all(self.record_text.as_bytes());
+                return;
+            }
             for (i, f) in self.fields.iter().enumerate() {
                 if i > 0 { let _ = w.write_all(self.ofs.as_bytes()); }
                 let _ = w.write_all(f.as_bytes());
@@ -257,6 +268,7 @@ impl Runtime {
     }
 
     pub fn set_field(&mut self, idx: usize, value: &str) {
+        self.nosplit = false;
         if idx == 0 {
             self.fields = field::split(value, &self.fs);
             self.nf = self.fields.len();
@@ -271,13 +283,31 @@ impl Runtime {
     }
 
     pub fn set_record(&mut self, line: &str) {
+        self.nosplit = false;
         field::split_into(&mut self.fields, line, &self.fs);
+        self.nf = self.fields.len();
+    }
+
+    /// Store the record text without field splitting (used when the
+    /// program never accesses $1…$N).
+    pub fn set_record_nosplit(&mut self, line: &str) {
+        self.nosplit = true;
+        self.record_text.clear();
+        self.record_text.push_str(line);
+    }
+
+    /// Split only the first `limit` fields (used when max_field_hint
+    /// is known and NF is not needed).
+    pub fn set_record_capped(&mut self, line: &str, limit: usize) {
+        self.nosplit = false;
+        field::split_into_limit(&mut self.fields, line, &self.fs, limit);
         self.nf = self.fields.len();
     }
 
     /// Set the record with pre-split fields (used by CSV/TSV/JSON readers).
     pub fn set_record_fields(&mut self, text: &str, fields: Vec<String>) {
-        let _ = text; // $0 is reconstructed from fields via OFS
+        self.nosplit = false;
+        let _ = text;
         self.nf = fields.len();
         self.fields = fields;
     }

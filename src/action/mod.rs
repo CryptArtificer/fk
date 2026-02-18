@@ -10,6 +10,7 @@ use std::time::Instant;
 
 use regex::Regex;
 
+use crate::analyze::{self, ProgramInfo};
 use crate::input::{self, Record};
 use crate::parser::{FuncDef, Pattern, Program};
 use crate::runtime::{Runtime, Value};
@@ -44,6 +45,7 @@ pub(crate) fn percentile_sorted(sorted: &[f64], pct: f64) -> f64 {
 pub struct Executor<'a> {
     pub(crate) program: &'a Program,
     pub(crate) rt: &'a mut Runtime,
+    pub(crate) info: ProgramInfo,
     pub(crate) functions: HashMap<String, FuncDef>,
     pub(crate) range_active: Vec<bool>,
     pub(crate) output_files: HashMap<String, File>,
@@ -61,13 +63,20 @@ pub struct Executor<'a> {
 
 impl<'a> Executor<'a> {
     pub fn new(program: &'a Program, rt: &'a mut Runtime) -> Self {
+        let info = analyze::analyze(program);
         let mut functions = HashMap::new();
         for f in &program.functions {
             functions.insert(f.name.clone(), f.clone());
         }
         let range_active = vec![false; program.rules.len()];
+        let mut regex_cache = HashMap::new();
+        for pat in &info.regex_literals {
+            if let Ok(re) = Regex::new(pat) {
+                regex_cache.insert(pat.clone(), re);
+            }
+        }
         Executor {
-            program, rt, functions, range_active,
+            program, rt, info, functions, range_active,
             output_files: HashMap::new(),
             output_pipes: HashMap::new(),
             stdout: BufWriter::new(io::stdout()),
@@ -75,7 +84,7 @@ impl<'a> Executor<'a> {
             next_record: false,
             next_file: false,
             exit_code: None,
-            regex_cache: HashMap::new(),
+            regex_cache,
             epoch: Instant::now(),
             timers: HashMap::new(),
             input: None,
@@ -212,6 +221,12 @@ impl<'a> Executor<'a> {
         self.rt.increment_nr();
         match &record.fields {
             Some(fields) => self.rt.set_record_fields(&record.text, fields.clone()),
+            None if !self.info.needs_fields && !self.info.needs_nf => {
+                self.rt.set_record_nosplit(&record.text);
+            }
+            // A3 (capped split) deferred: $0 reconstruction requires all
+            // fields, so max_field_hint is only safe once we store
+            // record_text alongside the capped field vec.
             None => self.rt.set_record(&record.text),
         }
 

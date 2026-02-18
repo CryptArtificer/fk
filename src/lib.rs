@@ -1,4 +1,5 @@
 pub mod action;
+pub mod analyze;
 pub mod builtins;
 pub mod cli;
 pub mod describe;
