@@ -25,11 +25,13 @@ The pattern-action model is the same. Everything below is new.
 - **Named columns** — in header mode (`-H`), access fields by name: `$name`, `$"user-name"`, `$col`. Works with CSV, TSV, JSON, and Parquet.
 - **JSON navigation** — `jpath()` gives you jq-like path access from within a pattern-action program.
 - **Statistical builtins** — `sum`, `mean`, `median`, `stddev`, `variance`, `percentile`, `quantile`, `iqm` on arrays.
+- **Array builtins** — `asort`, `asorti`, `join`, `keys`, `vals`, `uniq`, `inv`, `tidy`, `shuf`, `diff`, `inter`, `union`, `seq`, `samp`.
+- **Diagnostics** — `dump(x)` inspects any variable or array to stderr. `clk()`, `tic(id)`, `toc(id)` for timing.
 - **Unicode-aware** — `length`, `substr`, `index`, and all string builtins count characters, not bytes.
 - **Transparent decompression** — gzip, zstd, bzip2, xz, and lz4 files are decompressed on the fly. No need to pipe through `zcat` or `zstdcat` first.
 - **Auto-detection** — file extension determines both the decompression method and the input format. `fk '{ print $2 }' data.tsv.gz` just works: it decompresses with zlib and parses as TSV, no flags needed.
 - **Schema discovery** — `--describe` sniffs a file, detects its format and compression, infers column names and types, and suggests programs you can run on it.
-- **Capture groups in match()** — `match($0, "([0-9]+)-([0-9]+)", cap)` extracts groups into an array. Standard awk can't do this.
+- **Capture groups in match()** — `match($0, /(\d+)-(\d+)/, cap)` extracts groups into an array. Standard awk can't do this.
 - **Better errors** — source-location-aware diagnostics with line and column numbers.
 - **Negative field indexes** — `$-1` is the last field, `$-2` is second-to-last.
 - **REPL** — interactive mode for exploration (`--repl`).
@@ -77,7 +79,9 @@ src/
 
 ## Progress
 
-Phases 0–11 complete. See [docs/progress.md](docs/progress.md) for the full checklist.
+Phases 0–15 complete. See [docs/progress.md](docs/progress.md) for the full
+checklist and [docs/roadmap.md](docs/roadmap.md) for the performance and
+completeness plan.
 
 ## Usage
 
@@ -170,6 +174,14 @@ echo "" | fk 'BEGIN { a[1,2]="x"; a[3,4]="y"; for (k in a) print k, a[k] }'
 # 42
 # fk> :vars
 # fk> :q
+
+# ── Diagnostics & timing ──
+
+# Inspect a variable or array (output to stderr)
+echo "hello" | fk '{ dump($0) }'
+
+# Time a section of your program
+seq 1 100000 | fk 'BEGIN{tic("sum")} {s+=$1} END{printf "sum=%d in %.3fs\n", s, toc("sum")}'
 
 # ── Phase 8: Signature features ──
 

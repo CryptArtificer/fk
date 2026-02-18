@@ -122,3 +122,45 @@
 - [x] String: `trim()`, `ltrim()`, `rtrim()`, `startswith()`, `endswith()`, `repeat()`, `reverse()`, `chr()`, `ord()`, `hex()`
 - [x] Date: `parsedate(str, fmt)` — parse dates back to epoch
 - [x] Richer `strftime()` specifiers (`%j %u %w %e %C %y %p %I`)
+
+#### Phase 9 — Printf & statistics
+- [x] Printf enhancements: `%05d` (zero-pad), `%+d` (force sign), `%x` (hex), `%o` (octal), `%c` with numeric arg
+- [x] Statistical builtins on arrays: `sum()`, `mean()`, `median()`, `stddev()`, `variance()`, `p()`/`percentile()`, `quantile()`, `iqm()`, `min()`, `max()`
+
+#### Phase 10 — Code quality
+- [x] Split `action.rs` into `action/` directory (mod, eval, stmt, builtins_rt)
+- [x] Structured `FkError` with Display+Error
+- [x] O(1) lexer spans (incremental line/col tracking)
+- [x] Multiple BEGIN/END blocks
+- [x] Encapsulated Runtime (private arrays/variables, methods only)
+- [x] `#[must_use]` on Value; eliminated AST clones in match_rule hot path
+
+#### Phase 11 — Describe & decompression
+- [x] `--describe` / `-d` mode: auto-detect format, infer schema, suggest programs
+- [x] Transparent decompression (.gz/.zst/.bz2/.xz/.lz4)
+- [x] Auto-detect input mode from file extension (.csv → `-i csv`, .tsv.gz → `-i tsv`, etc.)
+
+#### Phase 12 — CSV robustness & CLI polish
+- [x] Single-pass RFC 4180 CSV, unclosed quote damage limiting
+- [x] `--help`, `--version`, `-F`/`-i` conflict check, file-only default to `{print}`
+- [x] `-v` escape interpretation, `-F` prevents auto-detect override
+
+#### Phase 13 — Array & I/O builtins
+- [x] `!/regex/` (bare regex in expression context), `print arr` (smart array dump)
+- [x] `keys(arr)`, `vals(arr)`, `join(arr)` defaults to OFS
+- [x] Lodash-inspired array builtins: `uniq`, `inv`, `tidy`, `shuf`, `diff`, `inter`, `union`, `seq`, `samp`
+- [x] String: `lpad`, `rpad`
+- [x] I/O: `slurp(file [, arr])`
+
+#### Phase 14 — Awk compatibility fixes
+- [x] `in` operator for any expression (`$0 in a`, `($1,$2) in arr`, `!(key in arr)`)
+- [x] Regex literals in `sub`/`gsub`/`match`/`split` (first arg)
+- [x] `printf "%c"` with numeric arg (char code conversion)
+- [x] Bare `length` / `length()` defaults to `length($0)`
+- [x] Diagnostics: `dump(x [,file])`, `clk()` / `clock()`, `tic([id])` / `start([id])`, `toc([id])` / `elapsed([id])`
+
+#### Phase 15 — Expression & I/O fixes
+- [x] Ternary/logical/in/match operators in print/printf arguments
+- [x] BEGIN/END-only programs skip stdin (gawk behaviour)
+- [x] `getline` (no source) reads from current input stream, not raw stdin
+- [x] `getline var` preserves `$0` while reading into named variable
