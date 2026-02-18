@@ -132,7 +132,9 @@ suite-perf: release
 
 # ── Examples & Showcase ───────────────────────────────────────────
 
-.PHONY: examples showcase
+.PHONY: examples showcase \
+        show-formats show-text show-stats show-sorting show-pipelines \
+        show-etl show-describe show-dashboards show-introspection
 
 examples: release
 	@for f in examples/0*.sh; do \
@@ -143,6 +145,33 @@ showcase: release
 	@for f in examples/1*.sh; do \
 		echo "" && echo "═══ Running $$f ═══" && echo "" && bash "$$f"; \
 	done
+
+show-formats: release
+	@bash examples/11-data-formats.sh
+
+show-text: release
+	@bash examples/12-text-and-regex.sh
+
+show-stats: release
+	@bash examples/13-statistics.sh
+
+show-sorting: release
+	@bash examples/14-sorting-and-dates.sh
+
+show-pipelines: release
+	@bash examples/15-pipelines.sh
+
+show-etl: release
+	@bash examples/16-etl.sh
+
+show-describe: release
+	@bash examples/17-describe.sh
+
+show-dashboards: release
+	@bash examples/18-dashboards.sh
+
+show-introspection: release
+	@bash examples/19-introspection.sh
 
 # ── Run shortcuts ────────────────────────────────────────────────
 
@@ -250,7 +279,18 @@ help:
 	@echo "  make repl         Start interactive REPL"
 	@echo "  make run ARGS=..  Run fk with arguments"
 	@echo "  make examples     Run tutorial scripts (examples/01-07)"
-	@echo "  make showcase     Run showcase scripts (examples/11-18)"
+	@echo "  make showcase     Run all showcases (examples/11-19)"
+	@echo ""
+	@echo "Showcases (individual):"
+	@echo "  make show-formats       Data formats (CSV, TSV, JSON, Parquet)"
+	@echo "  make show-text          Text processing and regex"
+	@echo "  make show-stats         Statistical builtins"
+	@echo "  make show-sorting       Sorting and date functions"
+	@echo "  make show-pipelines     Pipeline composition"
+	@echo "  make show-etl           ETL workflows"
+	@echo "  make show-describe      Schema detection and suggestions"
+	@echo "  make show-dashboards    Dashboard / reporting"
+	@echo "  make show-introspection Introspection: typeof, dump, tic/toc"
 	@echo ""
 	@echo "Other:"
 	@echo "  make ci           Full CI check (fmt, clippy, test)"
