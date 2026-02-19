@@ -1123,19 +1123,28 @@ impl<'a> Executor<'a> {
         };
 
         let mut labels: Vec<String> = Vec::new();
-        for (idx, (key, _count)) in entries.iter().enumerate() {
-            let label = if label_with_range {
+        if label_with_range {
+            let mut bounds: Vec<(String, String)> = Vec::new();
+            let mut num_width = 0usize;
+            for (idx, _entry) in entries.iter().enumerate() {
                 let lo = min + (idx as f64) * bin_width;
                 let hi = if idx + 1 == entries.len() {
                     max
                 } else {
                     lo + bin_width
                 };
-                format!("[{:.*}, {:.*})", range_decimals, lo, range_decimals, hi)
-            } else {
-                key.clone()
-            };
-            labels.push(label);
+                let lo_s = format!("{:.*}", range_decimals, lo);
+                let hi_s = format!("{:.*}", range_decimals, hi);
+                num_width = num_width.max(lo_s.len()).max(hi_s.len());
+                bounds.push((lo_s, hi_s));
+            }
+            for (lo_s, hi_s) in bounds {
+                labels.push(format!("[{:>w$}, {:>w$})", lo_s, hi_s, w = num_width));
+            }
+        } else {
+            for (key, _count) in &entries {
+                labels.push(key.clone());
+            }
         }
         let label_width = labels.iter().map(|l| l.len()).max().unwrap_or(0);
         let count_width = entries.iter()
@@ -1151,7 +1160,7 @@ impl<'a> Executor<'a> {
             lines.push(format!("{:pad$}{}", "", title, pad = title_pad));
         }
         lines.push(format!(
-            "{:label_w$} ┌{}┐",
+            "{:>label_w$} ┌{}┐",
             "",
             " ".repeat(box_width),
             label_w = label_width,
@@ -1177,7 +1186,7 @@ impl<'a> Executor<'a> {
                 format!("{}{}{}", color_code, bar, color_reset)
             };
             lines.push(format!(
-                "{:label_w$} ┤{} {:count_w$}",
+                "{:>label_w$} ┤{} {:count_w$}",
                 labels[idx],
                 colored_bar,
                 count_str,
@@ -1187,7 +1196,7 @@ impl<'a> Executor<'a> {
         }
 
         lines.push(format!(
-            "{:label_w$} └{}┘",
+            "{:>label_w$} └{}┘",
             "",
             " ".repeat(box_width),
             label_w = label_width,
