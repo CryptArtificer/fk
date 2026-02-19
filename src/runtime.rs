@@ -3,6 +3,19 @@ use std::collections::{HashMap, hash_map};
 use crate::builtins;
 use crate::field;
 
+// --- Array metadata: typed annotations attached to arrays ---
+
+#[derive(Debug, Clone)]
+pub enum ArrayMeta {
+    Histogram {
+        source: Vec<f64>,
+        bins: usize,
+        min: f64,
+        max: f64,
+        width: f64,
+    },
+}
+
 // --- Value type: dual string/number representation with lazy conversion ---
 
 const STR_VALID: u8 = 1;
@@ -115,6 +128,7 @@ impl Value {
 pub struct Runtime {
     variables: HashMap<String, Value>,
     arrays: HashMap<String, HashMap<String, Value>>,
+    array_meta: HashMap<String, ArrayMeta>,
     pub(crate) fields: Vec<String>,
     field_offsets: Vec<(usize, usize)>,
     fields_lazy: bool,
@@ -150,6 +164,7 @@ impl Runtime {
         Runtime {
             variables: HashMap::new(),
             arrays: HashMap::new(),
+            array_meta: HashMap::new(),
             fields: Vec::new(),
             field_offsets: Vec::new(),
             fields_lazy: false,
@@ -458,6 +473,7 @@ impl Runtime {
 
     pub fn delete_array_all(&mut self, name: &str) {
         self.arrays.remove(name);
+        self.array_meta.remove(name);
     }
 
     pub fn array_len(&self, name: &str) -> usize {
@@ -484,5 +500,19 @@ impl Runtime {
 
     pub fn array_values(&self, name: &str) -> Option<hash_map::Values<'_, String, Value>> {
         self.arrays.get(name).map(|a| a.values())
+    }
+
+    // --- array metadata ---
+
+    pub fn get_meta(&self, name: &str) -> Option<&ArrayMeta> {
+        self.array_meta.get(name)
+    }
+
+    pub fn set_meta(&mut self, name: &str, meta: ArrayMeta) {
+        self.array_meta.insert(name.to_string(), meta);
+    }
+
+    pub fn remove_meta(&mut self, name: &str) {
+        self.array_meta.remove(name);
     }
 }

@@ -1,10 +1,10 @@
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
 use std::process::{Command, Stdio};
 use std::time::Instant;
 
 use crate::builtins::{self, string_replace};
 use crate::parser::Expr;
-use crate::runtime::Value;
+use crate::runtime::{ArrayMeta, Value};
 
 use super::{percentile_sorted, Executor};
 
@@ -528,11 +528,22 @@ impl<'a> Executor<'a> {
             return Value::default();
         }
         let filename = self.eval_string(&args[0]);
-        let contents = match std::fs::read_to_string(&filename) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("fk: slurp: {}: {}", filename, e);
-                return if args.len() >= 2 { Value::from_number(0.0) } else { Value::default() };
+        let contents = if filename == "-" || filename == "/dev/stdin" {
+            let mut buf = String::new();
+            match std::io::stdin().read_to_string(&mut buf) {
+                Ok(_) => buf,
+                Err(e) => {
+                    eprintln!("fk: slurp: stdin: {}", e);
+                    return if args.len() >= 2 { Value::from_number(0.0) } else { Value::default() };
+                }
+            }
+        } else {
+            match std::fs::read_to_string(&filename) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("fk: slurp: {}: {}", filename, e);
+                    return if args.len() >= 2 { Value::from_number(0.0) } else { Value::default() };
+                }
             }
         };
         if args.len() >= 2 {
@@ -769,73 +780,76 @@ impl<'a> Executor<'a> {
         }
     }
 
-    /// hist(arr, bins [, out [, min [, max]]]) — histogram of numeric values.
-    /// Writes counts into `out` (or `arr` if omitted) with keys 1..bins.
-    /// Also stores metadata keys: _min, _max, _width. Returns bin count.
+    /// hist(arr [, bins [, out [, min [, max]]]]) — histogram of numeric values.
+    /// Writes counts into `out` (or a generated name) with keys 1..bins.
+    /// Attaches ArrayMeta::Histogram to the output array.
+    /// Bins default to Sturges' rule. Returns the output array name (for chaining).
     pub(crate) fn builtin_hist(&mut self, args: &[Expr]) -> Value {
-        if args.len() < 2 {
-            eprintln!("fk: hist() requires an array and bin count");
-            return Value::from_number(0.0);
+        if args.is_empty() {
+            eprintln!("fk: hist() requires an array argument");
+            return Value::from_string(String::new());
         }
         let array_name = match &args[0] {
             Expr::Var(v) => v.clone(),
             _ => {
                 eprintln!("fk: hist(): first argument must be an array name");
-                return Value::from_number(0.0);
+                return Value::from_string(String::new());
             }
         };
-        let bins_raw = builtins::to_number(&self.eval_string(&args[1])).round() as i64;
-        if bins_raw <= 0 {
-            eprintln!("fk: hist(): bins must be > 0");
-            return Value::from_number(0.0);
+
+        let Some(values) = self.rt.array_values(&array_name) else {
+            return Value::from_string(String::new());
+        };
+        let source: Vec<f64> = values.into_iter().map(|v| v.to_number()).collect();
+        if source.is_empty() {
+            return Value::from_string(String::new());
         }
-        let bins = bins_raw as usize;
 
         let out_name = if let Some(expr) = args.get(2) {
             match expr {
                 Expr::Var(v) => v.clone(),
                 _ => {
                     eprintln!("fk: hist(): output must be an array name");
-                    return Value::from_number(0.0);
+                    return Value::from_string(String::new());
                 }
             }
         } else {
-            array_name.clone()
+            format!("__hist_{}", array_name)
         };
 
-        let Some(values) = self.rt.array_values(&array_name) else {
-            return Value::from_number(0.0);
-        };
-        let mut vals: Vec<f64> = values.into_iter().map(|v| v.to_number()).collect();
-        let vals_len = vals.len();
-        if vals.is_empty() {
-            self.rt.delete_array_all(&out_name);
-            return Value::from_number(0.0);
-        }
-
-        let mut min = vals[0];
-        let mut max = vals[0];
-        for v in &vals[1..] {
-            if *v < min { min = *v; }
-            if *v > max { max = *v; }
+        let mut data_min = source[0];
+        let mut data_max = source[0];
+        for &v in &source[1..] {
+            if v < data_min { data_min = v; }
+            if v > data_max { data_max = v; }
         }
         if let Some(expr) = args.get(3) {
-            min = builtins::to_number(&self.eval_string(expr));
+            data_min = builtins::to_number(&self.eval_string(expr));
         }
         if let Some(expr) = args.get(4) {
-            max = builtins::to_number(&self.eval_string(expr));
+            data_max = builtins::to_number(&self.eval_string(expr));
         }
-        if min > max {
-            std::mem::swap(&mut min, &mut max);
+        if data_min > data_max {
+            std::mem::swap(&mut data_min, &mut data_max);
         }
 
-        let mut width = (max - min) / bins as f64;
-        if width == 0.0 || !width.is_finite() {
-            width = 1.0;
-        }
+        let explicit_bins = if let Some(expr) = args.get(1) {
+            let b = builtins::to_number(&self.eval_string(expr)).round() as i64;
+            if b > 0 { Some(b as usize) } else { None }
+        } else {
+            None
+        };
+
+        let (min, width, bins) = if let Some(b) = explicit_bins {
+            let mut w = (data_max - data_min) / b as f64;
+            if w == 0.0 || !w.is_finite() { w = 1.0; }
+            (data_min, w, b)
+        } else {
+            nice_hist_bins(data_min, data_max, source.len())
+        };
 
         let mut counts = vec![0usize; bins];
-        for v in vals.drain(..) {
+        for &v in &source {
             let mut idx = ((v - min) / width).floor() as i64;
             if idx < 0 { idx = 0; }
             if idx >= bins as i64 { idx = bins as i64 - 1; }
@@ -847,19 +861,21 @@ impl<'a> Executor<'a> {
             let key = (i + 1).to_string();
             self.rt.set_array(&out_name, &key, &count.to_string());
         }
-        self.rt.set_array(&out_name, "_min", &builtins::format_number(min));
-        self.rt.set_array(&out_name, "_max", &builtins::format_number(max));
-        self.rt.set_array(&out_name, "_width", &builtins::format_number(width));
-        self.rt.set_array(&out_name, "_bins", &bins.to_string());
-        self.rt.set_array(&out_name, "_count", &vals_len.to_string());
-        self.rt.set_array(&out_name, "_type", "hist");
 
-        Value::from_number(bins as f64)
+        let max = min + width * bins as f64;
+        self.rt.set_meta(&out_name, ArrayMeta::Histogram {
+            source,
+            bins,
+            min,
+            max,
+            width,
+        });
+
+        Value::from_string(out_name)
     }
 
     /// plot(arr [, width [, char [, precision [, color]]]]) — render a simple horizontal bar chart.
-    /// Uses numeric keys in ascending order if present (ignores keys starting with '_').
-    /// If histogram metadata keys (_min/_max/_width) exist, labels bins by range.
+    /// Auto-detects histogram arrays via ArrayMeta and uses range labels.
     pub(crate) fn builtin_plot(&mut self, args: &[Expr]) -> Value {
         if args.is_empty() {
             eprintln!("fk: plot() requires an array argument");
@@ -868,8 +884,11 @@ impl<'a> Executor<'a> {
         let array_name = match &args[0] {
             Expr::Var(v) => v.clone(),
             _ => {
-                eprintln!("fk: plot(): first argument must be an array name");
-                return Value::from_string(String::new());
+                let s = self.eval_string(&args[0]);
+                if self.rt.has_array(&s) { s } else {
+                    eprintln!("fk: plot(): first argument must be an array name");
+                    return Value::from_string(String::new());
+                }
             }
         };
         if !self.rt.has_array(&array_name) {
@@ -883,9 +902,9 @@ impl<'a> Executor<'a> {
         };
         let width = if width_raw <= 0 { 40 } else { width_raw as usize };
         let ch = if let Some(expr) = args.get(2) {
-            self.eval_string(expr).chars().next().unwrap_or('#')
+            self.eval_string(expr).chars().next().unwrap_or('▇')
         } else {
-            '#'
+            '▇'
         };
         let precision_raw = if let Some(expr) = args.get(3) {
             builtins::to_number(&self.eval_string(expr)).round() as i64
@@ -894,126 +913,30 @@ impl<'a> Executor<'a> {
         };
         let precision = if precision_raw < 0 { None } else { Some(precision_raw as usize) };
         let color_name = args.get(4).map(|expr| self.eval_string(expr)).unwrap_or_default();
-        let color_code = match color_name.as_str() {
-            "" | "none" => "",
-            "red" => "\x1b[31m",
-            "green" => "\x1b[32m",
-            "yellow" => "\x1b[33m",
-            "blue" => "\x1b[34m",
-            "magenta" => "\x1b[35m",
-            "cyan" => "\x1b[36m",
-            "gray" | "grey" => "\x1b[90m",
-            _ => "",
-        };
-        let color_reset = if color_code.is_empty() { "" } else { "\x1b[0m" };
+        let (color_code, color_reset) = ansi_color(&color_name);
 
-        let mut numeric_keys: Vec<(i64, String)> = Vec::new();
-        let mut other_keys: Vec<String> = Vec::new();
-        for k in self.rt.array_keys(&array_name) {
-            if k.starts_with('_') {
-                continue;
-            }
-            if let Ok(n) = k.parse::<i64>() {
-                numeric_keys.push((n, k));
-            } else {
-                other_keys.push(k);
-            }
+        let entries = self.collect_chart_entries(&array_name);
+        if entries.is_empty() {
+            return Value::from_string(String::new());
         }
-        if !numeric_keys.is_empty() {
-            numeric_keys.sort_by_key(|(n, _)| *n);
-        } else {
-            other_keys.sort();
-        }
+        let max_val = entries.iter().map(|(_, v)| *v).fold(0.0f64, f64::max);
 
-        let mut entries: Vec<(String, f64)> = Vec::new();
-        if !numeric_keys.is_empty() {
-            for (_n, k) in &numeric_keys {
-                let v = self.rt.get_array(&array_name, k);
-                entries.push((k.clone(), builtins::to_number(&v)));
-            }
-        } else {
-            for k in &other_keys {
-                let v = self.rt.get_array(&array_name, k);
-                entries.push((k.clone(), builtins::to_number(&v)));
-            }
-        }
-
-        let mut max_count = 0.0;
-        for (_k, v) in &entries {
-            if *v > max_count {
-                max_count = *v;
-            }
-        }
-
-        let mut label_with_range = false;
-        let min = builtins::to_number(&self.rt.get_array(&array_name, "_min"));
-        let max = builtins::to_number(&self.rt.get_array(&array_name, "_max"));
-        let bin_width = builtins::to_number(&self.rt.get_array(&array_name, "_width"));
-        if bin_width.is_finite() && bin_width > 0.0 && min.is_finite() && max.is_finite() {
-            label_with_range = !numeric_keys.is_empty();
-        }
-
-        let range_decimals = if let Some(p) = precision {
-            p
-        } else if !bin_width.is_finite() || bin_width == 0.0 {
-            0
-        } else {
-            let w = bin_width.abs();
-            if w >= 1.0 { 0 }
-            else if w >= 0.1 { 1 }
-            else if w >= 0.01 { 2 }
-            else if w >= 0.001 { 3 }
-            else { 4 }
-        };
-
-        let mut labels: Vec<String> = Vec::new();
-        for (idx, (key, _count)) in entries.iter().enumerate() {
-            let label = if label_with_range {
-                let lo = min + (idx as f64) * bin_width;
-                let hi = if idx + 1 == entries.len() {
-                    max
-                } else {
-                    lo + bin_width
-                };
-                format!("{:.*}..{:.*}", range_decimals, lo, range_decimals, hi)
-            } else {
-                key.clone()
-            };
-            labels.push(label);
-        }
+        let hist_meta = self.rt.get_meta(&array_name).cloned();
+        let labels = build_chart_labels(&entries, hist_meta.as_ref(), precision);
         let label_width = labels.iter().map(|l| l.len()).max().unwrap_or(0);
         let count_width = entries.iter()
-            .map(|(_k, v)| builtins::format_number(*v).len())
+            .map(|(_, v)| builtins::format_number(*v).len())
             .max()
             .unwrap_or(0);
 
         let mut lines: Vec<String> = Vec::new();
-        for (idx, (_key, count)) in entries.iter().enumerate() {
-            let mut bar_len = if max_count > 0.0 {
-                ((count / max_count) * width as f64).round() as usize
-            } else {
-                0
-            };
-            if *count > 0.0 && bar_len == 0 {
-                bar_len = 1;
-            }
-            let mut bar = ch.to_string().repeat(bar_len);
-            if bar_len < width {
-                bar.push_str(&" ".repeat(width - bar_len));
-            }
+        for (idx, (_, count)) in entries.iter().enumerate() {
+            let bar = render_bar(*count, max_val, width, ch, color_code, color_reset);
             let count_str = builtins::format_number(*count);
-            let colored_bar = if color_code.is_empty() {
-                bar
-            } else {
-                format!("{}{}{}", color_code, bar, color_reset)
-            };
             lines.push(format!(
                 "{:label_w$} | {} {:count_w$}",
-                labels[idx],
-                colored_bar,
-                count_str,
-                label_w = label_width,
-                count_w = count_width,
+                labels[idx], bar, count_str,
+                label_w = label_width, count_w = count_width,
             ));
         }
 
@@ -1021,7 +944,7 @@ impl<'a> Executor<'a> {
     }
 
     /// plotbox(arr [, width [, char [, precision [, title [, xlabel [, color]]]]]])
-    /// Render a boxed horizontal bar chart.
+    /// Render a boxed horizontal bar chart. Auto-detects histogram metadata.
     pub(crate) fn builtin_plotbox(&mut self, args: &[Expr]) -> Value {
         if args.is_empty() {
             eprintln!("fk: plotbox() requires an array argument");
@@ -1030,8 +953,11 @@ impl<'a> Executor<'a> {
         let array_name = match &args[0] {
             Expr::Var(v) => v.clone(),
             _ => {
-                eprintln!("fk: plotbox(): first argument must be an array name");
-                return Value::from_string(String::new());
+                let s = self.eval_string(&args[0]);
+                if self.rt.has_array(&s) { s } else {
+                    eprintln!("fk: plotbox(): first argument must be an array name");
+                    return Value::from_string(String::new());
+                }
             }
         };
         if !self.rt.has_array(&array_name) {
@@ -1056,107 +982,28 @@ impl<'a> Executor<'a> {
         };
         let precision = if precision_raw < 0 { None } else { Some(precision_raw as usize) };
         let title = args.get(4).map(|expr| self.eval_string(expr)).unwrap_or_default();
-        let xlabel = args.get(5).map(|expr| self.eval_string(expr)).unwrap_or_default();
+        let xlabel_arg = args.get(5).map(|expr| self.eval_string(expr));
         let color_name = args.get(6).map(|expr| self.eval_string(expr)).unwrap_or_default();
-        let color_code = match color_name.as_str() {
-            "" | "none" => "",
-            "red" => "\x1b[31m",
-            "green" => "\x1b[32m",
-            "yellow" => "\x1b[33m",
-            "blue" => "\x1b[34m",
-            "magenta" => "\x1b[35m",
-            "cyan" => "\x1b[36m",
-            "gray" | "grey" => "\x1b[90m",
-            _ => "",
-        };
-        let color_reset = if color_code.is_empty() { "" } else { "\x1b[0m" };
+        let (color_code, color_reset) = ansi_color(&color_name);
 
-        let mut numeric_keys: Vec<(i64, String)> = Vec::new();
-        let mut other_keys: Vec<String> = Vec::new();
-        for k in self.rt.array_keys(&array_name) {
-            if k.starts_with('_') {
-                continue;
-            }
-            if let Ok(n) = k.parse::<i64>() {
-                numeric_keys.push((n, k));
-            } else {
-                other_keys.push(k);
-            }
+        let entries = self.collect_chart_entries(&array_name);
+        if entries.is_empty() {
+            return Value::from_string(String::new());
         }
-        if !numeric_keys.is_empty() {
-            numeric_keys.sort_by_key(|(n, _)| *n);
-        } else {
-            other_keys.sort();
-        }
+        let max_val = entries.iter().map(|(_, v)| *v).fold(0.0f64, f64::max);
 
-        let mut entries: Vec<(String, f64)> = Vec::new();
-        if !numeric_keys.is_empty() {
-            for (_n, k) in &numeric_keys {
-                let v = self.rt.get_array(&array_name, k);
-                entries.push((k.clone(), builtins::to_number(&v)));
-            }
-        } else {
-            for k in &other_keys {
-                let v = self.rt.get_array(&array_name, k);
-                entries.push((k.clone(), builtins::to_number(&v)));
-            }
-        }
-
-        let mut max_count = 0.0;
-        for (_k, v) in &entries {
-            if *v > max_count {
-                max_count = *v;
-            }
-        }
-
-        let min = builtins::to_number(&self.rt.get_array(&array_name, "_min"));
-        let max = builtins::to_number(&self.rt.get_array(&array_name, "_max"));
-        let bin_width = builtins::to_number(&self.rt.get_array(&array_name, "_width"));
-        let label_with_range = bin_width.is_finite() && bin_width > 0.0 && min.is_finite() && max.is_finite() && !numeric_keys.is_empty();
-        let range_decimals = if let Some(p) = precision {
-            p
-        } else if !bin_width.is_finite() || bin_width == 0.0 {
-            0
-        } else {
-            let w = bin_width.abs();
-            if w >= 1.0 { 0 }
-            else if w >= 0.1 { 1 }
-            else if w >= 0.01 { 2 }
-            else if w >= 0.001 { 3 }
-            else { 4 }
-        };
-
-        let mut labels: Vec<String> = Vec::new();
-        if label_with_range {
-            let mut bounds: Vec<(String, String)> = Vec::new();
-            let mut num_width = 0usize;
-            for (idx, _entry) in entries.iter().enumerate() {
-                let lo = min + (idx as f64) * bin_width;
-                let hi = if idx + 1 == entries.len() {
-                    max
-                } else {
-                    lo + bin_width
-                };
-                let lo_s = format!("{:.*}", range_decimals, lo);
-                let hi_s = format!("{:.*}", range_decimals, hi);
-                num_width = num_width.max(lo_s.len()).max(hi_s.len());
-                bounds.push((lo_s, hi_s));
-            }
-            for (lo_s, hi_s) in bounds {
-                labels.push(format!("[{:>w$}, {:>w$})", lo_s, hi_s, w = num_width));
-            }
-        } else {
-            for (key, _count) in &entries {
-                labels.push(key.clone());
-            }
-        }
+        let hist_meta = self.rt.get_meta(&array_name).cloned();
+        let xlabel = xlabel_arg.unwrap_or_else(|| {
+            if hist_meta.is_some() { "Frequency".to_string() } else { String::new() }
+        });
+        let labels = build_chart_labels(&entries, hist_meta.as_ref(), precision);
         let label_width = labels.iter().map(|l| l.len()).max().unwrap_or(0);
         let count_width = entries.iter()
-            .map(|(_k, v)| builtins::format_number(*v).len())
+            .map(|(_, v)| builtins::format_number(*v).len())
             .max()
             .unwrap_or(0);
 
-        let box_width = width + count_width + 1; // bar + space + count
+        let box_width = width + count_width + 1;
         let mut lines: Vec<String> = Vec::new();
         if !title.is_empty() {
             let total = label_width + 3 + box_width + 1;
@@ -1165,45 +1012,22 @@ impl<'a> Executor<'a> {
         }
         lines.push(format!(
             "{:>label_w$} ┌{}┐",
-            "",
-            " ".repeat(box_width),
-            label_w = label_width,
+            "", " ".repeat(box_width), label_w = label_width,
         ));
 
-        for (idx, (_key, count)) in entries.iter().enumerate() {
-            let mut bar_len = if max_count > 0.0 {
-                ((count / max_count) * width as f64).round() as usize
-            } else {
-                0
-            };
-            if *count > 0.0 && bar_len == 0 {
-                bar_len = 1;
-            }
-            let mut bar = ch.to_string().repeat(bar_len);
-            if bar_len < width {
-                bar.push_str(&" ".repeat(width - bar_len));
-            }
+        for (idx, (_, count)) in entries.iter().enumerate() {
+            let bar = render_bar(*count, max_val, width, ch, color_code, color_reset);
             let count_str = builtins::format_number(*count);
-            let colored_bar = if color_code.is_empty() {
-                bar
-            } else {
-                format!("{}{}{}", color_code, bar, color_reset)
-            };
             lines.push(format!(
                 "{:>label_w$} ┤{} {:count_w$}",
-                labels[idx],
-                colored_bar,
-                count_str,
-                label_w = label_width,
-                count_w = count_width,
+                labels[idx], bar, count_str,
+                label_w = label_width, count_w = count_width,
             ));
         }
 
         lines.push(format!(
             "{:>label_w$} └{}┘",
-            "",
-            " ".repeat(box_width),
-            label_w = label_width,
+            "", " ".repeat(box_width), label_w = label_width,
         ));
         if !xlabel.is_empty() {
             let total = label_width + 3 + box_width + 1;
@@ -1212,52 +1036,6 @@ impl<'a> Executor<'a> {
         }
 
         Value::from_string(lines.join("\n"))
-    }
-
-    /// histplot(arr [, bins [, width [, char [, precision [, title [, xlabel [, color]]]]]]])
-    /// Convenience: build a histogram and render a boxed plot.
-    pub(crate) fn builtin_histplot(&mut self, args: &[Expr]) -> Value {
-        if args.is_empty() {
-            eprintln!("fk: histplot() requires an array argument");
-            return Value::from_string(String::new());
-        }
-        let array_name = match &args[0] {
-            Expr::Var(v) => v.clone(),
-            _ => {
-                eprintln!("fk: histplot(): first argument must be an array name");
-                return Value::from_string(String::new());
-            }
-        };
-        if !self.rt.has_array(&array_name) {
-            return Value::from_string(String::new());
-        }
-
-        let bins = if let Some(expr) = args.get(1) {
-            let b = builtins::to_number(&self.eval_string(expr)).round() as i64;
-            if b <= 0 { 1 } else { b as usize }
-        } else {
-            let n = self.rt.array_len(&array_name) as f64;
-            let b = (n.log2() + 1.0).ceil() as i64;
-            if b <= 0 { 1 } else { b as usize }
-        };
-
-        // Build a temporary histogram array and render plotbox on it.
-        let tmp = "__fk_histplot_tmp";
-        self.rt.delete_array_all(tmp);
-        let _ = self.builtin_hist(&[
-            Expr::Var(array_name),
-            Expr::NumberLit(bins as f64),
-            Expr::Var(tmp.to_string()),
-        ]);
-
-        let mut plot_args: Vec<Expr> = Vec::new();
-        plot_args.push(Expr::Var(tmp.to_string()));
-        for expr in args.iter().skip(2) {
-            plot_args.push(expr.clone());
-        }
-        let out = self.builtin_plotbox(&plot_args);
-        self.rt.delete_array_all(tmp);
-        out
     }
 
     pub(crate) fn exec_getline(&mut self, var: Option<&str>, source: Option<&Expr>) -> Value {
@@ -1463,6 +1241,35 @@ impl<'a> Executor<'a> {
         let t = self.timers.get(&id).unwrap_or(&self.epoch);
         Value::from_number(t.elapsed().as_secs_f64())
     }
+
+    /// Collect (key, numeric_value) pairs from an array, sorted sensibly.
+    fn collect_chart_entries(&self, array_name: &str) -> Vec<(String, f64)> {
+        let mut numeric_keys: Vec<(i64, String)> = Vec::new();
+        let mut other_keys: Vec<String> = Vec::new();
+        for k in self.rt.array_keys(array_name) {
+            if let Ok(n) = k.parse::<i64>() {
+                numeric_keys.push((n, k));
+            } else {
+                other_keys.push(k);
+            }
+        }
+
+        let mut entries: Vec<(String, f64)> = Vec::new();
+        if !numeric_keys.is_empty() {
+            numeric_keys.sort_by_key(|(n, _)| *n);
+            for (_, k) in &numeric_keys {
+                let v = self.rt.get_array(array_name, k);
+                entries.push((k.clone(), builtins::to_number(&v)));
+            }
+        } else {
+            other_keys.sort();
+            for k in &other_keys {
+                let v = self.rt.get_array(array_name, k);
+                entries.push((k.clone(), builtins::to_number(&v)));
+            }
+        }
+        entries
+    }
 }
 
 fn extract_array_name(args: &[Expr]) -> Option<String> {
@@ -1492,4 +1299,96 @@ fn is_sequential(sorted_keys: &[String]) -> bool {
     sorted_keys.iter().enumerate().all(|(i, k)| {
         k.parse::<usize>().is_ok_and(|n| n == i + 1)
     })
+}
+
+// --- Histogram binning (uplot-style nice numbers) ---
+
+/// Pick a "nice" bin width and aligned min, returning (aligned_min, width, bin_count).
+/// Emulates uplot/UnicodePlot: round bin widths (1, 2, 5, 10, 20, 50, ...)
+/// so labels read cleanly in a terminal.
+fn nice_hist_bins(data_min: f64, data_max: f64, n: usize) -> (f64, f64, usize) {
+    if data_min == data_max {
+        return (data_min - 0.5, 1.0, 1);
+    }
+    let range = data_max - data_min;
+    let target = ((n as f64).log2() + 1.0).ceil().max(3.0);
+    let rough = range / target;
+
+    let mag = 10.0f64.powf(rough.log10().floor());
+    let frac = rough / mag;
+    let nice_frac = if frac < 1.5 { 1.0 }
+        else if frac < 3.0 { 2.0 }
+        else if frac < 7.0 { 5.0 }
+        else { 10.0 };
+    let width = nice_frac * mag;
+
+    let aligned_min = (data_min / width).floor() * width;
+    let aligned_max = (data_max / width).ceil() * width;
+    let bins = ((aligned_max - aligned_min) / width).round() as usize;
+    let bins = bins.max(1);
+
+    (aligned_min, width, bins)
+}
+
+// --- Chart rendering helpers ---
+
+fn ansi_color(name: &str) -> (&'static str, &'static str) {
+    let code = match name {
+        "red" => "\x1b[31m",
+        "green" => "\x1b[32m",
+        "yellow" => "\x1b[33m",
+        "blue" => "\x1b[34m",
+        "magenta" => "\x1b[35m",
+        "cyan" => "\x1b[36m",
+        "gray" | "grey" => "\x1b[90m",
+        _ => "",
+    };
+    if code.is_empty() { ("", "") } else { (code, "\x1b[0m") }
+}
+
+fn render_bar(value: f64, max_val: f64, width: usize, ch: char, color: &str, reset: &str) -> String {
+    let mut bar_len = if max_val > 0.0 {
+        ((value / max_val) * width as f64).round() as usize
+    } else {
+        0
+    };
+    if value > 0.0 && bar_len == 0 {
+        bar_len = 1;
+    }
+    let mut bar = ch.to_string().repeat(bar_len);
+    if bar_len < width {
+        bar.push_str(&" ".repeat(width - bar_len));
+    }
+    if color.is_empty() { bar } else { format!("{}{}{}", color, bar, reset) }
+}
+
+fn build_chart_labels(
+    entries: &[(String, f64)],
+    meta: Option<&ArrayMeta>,
+    precision: Option<usize>,
+) -> Vec<String> {
+    if let Some(ArrayMeta::Histogram { min, max, width, .. }) = meta {
+        let range_decimals = precision.unwrap_or_else(|| {
+            let w = width.abs();
+            if w >= 0.01 { 1 }
+            else if w >= 0.001 { 3 }
+            else { 4 }
+        });
+
+        let mut bounds: Vec<(String, String)> = Vec::new();
+        let mut num_width = 0usize;
+        for (idx, _) in entries.iter().enumerate() {
+            let lo = min + (idx as f64) * width;
+            let hi = if idx + 1 == entries.len() { *max } else { lo + width };
+            let lo_s = format!("{:.*}", range_decimals, lo);
+            let hi_s = format!("{:.*}", range_decimals, hi);
+            num_width = num_width.max(lo_s.len()).max(hi_s.len());
+            bounds.push((lo_s, hi_s));
+        }
+        bounds.iter()
+            .map(|(lo_s, hi_s)| format!("[{:>w$}, {:>w$})", lo_s, hi_s, w = num_width))
+            .collect()
+    } else {
+        entries.iter().map(|(key, _)| key.clone()).collect()
+    }
 }

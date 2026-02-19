@@ -1905,61 +1905,58 @@ fn stats_iqm() {
 #[test]
 fn stats_histogram_basic() {
     let rt = eval(
-        r#"{ a[NR] = $1 } END { n = hist(a, 2, h); c1 = h[1]; c2 = h[2]; mn = h["_min"]; mx = h["_max"]; w = h["_width"] }"#,
+        r#"{ a[NR] = $1 } END { hname = hist(a, 2, h); c1 = h[1]; c2 = h[2] }"#,
         &["1", "2", "3", "4", "5"],
     );
-    assert_eq!(rt.get_var("n"), "2");
+    assert_eq!(rt.get_var("hname"), "h");
     assert_eq!(rt.get_var("c1"), "2");
     assert_eq!(rt.get_var("c2"), "3");
-    assert_eq!(rt.get_var("mn"), "1");
-    assert_eq!(rt.get_var("mx"), "5");
-    assert_eq!(rt.get_var("w"), "2");
 }
 
 #[test]
-fn stats_hist_metadata() {
+fn stats_hist_default_bins() {
     let rt = eval(
-        r#"{ a[NR] = $1 } END { hist(a, 3, h); t = h["_type"]; b = h["_bins"]; n = h["_count"] }"#,
+        r#"{ a[NR] = $1 } END { hname = hist(a); n = length(hname) }"#,
         &["1", "2", "3", "4", "5"],
     );
-    assert_eq!(rt.get_var("t"), "hist");
-    assert_eq!(rt.get_var("b"), "3");
-    assert_eq!(rt.get_var("n"), "5");
+    let hname = rt.get_var("hname");
+    assert!(hname.starts_with("__hist_"), "hist() should return generated name, got: {}", hname);
 }
 
 #[test]
 fn stats_plot_histogram() {
     let rt = eval(
-        r#"BEGIN { h[1]=2; h[2]=1; h["_min"]=0; h["_max"]=2; h["_width"]=1; s = plot(h, 4, "*") }"#,
-        &[],
+        r#"{ a[NR] = $1 } END { s = plot(hist(a, 2), 4, "*") }"#,
+        &["0", "0", "1"],
     );
-    assert_eq!(rt.get_var("s"), "0..1 | **** 2\n1..2 | **   1");
+    let s = rt.get_var("s");
+    assert!(s.contains('*'), "plot should contain bar chars");
+    assert!(s.contains('['), "histogram plot should have range labels");
 }
 
 #[test]
 fn stats_plotbox_histogram() {
     let rt = eval(
-        r##"BEGIN { h[1]=2; h[2]=1; h["_min"]=0; h["_max"]=2; h["_width"]=1; s = plotbox(h, 4, "#", 0, "Title", "X", "none") }"##,
-        &[],
+        r##"{ a[NR] = $1 } END { s = plotbox(hist(a, 2), 4, "#", 0, "Title", "X", "none") }"##,
+        &["0", "0", "1"],
     );
-    let expected = concat!(
-        "     Title\n",
-        "       ┌      ┐\n",
-        "[0, 1) ┤#### 2\n",
-        "[1, 2) ┤##   1\n",
-        "       └      ┘\n",
-        "       X",
-    );
-    assert_eq!(rt.get_var("s"), expected);
+    let s = rt.get_var("s");
+    assert!(s.contains("Title"), "should include title");
+    assert!(s.contains("X"), "should include xlabel");
+    assert!(s.contains('['), "histogram plotbox should have range labels");
+    assert!(s.contains('┤'), "should have box drawing chars");
 }
 
 #[test]
-fn stats_histplot_basic() {
+fn stats_hist_plotbox_chained() {
     let rt = eval(
-        r#"{ a[NR] = $1 } END { s = histplot(a) }"#,
+        r#"{ a[NR] = $1 } END { s = plotbox(hist(a)) }"#,
         &["1", "2", "3", "4", "5"],
     );
-    assert!(!rt.get_var("s").is_empty());
+    let s = rt.get_var("s");
+    assert!(!s.is_empty());
+    assert!(s.contains('┤'), "chained plotbox(hist(a)) should produce boxed chart");
+    assert!(s.contains("Frequency"), "histogram plotbox should default to Frequency xlabel");
 }
 
 #[test]

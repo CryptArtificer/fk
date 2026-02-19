@@ -166,7 +166,7 @@ print ... > "/dev/stderr"   # write to stderr
 | `system(cmd)` | Run shell command, return exit status |
 | `fflush()` | Flush stdout |
 | `close(name)` | Close an output file or pipe |
-| `slurp(file)` | Read entire file into string |
+| `slurp(file)` | Read entire file into string (`"-"` for stdin) |
 | `slurp(file, arr)` | Read file lines into array, return count |
 
 ### Arrays (fk extensions)
@@ -196,8 +196,7 @@ print ... > "/dev/stderr"   # write to stderr
 | `median(arr)` | Median (50th percentile) |
 | `stddev(arr)` | Population standard deviation |
 | `variance(arr)` | Population variance |
-| `hist(arr, bins [, out [, min [, max]]])` | Histogram counts (writes to `out`, returns bin count) |
-| `histplot(arr [, bins [, width [, char [, precision [, title [, xlabel [, color]]]]]]])` | Histogram + boxed plot |
+| `hist(arr [, bins [, out [, min [, max]]]])` | Histogram counts → output array; returns array name (chainable) |
 | `p(arr, n)` / `percentile(arr, n)` | nth percentile (0–100) |
 | `quantile(arr, q)` | Quantile (0–1, e.g. 0.95 = p95) |
 | `iqm(arr)` | Interquartile mean (robust to outliers) |
@@ -353,8 +352,17 @@ fk -F, -H '{ ts = parsedate($created, "%Y-%m-%d"); if (ts > 1700000000) print $n
 # Quick summary stats
 fk '{ a[NR]=$1 } END { printf "n=%d mean=%.2f median=%.2f stddev=%.2f\n", length(a), mean(a), median(a), stddev(a) }' data.txt
 
-# Histogram plot
-fk '{ a[NR]=$1 } END { print histplot(a, 10, 30, "▇", 0, "Latency (ms)", "Frequency", "yellow") }' data.txt
+# Histogram from stdin — one-liner, zero config
+fk 'BEGIN { slurp("-", a); print plotbox(hist(a)) }' < data.txt
+
+# Bar chart of frequencies
+fk '{ a[$1]++ } END { print plot(a) }' file
+
+# Histogram with per-record collection
+fk '{ a[NR]=$1 } END { print plotbox(hist(a)) }' data.txt
+
+# Histogram with custom bins, title, color
+fk '{ a[NR]=$1 } END { print plotbox(hist(a, 10), 30, "▇", 0, "Latency (ms)", "Frequency", "yellow") }' data.txt
 
 # p95 latency
 fk '{ a[NR]=$3 } END { print "p95:", p(a, 95) }' latency.log

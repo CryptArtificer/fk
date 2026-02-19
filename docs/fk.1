@@ -469,11 +469,12 @@ Close an output file or pipe opened by redirection.
 Returns 0 on success, \-1 if not found.
 .TP
 \fBslurp(\fIfile\fB)\fR
-Read the entire contents of \fIfile\fR and return as a string. \fI[fk]\fR
+Read the entire contents of \fIfile\fR and return as a string.
+Use \fB"-"\fR or \fB"/dev/stdin"\fR to read from standard input. \fI[fk]\fR
 .TP
 \fBslurp(\fIfile\fB,\fR \fIarr\fB)\fR
 Read \fIfile\fR line by line into \fIarr\fR[1], \fIarr\fR[2], etc.
-Returns the line count. \fI[fk]\fR
+Returns the line count. Accepts \fB"-"\fR for stdin. \fI[fk]\fR
 .
 .SS String replacement
 .TP
@@ -559,12 +560,11 @@ Population standard deviation.
 \fBvariance(\fIarr\fB)\fR
 Population variance.
 .TP
-\fBhist(\fIarr\fB,\fR \fIbins\fB [\fB,\fR \fIout\fR [\fB,\fR \fImin\fR [\fB,\fR \fImax\fR]]]]\fR
-Histogram counts. Writes \fIbins\fR counts into \fIout\fR (or \fIarr\fR),
-keys 1..bins. Stores metadata keys \fB_min\fR, \fB_max\fR, \fB_width\fR.
-.TP
-\fBhistplot(\fIarr\fB [\fB,\fR \fIbins\fR [\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR [\fB,\fR \fIprecision\fR [\fB,\fR \fItitle\fR [\fB,\fR \fIxlabel\fR [\fB,\fR \fIcolor\fR]]]]]]]])\fR
-Build a histogram from \fIarr\fR and render a boxed plot (defaults bins using Sturges' rule).
+\fBhist(\fIarr\fB [\fB,\fR \fIbins\fR [\fB,\fR \fIout\fR [\fB,\fR \fImin\fR [\fB,\fR \fImax\fR]]]]]\fR
+Histogram counts. Writes counts into \fIout\fR (or auto-generated array),
+keys 1..bins. Bins default to Sturges' rule. Returns the output array
+name, enabling chaining: \fBplotbox(hist(a))\fR. Metadata is stored
+internally as a typed enum (not in the array).
 .TP
 \fBp(\fIarr\fB,\fR \fIn\fB)\fR / \fBpercentile(\fIarr\fB,\fR \fIn\fB)\fR
 \fIn\fRth percentile (0\(en100). Uses linear interpolation.
@@ -586,8 +586,9 @@ Minimum / maximum value in the array.
 Returns \fB"number"\fR, \fB"string"\fR, \fB"array"\fR, or \fB"uninitialized"\fR.
 .TP
 \fBplot(\fIarr\fB [\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR [\fB,\fR \fIprecision\fR [\fB,\fR \fIcolor\fR]]]]])\fR
-Render a simple horizontal bar chart from array values. Optional \fIprecision\fR
-controls range label decimals; \fIcolor\fR can be \fBred\fR, \fBgreen\fR, \fByellow\fR,
+Render a simple horizontal bar chart from array values. Accepts an array
+name or a string returned by \fBhist()\fR. Auto-detects histogram metadata
+for range labels. \fIcolor\fR: \fBred\fR, \fBgreen\fR, \fByellow\fR,
 \fBblue\fR, \fBmagenta\fR, \fBcyan\fR, \fBgray\fR, or \fBnone\fR.
 .TP
 \fBplotbox(\fIarr\fB [\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR [\fB,\fR \fIprecision\fR [\fB,\fR \fItitle\fR [\fB,\fR \fIxlabel\fR [\fB,\fR \fIcolor\fR]]]]]]])\fR

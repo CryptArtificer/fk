@@ -62,27 +62,21 @@ END {
 
 section "5. Histogram — distribution at a glance"
 
-echo "Bucket latency into 6 bins:"
+echo "One-liner — just the data, everything else is automatic:"
 show $FK '{
     ms = jpath($0, ".ms") + 0; lat[NR] = ms
 }
 END {
-    n = hist(lat, 6, h)
-    minv = h["_min"] + 0; w = h["_width"] + 0
-    for (i=1; i<=n; i++) {
-        lo = minv + (i-1) * w
-        hi = (i == n) ? (h["_max"] + 0) : (lo + w)
-        printf "  %4.0f–%4.0f ms  %3d  %s\n", lo, hi, h[i], repeat("#", h[i])
-    }
+    print plotbox(hist(lat))
 }' "$TMPDIR/api.jsonl"
 
 echo ""
-echo "Quick plot:"
+echo "Customised (explicit bins, width, title, color):"
 show $FK '{
     ms = jpath($0, ".ms") + 0; lat[NR] = ms
 }
 END {
-    print histplot(lat, 6, 28, "▇", 0, "Latency (ms) — most fast, long tail", "Frequency", "yellow")
+    print plotbox(hist(lat, 6), 28, "▇", 0, "Latency (ms)", "Frequency", "yellow")
 }' "$TMPDIR/api.jsonl"
 
 printf "\n${C_BOLD}Done.${C_RESET} 15 stats builtins — no awk equivalent.\n"

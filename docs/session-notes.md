@@ -1,36 +1,73 @@
 # Session Notes (2026-02-19)
 
-## Completed
-- Added histogram support: `hist(arr, bins [, out [, min [, max]]])` with metadata keys `_min`, `_max`, `_width`.
-- Preserved raw `$0` for structured readers so `jpath($0, ...)` works in JSON mode; updated examples accordingly.
-- Added `plot()` (simple horizontal bars) and `plotbox()` (boxed charts with title/xlabel/color/precision options).
-- Improved `plotbox()` label alignment and range formatting to be closer to uplot/fu style.
-- Added formatted JSON showcase examples (multi-line JSON + arrays).
-- Added IO/program-tools showcase (sub/gsub, getline/close, RS regex, ARGV/ARGC, format/highlight).
-- Added newline-tolerant argument lists in `printf`/function calls.
-- Updated docs: README, man page (`docs/fk.1`), cheatsheet, progress notes, awk-vs-fk examples, and showcases.
-- Ran integrity checks repeatedly: `cargo test` and `cargo clippy -- -D warnings`.
-- Ran perf benchmark: `make suite-perf-strict` (report saved under `bench_data/`).
+## Completed (prior session)
+- Added histogram support: `hist()`, `plot()`, `plotbox()`, `histplot()`.
+- Preserved raw `$0` for structured readers.
+- Added newline-tolerant argument lists in printf/function calls.
 
-## In Progress / Not Fully Realized
-- **Histogram plotting UX**: User wants uplot-like default histogram rendering without parameters and better aesthetics. I started:
-  - Added `histplot()` to auto-bin and render a boxed histogram.
-  - Added histogram array metadata: `_type`, `_bins`, `_count` for annotation.
-  - Updated examples/docs to use `histplot()`.
-  - **Status**: Implemented and committed locally, but not pushed (branch is ahead by 1 commit). Needs push once approved.
-- **Plot appearance**: User wants closer parity with uplot (glyphs, colors, thin bars, aligned labels). We moved toward that, but further tuning may be desired:
-  - Validate exact glyph, bar scaling, and label precision.
-  - Consider `--labels` toggle or count placement inside/outside the box.
+## Completed (current session)
 
-## User Requests That Still Need Attention
-- “More like uplot”: tighten plot aesthetics (spacing, labels, thin bars) to match the provided screenshots.
-- “uplot can render a histogram without parameters”: ensure `histplot()` defaults are right and easy (`histplot(arr)` should be sufficient), and possibly allow `plotbox()` to auto-detect histogram arrays by metadata.
+### ArrayMeta enum
+Replaced `_`-prefixed magic keys with a typed Rust enum stored in a
+parallel `HashMap<String, ArrayMeta>` in Runtime. Cleared on `delete arr`.
+```rust
+pub enum ArrayMeta {
+    Histogram { source: Vec<f64>, bins: usize, min: f64, max: f64, width: f64 },
+}
+```
+Keeps the original source values for potential re-binning. No filtering
+needed in iteration — array data stays pure.
 
-## Repo State
-- `main` is **ahead by 1 commit** (local). Pending push.
-- Latest unpushed work: `histplot()` + histogram metadata + docs/examples updates.
+### hist() redesign
+- Bins now optional — defaults to Sturges target + nice-number rounding
+  (1, 2, 5 × 10^n thresholds from fu: `<1.5, <3.0, <7.0`), matching
+  uplot/fu output exactly.
+- Returns the output array **name** as a string, enabling composable
+  chaining: `plotbox(hist(a))`.
+- Auto-generates output array name (`__hist_<source>`) when no explicit
+  output given.
 
-## Suggested Next Actions
-1. Review plot aesthetics against the provided screenshots and adjust defaults (glyph/width/labels).
-2. Push the pending commit.
-3. Add an explicit `plotbox()` auto-detect behavior when `_type == "hist"` to reduce parameter need.
+### plot()/plotbox() refactored
+- Read metadata from `ArrayMeta` enum instead of `_`-prefixed keys.
+- Accept both `Var` names and string results from `hist()`.
+- Consistent `▇` default glyph (both plot and plotbox).
+- Auto "Frequency" xlabel on plotbox when histogram metadata detected.
+- Labels use `.1` decimal format (matching uplot/fu `format_compact`).
+- Shared helpers extracted: `collect_chart_entries`, `build_chart_labels`,
+  `render_bar`, `ansi_color`, `nice_hist_bins`.
+
+### histplot() removed
+Dropped in favour of the composable form `plotbox(hist(a))`. Less code,
+more flexible, no wrapper to maintain.
+
+### slurp("-") reads stdin
+`slurp("-", a)` and `slurp("/dev/stdin", a)` now read from standard
+input, enabling `BEGIN { slurp("-", a); print plotbox(hist(a)) }`.
+
+### Tests & docs
+- 4 tests rewritten, 1 new chaining test (379 Rust + all shell suites pass).
+- Cheatsheet, man page, awk-vs-fk, examples, README, .cursorrules updated.
+- All examples lead with minimal-parameter form first.
+- Nice-number thresholds aligned with fu's `nice_bin_width`.
+
+## Explored but deferred
+
+### Data collection convenience (F1)
+- `slurp("-", a, col)` — slurp specific column from stdin
+- `collect(a, expr)` — per-record append with auto-key, skip NaN
+- Decided to keep `{ a[NR]=$1 } END { ... }` as canonical pattern
+
+### Auto-print / smart output (F2)
+- Bare expression auto-print (unused return values get printed)
+- `emit(fmt, ...)` — printf + auto-newline
+- `show(expr)` — type-aware smart print
+- `table(arr)` — auto-aligned columnar output
+
+### Array math for chaining (F3)
+- `cumsum(a)`, `norm(a)`, `rank(a)` — return array name
+- `map(a, "expr")`, `filter(a, "expr")` — expression transforms
+- All following the hist() pattern: mutate-and-return-name
+
+## Repo state
+- `main`, working tree dirty, all tests and clippy pass.
+- Changes not yet committed.
