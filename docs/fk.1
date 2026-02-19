@@ -229,6 +229,34 @@ Patterns can be combined:
 .fi
 .
 .\" ─────────────────────────────────────────────────────────────
+.SH REGULAR EXPRESSIONS
+.
+fk uses the \fBRust regex crate\fR, a superset of POSIX Extended Regular
+Expressions (ERE).
+Every valid awk regex works unchanged in fk.
+In addition, fk accepts the following extensions:
+.
+.TS
+l l l.
+\fBSyntax\fR	\fBMeaning\fR	\fBawk equivalent\fR
+_
+\\d / \\D	Digit / non-digit	[0-9] / [^0-9]
+\\w / \\W	Word char / non-word	[A-Za-z0-9_] / [^...]
+\\s / \\S	Whitespace / non-whitespace	[ \\t] / [^ \\t]
+\\b	Word boundary	\fI(none)\fR
+(?:...)	Non-capturing group	\fI(none)\fR
+(?P<name>...)	Named capture group	\fI(none)\fR
+\\p{Letter}	Unicode property class	\fI(none)\fR
+*? +? ??	Non-greedy quantifiers	\fI(none)\fR
+.TE
+.PP
+Unicode-aware by default: \fB.\fR matches any codepoint, not a byte.
+Character classes like \fB\\w\fR and \fB\\b\fR are Unicode-aware.
+.PP
+Lookahead and lookbehind are \fBnot\fR supported (the Rust regex crate
+guarantees linear-time matching).
+.
+.\" ─────────────────────────────────────────────────────────────
 .SH FIELDS
 .
 Each record is split into fields.

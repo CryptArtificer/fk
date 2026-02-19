@@ -68,6 +68,9 @@ builtins/json.rs     — jpath() with JSON parser, path evaluator, iteration
 - Print writes parts directly to BufWriter (no intermediate String allocation)
 - Recursion depth guard (MAX_CALL_DEPTH = 200) prevents stack overflow
 - All string builtins are unicode-aware (chars, not bytes)
+- Regex dialect: Rust `regex` crate (POSIX ERE superset). Adds \d, \w, \s,
+  \b, (?:...), (?P<name>...), \p{Letter}, non-greedy quantifiers. No
+  lookahead/lookbehind (linear-time guarantee). Every awk regex works as-is.
 - jpath() supports multi-value navigation: .key[], .arr.key (implicit iteration)
 - Named column access: $expr where expr evaluates to a non-numeric string does
   an HDR array lookup; works with literals ($"col-name"), variables ($col), and

@@ -71,6 +71,24 @@ $1 > 0 && $2 ~ /pat/  # compound
 /start/,/stop/         # range (inclusive)
 ```
 
+## Regular expressions
+
+fk uses the **Rust `regex` crate** (a POSIX ERE superset). All awk regexes
+work unchanged; fk also accepts:
+
+| Syntax | Meaning | awk equivalent |
+|--------|---------|----------------|
+| `\d` / `\D` | Digit / non-digit | `[0-9]` / `[^0-9]` |
+| `\w` / `\W` | Word char / non-word | `[A-Za-z0-9_]` / `[^A-Za-z0-9_]` |
+| `\s` / `\S` | Whitespace / non-whitespace | `[ \t]` / `[^ \t]` |
+| `\b` | Word boundary | *(no equivalent)* |
+| `(?:...)` | Non-capturing group | *(no equivalent)* |
+| `(?P<name>...)` | Named capture group | *(no equivalent)* |
+| `\p{Letter}` | Unicode property class | *(no equivalent)* |
+| `*?` `+?` `??` | Non-greedy quantifiers | *(no equivalent)* |
+
+Unicode-aware by default: `.` matches any codepoint (not byte).
+
 ## Operators
 
 | Op | Description |
