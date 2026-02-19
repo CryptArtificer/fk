@@ -175,6 +175,15 @@ fn main() {
         args.input_mode.clone()
     };
 
+    // Fast path: END { print NR } with no rules (line counting).
+    let fast_count_nr = program.begin.is_none()
+        && program.beginfile.is_none()
+        && program.endfile.is_none()
+        && program.rules.is_empty()
+        && program.functions.is_empty()
+        && !args.header_mode
+        && is_end_print_nr_only(&program);
+
     // Parquet mode: reads entire file upfront (not streaming)
     if effective_mode == cli::InputMode::Parquet {
         #[cfg(feature = "parquet")]
@@ -185,6 +194,40 @@ fn main() {
         {
             eprintln!("fk: parquet support not compiled in. Rebuild with: cargo build --features parquet");
             process::exit(2);
+        }
+    } else if fast_count_nr {
+        // Simple line/record count: avoid per-record runtime setup.
+        let reader: Box<dyn input::RecordReader> = {
+            let rs = exec.get_var("RS");
+            if effective_mode == cli::InputMode::Line && rs.len() > 1 {
+                match input::regex_rs::RegexReader::new(&rs) {
+                    Ok(r) => Box::new(r),
+                    Err(e) => {
+                        eprintln!("fk: {}", e);
+                        process::exit(2);
+                    }
+                }
+            } else {
+                match effective_mode {
+                    cli::InputMode::Csv  => Box::new(input::csv::CsvReader::comma()),
+                    cli::InputMode::Tsv  => Box::new(input::csv::CsvReader::tab()),
+                    cli::InputMode::Json => Box::new(input::json::JsonReader),
+                    cli::InputMode::Line => Box::new(input::line::LineReader::new()),
+                    cli::InputMode::Parquet => unreachable!(),
+                }
+            }
+        };
+
+        let mut inp = input::Input::with_reader(&args.files, reader);
+        loop {
+            match inp.next_record() {
+                Ok(Some(_)) => exec.increment_nr(),
+                Ok(None) => break,
+                Err(e) => {
+                    eprintln!("{}", e);
+                    process::exit(1);
+                }
+            }
         }
     } else {
         // Select record reader based on input mode and RS (which may be set in BEGIN)
@@ -269,5 +312,22 @@ fn main() {
     exec.run_end();
     if let Some(code) = exec.should_exit() {
         process::exit(code);
+    }
+}
+
+fn is_end_print_nr_only(program: &parser::Program) -> bool {
+    let end = match &program.end {
+        Some(block) => block,
+        None => return false,
+    };
+    if end.len() != 1 {
+        return false;
+    }
+    match &end[0] {
+        parser::Statement::Print(exprs, None) if exprs.len() == 1 => match &exprs[0] {
+            parser::Expr::Var(name) => name == "NR",
+            _ => false,
+        },
+        _ => false,
     }
 }

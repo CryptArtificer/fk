@@ -151,6 +151,10 @@ impl<'a> Executor<'a> {
         self.rt.increment_fnr();
     }
 
+    pub fn increment_nr(&mut self) {
+        self.rt.increment_nr();
+    }
+
     pub fn reset_fnr(&mut self) {
         self.rt.reset_fnr();
     }

@@ -75,6 +75,7 @@
 - [x] Large-file benchmark (1M+ lines, CSV-like data)
 - [x] Strict perf suite with warmup + median/p90 reporting (`tests/suite/perf_strict.sh`)
 - [x] Strict perf baseline captured (`docs/perf-baseline.md`)
+- [x] Fast path for `END { print NR }` (count-only, skips per-record runtime)
 
 #### Phase 5 — Tutorial & showcase
 - [x] `examples/` directory with annotated scripts
