@@ -77,6 +77,7 @@
 - [x] Strict perf baseline captured (`docs/perf-baseline.md`)
 - [x] Fast path for `END { print NR }` (count-only, skips per-record runtime)
 - [x] Fast path for `NR>limit { exit } 1` in line mode (head-style)
+- [x] Stats builtins: single-pass mean/variance/min/max (no sort)
 
 #### Phase 5 — Tutorial & showcase
 - [x] `examples/` directory with annotated scripts

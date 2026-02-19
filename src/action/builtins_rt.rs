@@ -689,6 +689,43 @@ impl<'a> Executor<'a> {
             return Value::from_number(0.0);
         }
 
+        if matches!(name, "sum" | "mean" | "variance" | "stddev" | "min" | "max") {
+            let Some(values) = self.rt.array_values(&array_name) else {
+                return Value::from_number(0.0);
+            };
+            let mut count: f64 = 0.0;
+            let mut mean: f64 = 0.0;
+            let mut m2: f64 = 0.0;
+            let mut sum: f64 = 0.0;
+            let mut min: f64 = f64::INFINITY;
+            let mut max: f64 = f64::NEG_INFINITY;
+
+            for v in values {
+                let v = v.to_number();
+                count += 1.0;
+                sum += v;
+                if v < min { min = v; }
+                if v > max { max = v; }
+                let delta = v - mean;
+                mean += delta / count;
+                let delta2 = v - mean;
+                m2 += delta * delta2;
+            }
+
+            if count == 0.0 {
+                return Value::from_number(0.0);
+            }
+            return match name {
+                "sum" => Value::from_number(sum),
+                "mean" => Value::from_number(sum / count),
+                "variance" => Value::from_number(m2 / count),
+                "stddev" => Value::from_number((m2 / count).sqrt()),
+                "min" => Value::from_number(min),
+                "max" => Value::from_number(max),
+                _ => Value::from_number(0.0),
+            };
+        }
+
         let vals = self.array_sorted_values(&array_name);
         if vals.is_empty() {
             return Value::from_number(0.0);
@@ -696,26 +733,8 @@ impl<'a> Executor<'a> {
         let n = vals.len();
 
         match name {
-            "sum" => {
-                let s: f64 = vals.iter().sum();
-                Value::from_number(s)
-            }
-            "mean" => {
-                let s: f64 = vals.iter().sum();
-                Value::from_number(s / n as f64)
-            }
             "median" => {
                 Value::from_number(percentile_sorted(&vals, 50.0))
-            }
-            "variance" => {
-                let mean: f64 = vals.iter().sum::<f64>() / n as f64;
-                let var: f64 = vals.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / n as f64;
-                Value::from_number(var)
-            }
-            "stddev" => {
-                let mean: f64 = vals.iter().sum::<f64>() / n as f64;
-                let var: f64 = vals.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / n as f64;
-                Value::from_number(var.sqrt())
             }
             "percentile" | "p" => {
                 let pct = if args.len() >= 2 {
@@ -745,12 +764,6 @@ impl<'a> Executor<'a> {
                     let s: f64 = slice.iter().sum();
                     Value::from_number(s / slice.len() as f64)
                 }
-            }
-            "min" => {
-                Value::from_number(vals[0])
-            }
-            "max" => {
-                Value::from_number(vals[n - 1])
             }
             _ => Value::from_number(0.0),
         }

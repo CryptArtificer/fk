@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map};
 
 use crate::builtins;
 use crate::field;
@@ -478,5 +478,9 @@ impl Runtime {
             .get(name)
             .map(|a| a.keys().cloned().collect())
             .unwrap_or_default()
+    }
+
+    pub fn array_values(&self, name: &str) -> Option<hash_map::Values<'_, String, Value>> {
+        self.arrays.get(name).map(|a| a.values())
     }
 }
