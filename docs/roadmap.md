@@ -4,7 +4,7 @@
 
 **A1. `needs_fields`** ✓ — analyze.rs walks the AST; when the program
 never accesses `$1`…`$N`, `field::split()` is skipped entirely.
-Pattern matching went from 3.2× to 4.3× faster than awk.
+Pattern matching improved via nosplit; see `docs/perf-baseline.md` for current numbers.
 
 **A2. `needs_nf`** ✓ — when NF is never read, the NF counting path
 is also skipped (combined with A1 in the nosplit branch).
@@ -12,7 +12,7 @@ is also skipped (combined with A1 in the nosplit branch).
 **A3. `max_field_hint`** ✓ — Runtime now stores `record_text` alongside
 fields with a `fields_dirty` flag. `$0` served from record_text when no
 field was modified; capped split is safe. `{ print $2 }` on a 4-field
-CSV splits only 2 fields (0.15s → 0.13s).
+CSV splits only 2 fields; see `docs/perf-baseline.md` for current numbers.
 
 ## Phase B — Resource lifecycle ✓
 

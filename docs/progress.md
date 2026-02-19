@@ -183,8 +183,8 @@
 - [x] `CONVFMT` variable: controls implicit number-to-string in concatenation (separate from OFMT)
 - [x] OFMT wired into print output path (was stored but unused)
 - [x] Dynamic printf width/precision: `%*d`, `%.*f`, `%*.*f` consume extra args
-- [x] Pattern matching: 3.2× → 4.3× faster than awk (nosplit)
-- [x] Print $2: 0.15s → 0.13s (capped split), 4.7× faster than awk (1M lines, M3 Pro)
+- [x] Pattern matching speedups from nosplit (see `docs/perf-baseline.md`)
+- [x] Print $2 speedups from capped split (see `docs/perf-baseline.md`)
 
 #### Phase 17 — Awk compat: C3-C5
 - [x] Multiple `-f` files: `-f a.fk -f b.fk` concatenates program sources
@@ -197,4 +197,4 @@
 - [x] `write_field_to()` writes directly from `record_text[start..end]` — zero-copy hot path
 - [x] `get_field()` slices record_text on demand; `set_field()` materializes all before modifying
 - [x] `set_record()` and `set_record_capped()` now use offset path by default
-- [x] print $2: 0.13s → 0.10s (6.4× faster than awk); sum: 0.24s → 0.17s (3.4× faster)
+- [x] print $2 and sum column improvements from lazy field storage (see `docs/perf-baseline.md`)
