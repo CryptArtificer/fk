@@ -8,12 +8,12 @@ A modernized awk clone in Rust called `fk` (filter-kernel). Built
 incrementally as a learning exercise. The user values:
 - Modularity and composability (no spaghetti)
 - Commits in logical, coherent pieces
-- Minimal dependencies (only `regex` crate so far; `criterion` for benchmarks)
+- Minimal dependencies (core: `regex`; optional: `parquet` + `arrow`; `criterion` for benchmarks)
 
 ## Current state
 
-- **~12,100 lines of Rust** across 32 source files
-- **370 Rust + 152 shell tests**, zero warnings, clippy clean
+- **~12,400 lines of Rust** across 32 source files
+- **372 Rust + 152 shell tests**, zero warnings, clippy clean
 - **Phases 0–16 complete**
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)

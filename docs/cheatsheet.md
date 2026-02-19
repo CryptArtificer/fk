@@ -9,6 +9,8 @@ fk -f progfile [file ...]          # read program from file
 fk --describe [file ...]           # sniff format, show schema & examples
 fk --suggest  [file ...]           # schema + smart tailored programs
 fk --repl                          # interactive mode
+fk --highlight 'program'           # syntax-highlighted program and exit
+fk --format    'program'           # pretty-print program and exit
 fk --help / fk --version
 ```
 
@@ -25,6 +27,8 @@ fk --help / fk --version
 | `-d`, `--describe` | Describe mode: detect format, infer schema, suggest programs |
 | `-S`, `--suggest` | Suggest mode: schema + smart copy-pasteable programs |
 | `--repl` | Interactive REPL |
+| `--highlight` | Syntax-highlight program and exit |
+| `--format` | Pretty-print program and exit |
 
 ## Program structure
 

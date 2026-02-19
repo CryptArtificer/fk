@@ -273,7 +273,13 @@ fn main() {
                 let mut buf = String::with_capacity(256);
                 loop {
                     buf.clear();
-                    let bytes = reader.read_line(&mut buf).unwrap_or(0);
+                    let bytes = match reader.read_line(&mut buf) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            eprintln!("{}", e);
+                            process::exit(1);
+                        }
+                    };
                     if bytes == 0 { break; }
                     if buf.ends_with('\n') {
                         buf.pop();
