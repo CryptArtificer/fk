@@ -27,7 +27,7 @@ END {
 section "2. asorti — sort by key"
 
 echo "Alphabetical product index:"
-show $FK -H '{
+show $FK -i csv -H '{
     products[$product] += $units
 }
 END {
