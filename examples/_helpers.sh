@@ -49,9 +49,16 @@ show() {
 
     if [[ -n "$prog" ]]; then
         printf " ${C_YEL}'${C_RESET}\n"
-        while IFS= read -r line; do
-            printf "    ${C_YEL}%s${C_RESET}\n" "$line"
-        done <<< "$prog"
+        highlighted=$("$FK" --highlight "$prog" 2>/dev/null)
+        if [[ -n "$highlighted" ]]; then
+            while IFS= read -r line; do
+                printf "    %s\n" "$line"
+            done <<< "$highlighted"
+        else
+            while IFS= read -r line; do
+                printf "    ${C_YEL}%s${C_RESET}\n" "$line"
+            done <<< "$prog"
+        fi
         printf "  ${C_YEL}'${C_RESET}\n"
     else
         printf "\n"

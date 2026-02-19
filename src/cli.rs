@@ -22,6 +22,8 @@ pub struct Args {
     pub program_files: Vec<String>,
     pub describe: bool,
     pub suggest: bool,
+    pub highlight: bool,
+    pub format: bool,
 }
 
 pub fn parse_args() -> Args {
@@ -37,6 +39,8 @@ pub fn parse_args() -> Args {
     let mut program_files: Vec<String> = Vec::new();
     let mut describe = false;
     let mut suggest = false;
+    let mut highlight = false;
+    let mut format = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -113,6 +117,10 @@ pub fn parse_args() -> Args {
         } else if arg == "--version" {
             println!("fk {}", env!("CARGO_PKG_VERSION"));
             process::exit(0);
+        } else if arg == "--highlight" {
+            highlight = true;
+        } else if arg == "--format" {
+            format = true;
         } else if arg.starts_with('-') && arg.len() > 1 {
             eprintln!("fk: unknown option: {}", arg);
             eprintln!("Try 'fk --help' for usage.");
@@ -155,8 +163,8 @@ pub fn parse_args() -> Args {
         program = Some(parts.join("\n"));
     }
 
-    // In describe mode, all positional args are files, not a program
-    if describe
+    // In describe mode, all positional args are files, not a program (unless --highlight / --format)
+    if describe && !highlight && !format
         && let Some(p) = program.take() {
             files.insert(0, p);
     }
@@ -195,6 +203,8 @@ pub fn parse_args() -> Args {
         program_files,
         describe,
         suggest,
+        highlight,
+        format,
     }
 }
 
@@ -212,6 +222,8 @@ fn print_usage() {
     eprintln!("  -H               Header mode (skip header, enable $name)");
     eprintln!("  -d / -S          Describe / suggest mode");
     eprintln!("  --repl           Interactive mode");
+    eprintln!("  --highlight      Print syntax-highlighted program to stdout and exit");
+    eprintln!("  --format         Pretty-print program (indent, line breaks) and exit");
     eprintln!("  -h, --help       Show this help (see also: man fk)");
     eprintln!();
     eprintln!("  Format auto-detected from .csv/.tsv/.json extensions (+compression).");

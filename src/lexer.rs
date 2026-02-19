@@ -83,6 +83,17 @@ pub enum Token {
     Eof,
 }
 
+impl Token {
+    /// Reference to the identifier string if this token is `Ident(_)`.
+    #[must_use]
+    pub fn as_ident_str(&self) -> Option<&str> {
+        match self {
+            Token::Ident(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+}
+
 /// A token with its source location.
 #[derive(Debug, Clone)]
 pub struct Spanned {

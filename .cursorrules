@@ -12,8 +12,8 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~10,800 lines of Rust** across 28 source files
-- **361 Rust + 152 shell tests**, zero warnings, clippy clean
+- **~12,100 lines of Rust** across 32 source files
+- **370 Rust + 152 shell tests**, zero warnings, clippy clean
 - **Phases 0–16 complete**
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
@@ -34,6 +34,7 @@ action/builtins_rt.rs — builtins needing runtime: sub, gsub, match, split, sta
 runtime.rs            — variables (private), fields, arrays (private, via methods)
 field.rs              — field splitting (FS semantics)
 error.rs              — Span + FkError (structured errors with Display + Error)
+format/                — format and syntax-highlight programs (theme, segments, ANSI; --highlight, --format pretty-print)
 repl.rs               — interactive REPL (--repl)
 input/mod.rs   — Record struct, RecordReader trait, multi-source orchestration
 input/line.rs  — default newline reader
@@ -146,7 +147,7 @@ Phase E — Memory:
 
 Order: A1-A3 ✓ → B1-B4 ✓ → D1 ✓ → C1-C5 ✓ → E3 ✓ → D2 → E1-E2
 
-- [ ] CI pipeline (build, test, lint, clippy)
+- [ ] CI pipeline (build, test, lint, clippy) — on hold
 - [ ] Publish to crates.io
 
 ### Performance (from user-time benchmarks on 1M lines, Apple M3 Pro):
@@ -187,3 +188,5 @@ fk is faster than awk (macOS system awk 20200816) on all benchmarks:
 - Keep README.md, docs/progress.md, and .cursorrules updated as you go.
   Don't let them fall behind — update them in the same commit as the
   feature or fix they describe.
+- Always verify code changes with `cargo clippy -- -D warnings` (and fix any
+  warnings) before considering a change done.

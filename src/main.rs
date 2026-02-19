@@ -1,7 +1,7 @@
 use std::env;
 use std::process;
 
-use fk::{action, cli, describe, input, lexer, parser, runtime, repl};
+use fk::{action, cli, describe, format, input, lexer, parser, runtime, repl};
 use fk::builtins::format_number;
 
 #[cfg(feature = "parquet")]
@@ -47,6 +47,34 @@ fn run_parquet(args: &cli::Args, exec: &mut action::Executor) {
 
 fn main() {
     let args = cli::parse_args();
+
+    // Highlight mode: print syntax-highlighted program and exit
+    if args.highlight {
+        match format::highlight(&args.program) {
+            Ok(s) => {
+                print!("{}", s);
+                return;
+            }
+            Err(e) => {
+                eprintln!("fk: {}", e);
+                process::exit(2);
+            }
+        }
+    }
+
+    // Format mode: pretty-print program and exit
+    if args.format {
+        match format::format_program(&args.program) {
+            Ok(s) => {
+                println!("{}", s);
+                return;
+            }
+            Err(e) => {
+                eprintln!("fk: {}", e);
+                process::exit(2);
+            }
+        }
+    }
 
     // Describe / suggest mode
     if args.describe {

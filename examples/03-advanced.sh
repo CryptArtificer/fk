@@ -3,9 +3,7 @@
 #
 # Run: ./examples/03-advanced.sh
 set -euo pipefail
-FK="${FK:-$(dirname "$0")/../target/release/fk}"
-TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
+source "$(dirname "$0")/_helpers.sh"
 
 echo "═══ advanced features ═══"
 echo ""
@@ -13,7 +11,7 @@ echo ""
 # ── User-defined functions ───────────────────────────────────────
 echo "1) Functions — letter grade conversion:"
 SCORES="Alice 95\nBob 87\nCarol 72\nDave 64\nEve 58"
-printf "$SCORES" | $FK '
+printf "$SCORES" | show $FK '
 function grade(score) {
     if (score >= 90) return "A"
     if (score >= 80) return "B"
@@ -27,7 +25,7 @@ echo ""
 
 # ── Recursive functions ──────────────────────────────────────────
 echo "2) Recursive factorial:"
-echo "10" | $FK '
+echo "10" | show $FK '
 function factorial(n) {
     if (n <= 1) return 1
     return n * factorial(n - 1)
@@ -48,7 +46,7 @@ Sales Frank 55000
 Sales Grace 61000
 EOF
 )
-echo "$DATA" | $FK '
+echo "$DATA" | show $FK '
 {
     dept_sum[$1] += $3
     dept_count[$1]++
@@ -78,11 +76,11 @@ Carol 4100
 EOF
 
 echo "January:"
-$FK '{ print "  ", $1, $2 }' "$TMPDIR/jan.txt"
+show $FK '{ print "  ", $1, $2 }' "$TMPDIR/jan.txt"
 echo "February:"
-$FK '{ print "  ", $1, $2 }' "$TMPDIR/feb.txt"
+show $FK '{ print "  ", $1, $2 }' "$TMPDIR/feb.txt"
 echo "Changes (using NR==FNR two-file idiom):"
-$FK '
+show $FK '
     NR == FNR { jan[$1] = $2; next }
     {
         diff = $2 - jan[$1]
@@ -109,13 +107,13 @@ host = redis.local
 ttl = 300
 EOF
 )
-echo "$CONFIG" | $FK '/\[database\]/,/^\[/ { if ($0 !~ /^\[/) print "  " $0 }'
+echo "$CONFIG" | show $FK '/\[database\]/,/^\[/ { if ($0 !~ /^\[/) print "  " $0 }'
 echo ""
 
 # ── Output to multiple files ─────────────────────────────────────
 echo "6) Split input into separate files by key:"
 RECORDS="A 10\nB 20\nA 30\nC 40\nB 50\nA 60"
-printf "$RECORDS" | $FK -v "dir=$TMPDIR" '{ print $2 >> (dir "/" $1 ".txt") }'
+printf "$RECORDS" | show $FK -v "dir=$TMPDIR" '{ print $2 >> (dir "/" $1 ".txt") }'
 for f in "$TMPDIR"/A.txt "$TMPDIR"/B.txt "$TMPDIR"/C.txt; do
     echo "  $(basename "$f"): $(cat "$f" | tr '\n' ' ')"
 done
@@ -123,7 +121,7 @@ echo ""
 
 # ── Set operations on arrays ────────────────────────────────────
 echo "7) Set operations — diff, inter, union:"
-echo "x" | $FK 'BEGIN {
+echo "x" | show $FK 'BEGIN {
     split("apple banana cherry", a, " "); for(i in a) s1[a[i]]=1
     split("banana date cherry",  b, " "); for(i in b) s2[b[i]]=1
 }

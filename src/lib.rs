@@ -5,6 +5,7 @@ pub mod cli;
 pub mod describe;
 pub mod error;
 pub mod field;
+pub mod format;
 pub mod input;
 pub mod lexer;
 pub mod parser;

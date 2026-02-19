@@ -35,6 +35,7 @@ The pattern-action model is the same. Everything below is new.
 - **Better errors** — source-location-aware diagnostics with line and column numbers.
 - **Negative field indexes** — `$-1` is the last field, `$-2` is second-to-last.
 - **REPL** — interactive mode for exploration (`--repl`).
+- **Format & highlight** — `--highlight` prints a syntax-highlighted program (keywords, literals, built-in vars distinct); `--format` pretty-prints with indentation and line breaks. Examples and `--suggest` output use highlighting when available.
 
 Some of these — especially the built-in format readers and decompression —
 go against the classic Unix ideal of small, single-purpose tools composed with
@@ -55,6 +56,7 @@ src/
   runtime.rs           – runtime state (variables, fields, arrays, Value type)
   field.rs             – field splitting (FS / OFS semantics)
   error.rs             – source-location-aware diagnostics (Span type)
+  format/              – syntax-highlight (theme, segments) and pretty-print (AST → indented source)
   repl.rs              – interactive REPL mode
   action/
     mod.rs             – executor core, public API, pattern matching
@@ -79,9 +81,8 @@ src/
 
 ## Progress
 
-Phases 0–15 complete. See [docs/progress.md](docs/progress.md) for the full
-checklist and [docs/roadmap.md](docs/roadmap.md) for the performance and
-completeness plan.
+Phases 0–16 complete. See [docs/progress.md](docs/progress.md) for the full
+checklist and [docs/roadmap.md](docs/roadmap.md) for the performance and completeness plan.
 
 ## Usage
 

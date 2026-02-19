@@ -90,8 +90,9 @@
 - [x] Edge-case audit: empty input, binary data, long lines, deep recursion (15 new tests)
 - [x] Recursion depth guard (limit 200, clean error instead of stack overflow)
 - [x] Profile-guided executor review: eliminate field-index round-trip, concat allocation, format overhead
-- [ ] CI pipeline (build, test, lint, clippy)
+- [ ] CI pipeline (build, test, lint, clippy) — on hold
 - [ ] Publish to crates.io
+- [x] Format module: syntax-highlight (theme, token segments, comments; BuiltinVar vs Identifier); `--highlight`; `--format` pretty-print (indent, line breaks); suggest output and examples use highlighting
 
 #### Phase 7 — Missing POSIX & gawk features
 - [x] `break` / `continue` statements (loop control)

@@ -3,7 +3,7 @@
 #
 # Run: ./examples/02-text-transforms.sh
 set -euo pipefail
-FK="${FK:-$(dirname "$0")/../target/release/fk}"
+source "$(dirname "$0")/_helpers.sh"
 
 echo "═══ text transforms ═══"
 echo ""
@@ -19,7 +19,7 @@ Dave,Marketing,68000
 Eve,Engineering,88000
 EOF
 )
-echo "$CSV" | $FK -F, 'NR > 1 { print $1, $3 }'
+echo "$CSV" | show $FK -F, 'NR > 1 { print $1, $3 }'
 echo ""
 
 # ── Log parsing ──────────────────────────────────────────────────
@@ -35,33 +35,33 @@ LOGS=$(cat <<'EOF'
 2025-01-15 10:26:45 ERROR Disk space below 5% on /var/log
 EOF
 )
-echo "$LOGS" | $FK '/ERROR/ { print $1, $2, substr($0, index($0, "ERROR") + 6) }'
+echo "$LOGS" | show $FK '/ERROR/ { print $1, $2, substr($0, index($0, "ERROR") + 6) }'
 echo ""
 
 # ── Frequency count ──────────────────────────────────────────────
 echo "3) Count log levels (print arr = sorted keys):"
-echo "$LOGS" | $FK '{ count[$3]++ } END { for (k in count) print k, count[k] }'
+echo "$LOGS" | show $FK '{ count[$3]++ } END { for (k in count) print k, count[k] }'
 echo ""
 echo "   Just the level names:"
-echo "$LOGS" | $FK '{ count[$3]++ } END { print count }'
+echo "$LOGS" | show $FK '{ count[$3]++ } END { print count }'
 echo ""
 
 # ── Field reordering ─────────────────────────────────────────────
 echo "4) Reorder and reformat CSV → TSV:"
-echo "$CSV" | $FK -F, -v 'OFS=\t' 'NR > 1 { print $2, $1, $3 }'
+echo "$CSV" | show $FK -F, -v 'OFS=\t' 'NR > 1 { print $2, $1, $3 }'
 echo ""
 
 # ── Deduplication ────────────────────────────────────────────────
 echo "5) Unique departments from CSV:"
-echo "$CSV" | $FK -F, 'NR > 1 && !seen[$2]++ { print $2 }'
+echo "$CSV" | show $FK -F, 'NR > 1 && !seen[$2]++ { print $2 }'
 echo "   (or: collect then print sorted):"
-echo "$CSV" | $FK -F, 'NR > 1 { dept[$2]++ } END { print dept }'
+echo "$CSV" | show $FK -F, 'NR > 1 { dept[$2]++ } END { print dept }'
 echo ""
 
 # ── Word frequency ───────────────────────────────────────────────
 echo "6) Word frequency in text:"
 TEXT="the quick brown fox jumps over the lazy dog the fox the dog"
-echo "$TEXT" | $FK '{
+echo "$TEXT" | show $FK '{
     for (i = 1; i <= NF; i++) freq[$i]++
 }
 END { for (w in freq) printf "  %s %s\n", lpad(freq[w], 3), w }
@@ -70,4 +70,4 @@ echo ""
 
 # ── Running total ────────────────────────────────────────────────
 echo "7) Running total:"
-printf "10\n25\n-5\n30\n15\n" | $FK '{ sum += $1; printf "%4d  (total: %d)\n", $1, sum }'
+printf "10\n25\n-5\n30\n15\n" | show $FK '{ sum += $1; printf "%4d  (total: %d)\n", $1, sum }'

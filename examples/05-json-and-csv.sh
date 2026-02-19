@@ -3,7 +3,7 @@
 #
 # Run: ./examples/05-json-and-csv.sh
 set -euo pipefail
-FK="${FK:-$(dirname "$0")/../target/release/fk}"
+source "$(dirname "$0")/_helpers.sh"
 
 echo "═══ structured input ═══"
 echo ""
@@ -17,22 +17,22 @@ name,city,score
 "Carol, Jr.",Boston,92
 EOF
 )
-echo "$CSV" | $FK -i csv -H '{ printf "%-15s %-18s %s\n", $1, $2, $3 }'
+echo "$CSV" | show $FK -i csv -H '{ printf "%-15s %-18s %s\n", $1, $2, $3 }'
 echo ""
 
 echo "   Quoted fields with commas handled correctly:"
-echo "$CSV" | $FK -i csv 'NR > 1 { print NR-1 ": [" $1 "]" }'
+echo "$CSV" | show $FK -i csv 'NR > 1 { print NR-1 ": [" $1 "]" }'
 echo ""
 
 # ── TSV input mode ───────────────────────────────────────────────
 echo "2) TSV input (-i tsv):"
 printf "product\tqty\tprice\nWidget\t100\t9.99\nGadget\t50\t24.95\nGizmo\t200\t4.50\n" | \
-    $FK -i tsv -H '{ printf "%-10s %3d units @ $%-6s = $%.2f\n", $1, $2, $3, $2 * $3 }'
+    show $FK -i tsv -H '{ printf "%-10s %3d units @ $%-6s = $%.2f\n", $1, $2, $3, $2 * $3 }'
 echo ""
 
 # ── Header mode ──────────────────────────────────────────────────
 echo "3) Header mode (-H) — column names in HDR array:"
-echo "$CSV" | $FK -i csv -H 'BEGIN { } { print "Row", NR-1, ": name=" $1, "score=" $3 }'
+echo "$CSV" | show $FK -i csv -H 'BEGIN { } { print "Row", NR-1, ": name=" $1, "score=" $3 }'
 echo ""
 
 # ── JSON lines input ─────────────────────────────────────────────
@@ -44,17 +44,17 @@ JSONL=$(cat <<'EOF'
 {"name":"Dave","role":"manager","level":3}
 EOF
 )
-echo "$JSONL" | $FK -i json '{ printf "%-8s %-10s L%d\n", $1, $2, $3 }'
+echo "$JSONL" | show $FK -i json '{ printf "%-8s %-10s L%d\n", $1, $2, $3 }'
 echo ""
 
 echo "   Filter JSON by field value:"
-echo "$JSONL" | $FK -i json '$2 == "engineer" { print $1, "L" $3 }'
+echo "$JSONL" | show $FK -i json '$2 == "engineer" { print $1, "L" $3 }'
 echo ""
 
 # ── jpath — navigate nested JSON ─────────────────────────────────
 echo "5) jpath() — drill into nested JSON:"
 NESTED='{"server":{"host":"db.example.com","port":5432,"tags":["primary","us-east"]}}'
-echo "$NESTED" | $FK '{
+echo "$NESTED" | show $FK '{
     print "Host:", jpath($0, ".server.host")
     print "Port:", jpath($0, ".server.port")
     print "Tags:", jpath($0, ".server.tags")
@@ -65,15 +65,15 @@ echo ""
 echo "6) jpath() — iterate over arrays:"
 USERS='{"users":[{"name":"Alice","id":101},{"name":"Bob","id":102},{"name":"Carol","id":103}]}'
 echo "   All names: "
-echo "$USERS" | $FK '{ print jpath($0, ".users[].name") }'
+echo "$USERS" | show $FK '{ print jpath($0, ".users[].name") }'
 echo ""
 echo "   All IDs:"
-echo "$USERS" | $FK '{ print jpath($0, ".users.id") }'
+echo "$USERS" | show $FK '{ print jpath($0, ".users.id") }'
 echo ""
 
 # ── jpath — extract into awk array ───────────────────────────────
 echo "7) jpath() — extract into array and process:"
-echo "$USERS" | $FK '{
+echo "$USERS" | show $FK '{
     n = jpath($0, ".users", arr)
     printf "Found %d users\n", n
     n = jpath($0, ".users[].name", names)
@@ -91,7 +91,7 @@ EVENTS=$(cat <<'EOF'
 {"event":"purchase","user":"alice","amount":45.00,"ts":1739700240}
 EOF
 )
-echo "$EVENTS" | $FK -i json '
+echo "$EVENTS" | show $FK -i json '
     $1 == "purchase" { spent[$2] += $3; orders[$2]++ }
     END {
         for (user in spent)
@@ -111,11 +111,11 @@ East,Widget,200,9.99
 West,Gizmo,30,4.50
 EOF
 )
-echo "$SALES" | $FK -i csv -H '
+echo "$SALES" | show $FK -i csv -H '
     { rev[$region] += $units * $price }
     END { for (r in rev) printf "  %-6s $%.2f\n", r, rev[r] }
 '
 echo ""
 
 echo "10) JSON lines — collect and print sorted keys:"
-echo "$JSONL" | $FK -i json '{ roles[$2]++ } END { asorti(roles); print "  Roles:", join(roles, ", ") }'
+echo "$JSONL" | show $FK -i json '{ roles[$2]++ } END { asorti(roles); print "  Roles:", join(roles, ", ") }'

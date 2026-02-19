@@ -663,7 +663,12 @@ pub fn print_suggest(schema: &Schema, file_hint: &str) {
 fn suggest_cmd(flags: &str, file_part: &str, program: &str, why: &str) {
     let flag_part = if flags.is_empty() { String::new() } else { format!(" {}", flags) };
     eprintln!("  \x1b[90m# {}\x1b[0m", why);
-    eprintln!("  \x1b[32mfk{} '{}'{}\x1b[0m", flag_part, program, file_part);
+    let highlighted = crate::format::highlight(program).unwrap_or_else(|_| program.to_string());
+    eprintln!("  \x1b[32mfk{}\x1b[0m \x1b[93m'\x1b[0m", flag_part);
+    for line in highlighted.lines() {
+        eprintln!("  {}", line);
+    }
+    eprintln!("  \x1b[93m'\x1b[0m{}", file_part);
     eprintln!();
 }
 
