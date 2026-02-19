@@ -402,7 +402,7 @@ impl FragTag {
             Aggregate | Sum => &[Stats],
             Collect   => &[Chart, Stats, Aggregate, Frequency],
             Compute   => &[Chart, Stats, Aggregate, Frequency, Sum, Count,
-                           Transform, Extract, Select],
+                           Transform, Extract, Select, Slurp],
             Number    => &[Select, Compute, Count],
             _         => &[],
         }
@@ -626,16 +626,18 @@ fn is_nr_eq_fnr(pat: &Pattern) -> bool {
     false
 }
 
-/// Detect /pattern/{n++}; END{print n} → "count /pattern/".
+/// Detect {n++} END{print n} → "count" or /pat/{n++} END{…} → "count /pat/".
 fn detect_count_match(program: &Program) -> Option<String> {
     program.end.as_ref()?;
     for rule in &program.rules {
-        let pat = rule.pattern.as_ref()?;
         let has_incr = rule.action.iter().any(|s| {
             matches!(s, Statement::Expression(Expr::Increment(inner, _)) if matches!(inner.as_ref(), Expr::Var(_)))
         });
         if has_incr {
-            return Some(format!("count {}", describe_pattern(pat)));
+            return Some(match &rule.pattern {
+                Some(pat) => format!("count {}", describe_pattern(pat)),
+                None => "count".to_string(),
+            });
         }
     }
     None
