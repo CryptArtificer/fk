@@ -64,11 +64,7 @@ JSON
 echo "Parse a formatted JSON object (multi-line):"
 show $FK 'BEGIN {
     json = slurp("'"$TMPDIR/pretty.json"'")
-    printf "  service=%s  version=%s  timeout=%sms  retries=%s\n",
-        jpath(json, ".service"),
-        jpath(json, ".version"),
-        jpath(json, ".limits.timeout_ms"),
-        jpath(json, ".limits.retries")
+    printf "  service=%s  version=%s  timeout=%sms  retries=%s\n", jpath(json, ".service"), jpath(json, ".version"), jpath(json, ".limits.timeout_ms"), jpath(json, ".limits.retries")
 }'
 
 cat > "$TMPDIR/pretty-array.json" <<'JSON'
