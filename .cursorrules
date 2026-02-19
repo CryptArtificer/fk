@@ -151,12 +151,11 @@ Order: A1-A3 ✓ → B1-B4 ✓ → D1 ✓ → C1-C5 ✓ → E3 ✓ → D2 → E1
 - [ ] Publish to crates.io
 
 ### Performance (from user-time benchmarks on 1M lines, Apple M3 Pro):
-fk is faster than awk (macOS system awk 20200816) on all benchmarks:
-- `print $2`: fk ~0.10s vs awk ~0.64s (fk 6.4× faster) ← lazy offsets
-- Sum column: fk ~0.17s vs awk ~0.58s (fk 3.4× faster) ← lazy offsets
-- Pattern matching: fk ~0.55s vs awk ~0.63s (fk 1.1× faster) ← nosplit
-- Field arithmetic: fk ~0.21s vs awk ~0.83s (fk 4.0× faster) ← lazy offsets
-- NF-dependent: fk ~0.11s (lazy offsets + capped when possible)
+Historical numbers favored fk heavily after lazy field storage, but current
+results depend on harness and data size. For truthful, current numbers use
+`make suite-perf-strict` (warmup + median/p90, reports under `bench_data/`).
+fk tends to be faster on multi-field arithmetic and pattern-heavy workloads,
+while `print $2` and single-purpose tools like `wc`/`head` can be closer or faster.
 
 ## Documentation & demos
 

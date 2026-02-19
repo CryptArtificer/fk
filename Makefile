@@ -114,7 +114,7 @@ uninstall:
 
 # ── Test suites (shell-based) ────────────────────────────────────
 
-.PHONY: suite suite-compat suite-tools suite-fkonly suite-perf
+.PHONY: suite suite-compat suite-tools suite-fkonly suite-perf suite-perf-strict
 
 suite: suite-compat suite-tools suite-fkonly
 
@@ -129,6 +129,9 @@ suite-fkonly: release
 
 suite-perf: release
 	@bash tests/suite/perf.sh
+
+suite-perf-strict: release
+	@bash tests/suite/perf_strict.sh
 
 # ── Examples & Showcase ───────────────────────────────────────────
 
@@ -266,6 +269,7 @@ help:
 	@echo "  make suite-tools  fk vs Unix tools (cut, sed, grep, ...)"
 	@echo "  make suite-fkonly fk-only features (stats, arrays, I/O)"
 	@echo "  make suite-perf   Performance benchmarks (fk vs awk vs tools)"
+	@echo "  make suite-perf-strict  Perf with warmup + median/p90 (writes bench_data report)"
 	@echo ""
 	@echo "Bench:"
 	@echo "  make bench        Run all criterion benchmarks"

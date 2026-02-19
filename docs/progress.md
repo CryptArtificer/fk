@@ -73,6 +73,8 @@
 - [x] Record processing throughput (simple print, field access, pattern match)
 - [x] Comparison harness: `fk` vs `awk` vs `gawk` vs `mawk` on common tasks
 - [x] Large-file benchmark (1M+ lines, CSV-like data)
+- [x] Strict perf suite with warmup + median/p90 reporting (`tests/suite/perf_strict.sh`)
+- [x] Strict perf baseline captured (`docs/perf-baseline.md`)
 
 #### Phase 5 — Tutorial & showcase
 - [x] `examples/` directory with annotated scripts

@@ -220,17 +220,14 @@ echo "" | fk 'BEGIN { print parsedate("2025-01-15 10:30:00", "%Y-%m-%d %H:%M:%S"
 ## Performance
 
 `make bench-compare` runs fk and awk head-to-head on a 1M-line CSV.
-fk is faster than awk on every benchmark (1.1–3.2× faster):
+For more reliable numbers, use `make suite-perf-strict` which warms up,
+runs multiple trials, and reports median/p90 into `bench_data/`.
+See `docs/perf-baseline.md` for the latest strict baseline snapshot.
 
-| Benchmark | fk | awk | Speedup |
-|---|---|---|---|
-| `print $2` | 0.48 s | 0.58 s | 1.2× |
-| Sum column | 0.24 s | 0.60 s | 2.5× |
-| `/active/` count | 0.24 s | 0.76 s | 3.2× |
-| Field arithmetic | 0.25 s | 0.62 s | 2.5× |
-| Associative array | 0.28 s | 0.67 s | 2.4× |
-| Computed regex | 0.34 s | 0.65 s | 1.9× |
-| Tight loop (3×) | 0.70 s | 0.75 s | 1.1× |
+Performance varies by workload and machine. In general, fk is faster on
+multi-field arithmetic and pattern-heavy workloads, while simple Unix tools
+(`wc`, `head`) can remain faster for single-purpose tasks. Use the strict
+perf report for current, apples-to-apples numbers.
 
 Field extraction from 1M AWS ARNs (`-F: '{ print $4 }'`):
 
