@@ -10,7 +10,9 @@ pub struct LineReader {
 
 impl Default for LineReader {
     fn default() -> Self {
-        LineReader { buf: String::with_capacity(256) }
+        LineReader {
+            buf: String::with_capacity(256),
+        }
     }
 }
 

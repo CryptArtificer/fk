@@ -57,7 +57,11 @@ pub fn format_number(n: f64) -> String {
         return "nan".to_string();
     }
     if n.is_infinite() {
-        return if n > 0.0 { "inf".to_string() } else { "-inf".to_string() };
+        return if n > 0.0 {
+            "inf".to_string()
+        } else {
+            "-inf".to_string()
+        };
     }
     if n == (n as i64) as f64 {
         (n as i64).to_string()
@@ -72,13 +76,11 @@ pub fn format_number(n: f64) -> String {
 /// Dispatch pure built-in function calls (those that don't need runtime access).
 pub fn call_builtin(name: &str, args: &[String]) -> String {
     match name {
-        "length" | "substr" | "index" | "tolower" | "toupper" |
-        "trim" | "ltrim" | "rtrim" | "startswith" | "endswith" |
-        "repeat" | "reverse" | "chr" | "ord" | "hex" |
-        "lpad" | "rpad" => string::call(name, args),
-        "int" | "sin" | "cos" | "sqrt" | "log" | "exp" |
-        "atan2" | "abs" | "ceil" | "floor" | "round" | "log2" | "log10" |
-        "min" | "max" | "rand" | "srand" => math::call(name, args),
+        "length" | "substr" | "index" | "tolower" | "toupper" | "trim" | "ltrim" | "rtrim"
+        | "startswith" | "endswith" | "repeat" | "reverse" | "chr" | "ord" | "hex" | "lpad"
+        | "rpad" => string::call(name, args),
+        "int" | "sin" | "cos" | "sqrt" | "log" | "exp" | "atan2" | "abs" | "ceil" | "floor"
+        | "round" | "log2" | "log10" | "min" | "max" | "rand" | "srand" => math::call(name, args),
         "systime" | "strftime" | "mktime" | "parsedate" => time::call(name, args),
         "jpath" => json::call(args),
         _ => {

@@ -51,7 +51,11 @@ pub fn call(args: &[String]) -> String {
     } else if results.len() == 1 {
         value_to_string(results[0])
     } else {
-        results.iter().map(|v| value_to_string(v)).collect::<Vec<_>>().join("\n")
+        results
+            .iter()
+            .map(|v| value_to_string(v))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -108,7 +112,7 @@ pub fn extract(json_str: &str, path: &str) -> Vec<(String, String)> {
 enum Step {
     Key(String),
     Index(usize),
-    Iterate,  // [] — expand all elements of an array or object
+    Iterate, // [] — expand all elements of an array or object
 }
 
 fn parse_path(path: &str) -> Vec<Step> {
@@ -125,7 +129,10 @@ fn parse_path(path: &str) -> Vec<Step> {
             chars.next(); // skip '['
             let mut content = String::new();
             while let Some(&ch) = chars.peek() {
-                if ch == ']' { chars.next(); break; }
+                if ch == ']' {
+                    chars.next();
+                    break;
+                }
                 content.push(ch);
                 chars.next();
             }
@@ -140,7 +147,9 @@ fn parse_path(path: &str) -> Vec<Step> {
         } else {
             let mut key = String::new();
             while let Some(&ch) = chars.peek() {
-                if ch == '.' || ch == '[' { break; }
+                if ch == '.' || ch == '[' {
+                    break;
+                }
                 key.push(ch);
                 chars.next();
             }
@@ -173,9 +182,10 @@ fn navigate_multi<'a>(val: &'a Value, steps: &[Step]) -> Vec<&'a Value> {
                 (Step::Key(k), Value::Array(arr)) => {
                     for elem in arr {
                         if let Value::Object(pairs) = elem
-                            && let Some((_, val)) = pairs.iter().find(|(key, _)| key == k) {
-                                next.push(val);
-                            }
+                            && let Some((_, val)) = pairs.iter().find(|(key, _)| key == k)
+                        {
+                            next.push(val);
+                        }
                     }
                 }
                 (Step::Index(i), Value::Array(arr)) => {
@@ -202,7 +212,13 @@ fn navigate_multi<'a>(val: &'a Value, steps: &[Step]) -> Vec<&'a Value> {
 fn value_to_string(val: &Value) -> String {
     match val {
         Value::Null => String::new(),
-        Value::Bool(b) => if *b { "1".to_string() } else { "0".to_string() },
+        Value::Bool(b) => {
+            if *b {
+                "1".to_string()
+            } else {
+                "0".to_string()
+            }
+        }
         Value::Number(n) => super::format_number(*n),
         Value::Str(s) => s.clone(),
         Value::Array(_) | Value::Object(_) => to_json(val),
@@ -223,7 +239,11 @@ fn to_json(val: &Value) -> String {
             let items: Vec<String> = pairs
                 .iter()
                 .map(|(k, v)| {
-                    format!("\"{}\":{}", k.replace('\\', "\\\\").replace('"', "\\\""), to_json(v))
+                    format!(
+                        "\"{}\":{}",
+                        k.replace('\\', "\\\\").replace('"', "\\\""),
+                        to_json(v)
+                    )
                 })
                 .collect();
             format!("{{{}}}", items.join(","))
@@ -249,7 +269,9 @@ fn parse_value(chars: &mut Peekable<Chars>) -> Option<Value> {
 }
 
 fn parse_string(chars: &mut Peekable<Chars>) -> Option<String> {
-    if chars.next()? != '"' { return None; }
+    if chars.next()? != '"' {
+        return None;
+    }
     let mut s = String::new();
     loop {
         match chars.next()? {
@@ -263,11 +285,19 @@ fn parse_string(chars: &mut Peekable<Chars>) -> Option<String> {
                 'r' => s.push('\r'),
                 'u' => {
                     let mut hex = String::new();
-                    for _ in 0..4 { hex.push(chars.next()?); }
+                    for _ in 0..4 {
+                        hex.push(chars.next()?);
+                    }
                     if let Ok(cp) = u32::from_str_radix(&hex, 16)
-                        && let Some(ch) = char::from_u32(cp) { s.push(ch); }
+                        && let Some(ch) = char::from_u32(cp)
+                    {
+                        s.push(ch);
+                    }
                 }
-                other => { s.push('\\'); s.push(other); }
+                other => {
+                    s.push('\\');
+                    s.push(other);
+                }
             },
             ch => s.push(ch),
         }
@@ -276,7 +306,9 @@ fn parse_string(chars: &mut Peekable<Chars>) -> Option<String> {
 
 fn parse_number(chars: &mut Peekable<Chars>) -> Option<Value> {
     let mut buf = String::new();
-    if chars.peek() == Some(&'-') { buf.push(chars.next()?); }
+    if chars.peek() == Some(&'-') {
+        buf.push(chars.next()?);
+    }
     while let Some(&ch) = chars.peek() {
         if ch.is_ascii_digit() || ch == '.' || ch == 'e' || ch == 'E' || ch == '+' || ch == '-' {
             if (ch == '+' || ch == '-') && !buf.ends_with('e') && !buf.ends_with('E') {
@@ -295,18 +327,28 @@ fn parse_object(chars: &mut Peekable<Chars>) -> Option<Value> {
     chars.next(); // skip '{'
     let mut pairs = Vec::new();
     skip_ws(chars);
-    if chars.peek() == Some(&'}') { chars.next(); return Some(Value::Object(pairs)); }
+    if chars.peek() == Some(&'}') {
+        chars.next();
+        return Some(Value::Object(pairs));
+    }
     loop {
         skip_ws(chars);
         let key = parse_string(chars)?;
         skip_ws(chars);
-        if chars.next()? != ':' { return None; }
+        if chars.next()? != ':' {
+            return None;
+        }
         let val = parse_value(chars)?;
         pairs.push((key, val));
         skip_ws(chars);
         match chars.peek()? {
-            ',' => { chars.next(); }
-            '}' => { chars.next(); return Some(Value::Object(pairs)); }
+            ',' => {
+                chars.next();
+            }
+            '}' => {
+                chars.next();
+                return Some(Value::Object(pairs));
+            }
             _ => return None,
         }
     }
@@ -316,14 +358,22 @@ fn parse_array(chars: &mut Peekable<Chars>) -> Option<Value> {
     chars.next(); // skip '['
     let mut items = Vec::new();
     skip_ws(chars);
-    if chars.peek() == Some(&']') { chars.next(); return Some(Value::Array(items)); }
+    if chars.peek() == Some(&']') {
+        chars.next();
+        return Some(Value::Array(items));
+    }
     loop {
         let val = parse_value(chars)?;
         items.push(val);
         skip_ws(chars);
         match chars.peek()? {
-            ',' => { chars.next(); }
-            ']' => { chars.next(); return Some(Value::Array(items)); }
+            ',' => {
+                chars.next();
+            }
+            ']' => {
+                chars.next();
+                return Some(Value::Array(items));
+            }
             _ => return None,
         }
     }
@@ -332,7 +382,12 @@ fn parse_array(chars: &mut Peekable<Chars>) -> Option<Value> {
 fn parse_bool(chars: &mut Peekable<Chars>) -> Option<Value> {
     let mut word = String::new();
     while let Some(&ch) = chars.peek() {
-        if ch.is_ascii_alphabetic() { word.push(ch); chars.next(); } else { break; }
+        if ch.is_ascii_alphabetic() {
+            word.push(ch);
+            chars.next();
+        } else {
+            break;
+        }
     }
     match word.as_str() {
         "true" => Some(Value::Bool(true)),
@@ -343,14 +398,20 @@ fn parse_bool(chars: &mut Peekable<Chars>) -> Option<Value> {
 
 fn parse_null(chars: &mut Peekable<Chars>) -> Option<Value> {
     for expected in ['n', 'u', 'l', 'l'] {
-        if chars.next()? != expected { return None; }
+        if chars.next()? != expected {
+            return None;
+        }
     }
     Some(Value::Null)
 }
 
 fn skip_ws(chars: &mut Peekable<Chars>) {
     while let Some(&ch) = chars.peek() {
-        if ch.is_ascii_whitespace() { chars.next(); } else { break; }
+        if ch.is_ascii_whitespace() {
+            chars.next();
+        } else {
+            break;
+        }
     }
 }
 
@@ -415,20 +476,26 @@ mod tests {
     #[test]
     fn extract_array() {
         let pairs = extract(r#"{"items":[10,20,30]}"#, ".items");
-        assert_eq!(pairs, vec![
-            ("1".to_string(), "10".to_string()),
-            ("2".to_string(), "20".to_string()),
-            ("3".to_string(), "30".to_string()),
-        ]);
+        assert_eq!(
+            pairs,
+            vec![
+                ("1".to_string(), "10".to_string()),
+                ("2".to_string(), "20".to_string()),
+                ("3".to_string(), "30".to_string()),
+            ]
+        );
     }
 
     #[test]
     fn extract_object() {
         let pairs = extract(r#"{"a":"x","b":"y"}"#, ".");
-        assert_eq!(pairs, vec![
-            ("a".to_string(), "x".to_string()),
-            ("b".to_string(), "y".to_string()),
-        ]);
+        assert_eq!(
+            pairs,
+            vec![
+                ("a".to_string(), "x".to_string()),
+                ("b".to_string(), "y".to_string()),
+            ]
+        );
     }
 
     // ── iteration / projection ──────────────────────────────────
@@ -458,21 +525,27 @@ mod tests {
     fn extract_iterated_into_array() {
         let json = r#"{"users":[{"id":10},{"id":20},{"id":30}]}"#;
         let pairs = extract(json, ".users[].id");
-        assert_eq!(pairs, vec![
-            ("1".to_string(), "10".to_string()),
-            ("2".to_string(), "20".to_string()),
-            ("3".to_string(), "30".to_string()),
-        ]);
+        assert_eq!(
+            pairs,
+            vec![
+                ("1".to_string(), "10".to_string()),
+                ("2".to_string(), "20".to_string()),
+                ("3".to_string(), "30".to_string()),
+            ]
+        );
     }
 
     #[test]
     fn implicit_iteration_extract() {
         let json = r#"{"users":[{"id":10},{"id":20}]}"#;
         let pairs = extract(json, ".users.id");
-        assert_eq!(pairs, vec![
-            ("1".to_string(), "10".to_string()),
-            ("2".to_string(), "20".to_string()),
-        ]);
+        assert_eq!(
+            pairs,
+            vec![
+                ("1".to_string(), "10".to_string()),
+                ("2".to_string(), "20".to_string()),
+            ]
+        );
     }
 
     #[test]

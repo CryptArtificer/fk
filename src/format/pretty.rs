@@ -2,8 +2,8 @@
 
 use crate::error::FkError;
 use crate::lexer::Lexer;
-use crate::parser::{BinOp, Block, Expr, FuncDef, Pattern, Program, Redirect, Rule, Statement};
 use crate::parser::Parser;
+use crate::parser::{BinOp, Block, Expr, FuncDef, Pattern, Program, Redirect, Rule, Statement};
 use std::fmt::Write;
 
 const INDENT: &str = "  ";
@@ -20,7 +20,11 @@ pub fn format_program(source: &str) -> Result<String, FkError> {
 /// Format an already-parsed program.
 #[must_use]
 pub fn pretty_program(program: &Program) -> String {
-    let mut p = Pretty { out: String::new(), indent: 0, indent_cache: String::new() };
+    let mut p = Pretty {
+        out: String::new(),
+        indent: 0,
+        indent_cache: String::new(),
+    };
     p.program(program);
     p.out
 }

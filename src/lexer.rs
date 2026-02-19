@@ -10,9 +10,9 @@ pub enum Token {
 
     // Identifiers and fields
     Ident(String),
-    Field(u32),         // $0, $1, ...
-    FieldVar(String),   // $variable (resolved at runtime)
-    Dollar,             // bare $ (followed by expression)
+    Field(u32),       // $0, $1, ...
+    FieldVar(String), // $variable (resolved at runtime)
+    Dollar,           // bare $ (followed by expression)
 
     // Keywords
     Begin,
@@ -41,32 +41,32 @@ pub enum Token {
     Plus,
     Minus,
     Star,
-    Power,          // **
+    Power, // **
     Slash,
     Percent,
     Assign,
-    PlusAssign,     // +=
-    MinusAssign,    // -=
-    StarAssign,     // *=
-    SlashAssign,    // /=
-    PercentAssign,  // %=
-    Increment,      // ++
-    Decrement,      // --
+    PlusAssign,    // +=
+    MinusAssign,   // -=
+    StarAssign,    // *=
+    SlashAssign,   // /=
+    PercentAssign, // %=
+    Increment,     // ++
+    Decrement,     // --
     Eq,
     Ne,
     Lt,
     Le,
     Gt,
     Ge,
-    Match,       // ~
-    NotMatch,    // !~
-    Not,         // !
-    And,         // &&
-    Or,          // ||
-    Question,    // ?
-    Colon,       // :
-    Append,      // >>
-    Pipe,        // | (single, for output redirection)
+    Match,    // ~
+    NotMatch, // !~
+    Not,      // !
+    And,      // &&
+    Or,       // ||
+    Question, // ?
+    Colon,    // :
+    Append,   // >>
+    Pipe,     // | (single, for output redirection)
 
     // Delimiters
     LBrace,
@@ -143,7 +143,10 @@ impl Lexer {
             self.skip_whitespace();
             if self.pos >= self.input.len() {
                 let span = self.span();
-                tokens.push(Spanned { token: Token::Eof, span });
+                tokens.push(Spanned {
+                    token: Token::Eof,
+                    span,
+                });
                 break;
             }
 
@@ -159,15 +162,42 @@ impl Lexer {
             }
 
             let token = match ch {
-                '\n' => { self.advance_char(); Token::Newline }
-                '{' => { self.advance_char(); Token::LBrace }
-                '}' => { self.advance_char(); Token::RBrace }
-                '(' => { self.advance_char(); Token::LParen }
-                ')' => { self.advance_char(); Token::RParen }
-                '[' => { self.advance_char(); Token::LBracket }
-                ']' => { self.advance_char(); Token::RBracket }
-                ';' => { self.advance_char(); Token::Semicolon }
-                ',' => { self.advance_char(); Token::Comma }
+                '\n' => {
+                    self.advance_char();
+                    Token::Newline
+                }
+                '{' => {
+                    self.advance_char();
+                    Token::LBrace
+                }
+                '}' => {
+                    self.advance_char();
+                    Token::RBrace
+                }
+                '(' => {
+                    self.advance_char();
+                    Token::LParen
+                }
+                ')' => {
+                    self.advance_char();
+                    Token::RParen
+                }
+                '[' => {
+                    self.advance_char();
+                    Token::LBracket
+                }
+                ']' => {
+                    self.advance_char();
+                    Token::RBracket
+                }
+                ';' => {
+                    self.advance_char();
+                    Token::Semicolon
+                }
+                ',' => {
+                    self.advance_char();
+                    Token::Comma
+                }
                 '+' => {
                     self.advance_char();
                     if self.peek() == Some('=') {
@@ -268,9 +298,18 @@ impl Lexer {
                         Token::Gt
                     }
                 }
-                '~' => { self.advance_char(); Token::Match }
-                '?' => { self.advance_char(); Token::Question }
-                ':' => { self.advance_char(); Token::Colon }
+                '~' => {
+                    self.advance_char();
+                    Token::Match
+                }
+                '?' => {
+                    self.advance_char();
+                    Token::Question
+                }
+                ':' => {
+                    self.advance_char();
+                    Token::Colon
+                }
                 '&' => {
                     self.advance_char();
                     if self.peek() == Some('&') {
@@ -322,10 +361,16 @@ impl Lexer {
     fn is_regex_context(&self, tokens: &[Spanned]) -> bool {
         matches!(
             tokens.last().map(|s| &s.token),
-            None | Some(Token::LBrace) | Some(Token::Semicolon) | Some(Token::Newline)
-            | Some(Token::And) | Some(Token::Or) | Some(Token::Not)
-            | Some(Token::LParen) | Some(Token::Comma)
-            | Some(Token::Match) | Some(Token::NotMatch)
+            None | Some(Token::LBrace)
+                | Some(Token::Semicolon)
+                | Some(Token::Newline)
+                | Some(Token::And)
+                | Some(Token::Or)
+                | Some(Token::Not)
+                | Some(Token::LParen)
+                | Some(Token::Comma)
+                | Some(Token::Match)
+                | Some(Token::NotMatch)
         )
     }
 
@@ -371,11 +416,26 @@ impl Lexer {
                 self.advance_char();
                 let escaped = self.input[self.pos];
                 match escaped {
-                    'n' => { s.push('\n'); self.advance_char(); }
-                    't' => { s.push('\t'); self.advance_char(); }
-                    '\\' => { s.push('\\'); self.advance_char(); }
-                    '"' => { s.push('"'); self.advance_char(); }
-                    '/' => { s.push('/'); self.advance_char(); }
+                    'n' => {
+                        s.push('\n');
+                        self.advance_char();
+                    }
+                    't' => {
+                        s.push('\t');
+                        self.advance_char();
+                    }
+                    '\\' => {
+                        s.push('\\');
+                        self.advance_char();
+                    }
+                    '"' => {
+                        s.push('"');
+                        self.advance_char();
+                    }
+                    '/' => {
+                        s.push('/');
+                        self.advance_char();
+                    }
                     'x' => {
                         self.advance_char(); // skip 'x'
                         if let Some(ch) = self.read_hex_escape(2) {
@@ -466,7 +526,9 @@ impl Lexer {
             }
         }
         let s: String = self.input[start..self.pos].iter().collect();
-        let num: f64 = s.parse().map_err(|_| FkError::new(span, format!("invalid number: {}", s)))?;
+        let num: f64 = s
+            .parse()
+            .map_err(|_| FkError::new(span, format!("invalid number: {}", s)))?;
         Ok(Token::Number(num))
     }
 
@@ -549,7 +611,13 @@ mod tests {
         let toks = tokens(lexer.tokenize().unwrap());
         assert_eq!(
             toks,
-            vec![Token::LBrace, Token::Print, Token::Field(1), Token::RBrace, Token::Eof]
+            vec![
+                Token::LBrace,
+                Token::Print,
+                Token::Field(1),
+                Token::RBrace,
+                Token::Eof
+            ]
         );
     }
 

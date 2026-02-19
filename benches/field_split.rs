@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use fk::field;
 
 fn make_whitespace_line(n: usize) -> String {
@@ -6,11 +6,17 @@ fn make_whitespace_line(n: usize) -> String {
 }
 
 fn make_comma_line(n: usize) -> String {
-    (0..n).map(|i| format!("field{}", i)).collect::<Vec<_>>().join(",")
+    (0..n)
+        .map(|i| format!("field{}", i))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn make_multichar_line(n: usize) -> String {
-    (0..n).map(|i| format!("val{}", i)).collect::<Vec<_>>().join("::")
+    (0..n)
+        .map(|i| format!("val{}", i))
+        .collect::<Vec<_>>()
+        .join("::")
 }
 
 fn bench_whitespace_split(c: &mut Criterion) {
@@ -46,5 +52,10 @@ fn bench_multichar_split(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_whitespace_split, bench_single_char_split, bench_multichar_split);
+criterion_group!(
+    benches,
+    bench_whitespace_split,
+    bench_single_char_split,
+    bench_multichar_split
+);
 criterion_main!(benches);

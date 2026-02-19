@@ -146,8 +146,11 @@ Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
   jpath → file — [].path, fields → file — $N, named cols → file — name.
   expr_to_source() general AST→source formatter (separate from format/ module).
   Subtitle renders below user title on its own centered line.
-  --explain mode: terse one-line program description from AST analysis
-  (detects histogram, stats, filter, count-by, sum, transform, print).
+  --explain mode: terse one-line program description from AST analysis.
+  Human-readable vocabulary: `use col 1–2`, `where col 2 > 50`,
+  `freq of col 1`, `sum col 2`, `stats of col 2`, `histogram of col 1`,
+  `count lines`, `deduplicate by $0`, `join on col 1`, `timed`.
+  Field refs humanized ($N → col N), consecutive ranges collapsed (col 1–3).
   Integrated into showcase `show` helper as auto-subtitle for all examples.
 
 ### Future ideas (explored, deferred)

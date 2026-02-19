@@ -73,7 +73,10 @@ fn read_lines(reader: &mut dyn BufRead, limit: usize) -> Vec<String> {
         match reader.read_line(&mut buf) {
             Ok(0) => break,
             Ok(_) => {
-                let line = buf.trim_end_matches('\n').trim_end_matches('\r').to_string();
+                let line = buf
+                    .trim_end_matches('\n')
+                    .trim_end_matches('\r')
+                    .to_string();
                 if !line.is_empty() {
                     lines.push(line);
                 }
@@ -93,7 +96,8 @@ fn detect_format(lines: &[String]) -> Format {
     // JSON: first non-empty line starts with { or [
     let first = lines[0].trim_start();
     if first.starts_with('{') || first.starts_with('[') {
-        let json_count = lines.iter()
+        let json_count = lines
+            .iter()
             .filter(|l| l.trim_start().starts_with('{'))
             .count();
         if json_count > lines.len() / 2 {
@@ -103,8 +107,16 @@ fn detect_format(lines: &[String]) -> Format {
 
     // Count tabs vs commas in first few lines
     let sample = &lines[..lines.len().min(10)];
-    let avg_tabs: f64 = sample.iter().map(|l| l.matches('\t').count() as f64).sum::<f64>() / sample.len() as f64;
-    let avg_commas: f64 = sample.iter().map(|l| l.matches(',').count() as f64).sum::<f64>() / sample.len() as f64;
+    let avg_tabs: f64 = sample
+        .iter()
+        .map(|l| l.matches('\t').count() as f64)
+        .sum::<f64>()
+        / sample.len() as f64;
+    let avg_commas: f64 = sample
+        .iter()
+        .map(|l| l.matches(',').count() as f64)
+        .sum::<f64>()
+        / sample.len() as f64;
 
     // Consistent tab count across lines → TSV
     if avg_tabs >= 1.0 {
@@ -195,13 +207,17 @@ fn parse_json_keys(line: &str) -> Vec<String> {
             let start = i + 1;
             i += 1;
             while i < chars.len() && chars[i] != '"' {
-                if chars[i] == '\\' { i += 1; }
+                if chars[i] == '\\' {
+                    i += 1;
+                }
                 i += 1;
             }
             let end = i;
             i += 1;
             // Skip whitespace
-            while i < chars.len() && chars[i].is_whitespace() { i += 1; }
+            while i < chars.len() && chars[i].is_whitespace() {
+                i += 1;
+            }
             if i < chars.len() && chars[i] == ':' {
                 let key: String = chars[start..end].iter().collect();
                 keys.push(key);
@@ -217,14 +233,19 @@ fn json_value_for_key(line: &str, key: &str) -> String {
     let pattern = format!("\"{}\"", key);
     if let Some(pos) = line.find(&pattern) {
         let after = &line[pos + pattern.len()..];
-        let after = after.trim_start().strip_prefix(':').unwrap_or(after).trim_start();
+        let after = after
+            .trim_start()
+            .strip_prefix(':')
+            .unwrap_or(after)
+            .trim_start();
         if let Some(stripped) = after.strip_prefix('"') {
             // String value
             let end = stripped.find('"').unwrap_or(stripped.len());
             stripped[..end].to_string()
         } else {
             // Number or other
-            let end = after.find(|c: char| c == ',' || c == '}' || c.is_whitespace())
+            let end = after
+                .find(|c: char| c == ',' || c == '}' || c.is_whitespace())
                 .unwrap_or(after.len());
             after[..end].to_string()
         }
@@ -247,9 +268,9 @@ fn detect_header(rows: &[Vec<String>], format: Format) -> bool {
 
     // If first row is all non-numeric and subsequent rows have numerics → header
     let first_all_non_numeric = first.iter().all(|s| s.parse::<f64>().is_err());
-    let rest_has_numeric = rest.iter().any(|row| {
-        row.iter().any(|s| s.parse::<f64>().is_ok())
-    });
+    let rest_has_numeric = rest
+        .iter()
+        .any(|row| row.iter().any(|s| s.parse::<f64>().is_ok()));
 
     if first_all_non_numeric && rest_has_numeric {
         return true;
@@ -284,9 +305,13 @@ fn infer_type(values: &[String]) -> ColType {
             all_float = false;
         }
     }
-    if all_int { ColType::Int }
-    else if all_float { ColType::Float }
-    else { ColType::String }
+    if all_int {
+        ColType::Int
+    } else if all_float {
+        ColType::Float
+    } else {
+        ColType::String
+    }
 }
 
 /// Sniff input and produce a Schema.
@@ -312,7 +337,8 @@ pub fn sniff(reader: &mut dyn BufRead) -> Schema {
     let ncols = columns.len();
     let mut types = Vec::with_capacity(ncols);
     for col_idx in 0..ncols {
-        let values: Vec<String> = data_rows.iter()
+        let values: Vec<String> = data_rows
+            .iter()
             .filter_map(|row| row.get(col_idx).cloned())
             .collect();
         types.push(infer_type(&values));
@@ -325,7 +351,11 @@ pub fn sniff(reader: &mut dyn BufRead) -> Schema {
         has_header,
         columns,
         types,
-        total_rows: if has_header { lines.len() - 1 } else { lines.len() },
+        total_rows: if has_header {
+            lines.len() - 1
+        } else {
+            lines.len()
+        },
         sample_rows,
     }
 }
@@ -347,14 +377,17 @@ fn sniff_json(lines: &[String]) -> Schema {
 
     let mut types = Vec::with_capacity(ncols);
     for col in &columns {
-        let values: Vec<String> = lines.iter()
+        let values: Vec<String> = lines
+            .iter()
             .map(|l| json_value_for_key(l, col))
             .filter(|v| !v.is_empty())
             .collect();
         types.push(infer_type(&values));
     }
 
-    let sample_rows: Vec<Vec<String>> = lines.iter().take(5)
+    let sample_rows: Vec<Vec<String>> = lines
+        .iter()
+        .take(5)
         .map(|l| columns.iter().map(|c| json_value_for_key(l, c)).collect())
         .collect();
 
@@ -408,15 +441,33 @@ pub fn print_description(schema: &Schema, row_count: Option<usize>) {
     eprintln!();
 
     // Column table
-    let max_name_len = schema.columns.iter().map(|c| c.len()).max().unwrap_or(4).max(6);
-    eprintln!("  \x1b[90m{:<4}  {:<width$}  {:<6}  sample\x1b[0m",
-        "#", "column", "type", width = max_name_len);
-    eprintln!("  \x1b[90m{}  {}  {}  {}\x1b[0m",
-        "─".repeat(4), "─".repeat(max_name_len), "─".repeat(6), "─".repeat(30));
+    let max_name_len = schema
+        .columns
+        .iter()
+        .map(|c| c.len())
+        .max()
+        .unwrap_or(4)
+        .max(6);
+    eprintln!(
+        "  \x1b[90m{:<4}  {:<width$}  {:<6}  sample\x1b[0m",
+        "#",
+        "column",
+        "type",
+        width = max_name_len
+    );
+    eprintln!(
+        "  \x1b[90m{}  {}  {}  {}\x1b[0m",
+        "─".repeat(4),
+        "─".repeat(max_name_len),
+        "─".repeat(6),
+        "─".repeat(30)
+    );
 
     for (i, col) in schema.columns.iter().enumerate() {
         let typ = schema.types.get(i).unwrap_or(&ColType::String);
-        let sample: String = schema.sample_rows.iter()
+        let sample: String = schema
+            .sample_rows
+            .iter()
             .filter_map(|row| row.get(i))
             .take(3)
             .map(|v| truncate(v, 20))
@@ -428,8 +479,15 @@ pub fn print_description(schema: &Schema, row_count: Option<usize>) {
             ColType::String => "\x1b[36m",
         };
 
-        eprintln!("  {:<4}  {:<width$}  {}{:<6}\x1b[0m  \x1b[90m{}\x1b[0m",
-            i + 1, col, type_color, typ.label(), sample, width = max_name_len);
+        eprintln!(
+            "  {:<4}  {:<width$}  {}{:<6}\x1b[0m  \x1b[90m{}\x1b[0m",
+            i + 1,
+            col,
+            type_color,
+            typ.label(),
+            sample,
+            width = max_name_len
+        );
     }
     eprintln!();
 }
@@ -480,16 +538,22 @@ pub fn open_maybe_compressed(path: &str) -> io::Result<Box<dyn Read + Send>> {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .spawn()
-        .map_err(|e| io::Error::new(e.kind(),
-            format!("fk: cannot run '{}' to decompress '{}': {}", cmd, path, e)))?;
+        .map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("fk: cannot run '{}' to decompress '{}': {}", cmd, path, e),
+            )
+        })?;
 
     Ok(Box::new(child.stdout.unwrap()))
 }
 
 /// Check if a path looks like a compressed file.
 pub fn is_compressed(path: &str) -> bool {
-    path.ends_with(".gz") || path.ends_with(".tgz")
-        || path.ends_with(".zst") || path.ends_with(".zstd")
+    path.ends_with(".gz")
+        || path.ends_with(".tgz")
+        || path.ends_with(".zst")
+        || path.ends_with(".zstd")
         || path.ends_with(".bz2")
         || path.ends_with(".xz")
         || path.ends_with(".lz4")
@@ -497,22 +561,33 @@ pub fn is_compressed(path: &str) -> bool {
 
 /// Detect format from file extension (before compression suffix).
 pub fn format_from_extension(path: &str) -> Option<Format> {
-    let base = path.trim_end_matches(".gz")
-        .trim_end_matches(".zst").trim_end_matches(".zstd")
-        .trim_end_matches(".bz2").trim_end_matches(".xz")
+    let base = path
+        .trim_end_matches(".gz")
+        .trim_end_matches(".zst")
+        .trim_end_matches(".zstd")
+        .trim_end_matches(".bz2")
+        .trim_end_matches(".xz")
         .trim_end_matches(".lz4");
-    if base.ends_with(".csv") { Some(Format::Csv) }
-    else if base.ends_with(".tsv") || base.ends_with(".tab") { Some(Format::Tsv) }
-    else if base.ends_with(".json") || base.ends_with(".jsonl") || base.ends_with(".ndjson") { Some(Format::Json) }
-    else if base.ends_with(".parquet") { Some(Format::Parquet) }
-    else { None }
+    if base.ends_with(".csv") {
+        Some(Format::Csv)
+    } else if base.ends_with(".tsv") || base.ends_with(".tab") {
+        Some(Format::Tsv)
+    } else if base.ends_with(".json") || base.ends_with(".jsonl") || base.ends_with(".ndjson") {
+        Some(Format::Json)
+    } else if base.ends_with(".parquet") {
+        Some(Format::Parquet)
+    } else {
+        None
+    }
 }
 
 /// Helper: get sample values for a column by name.
 fn sample_values<'a>(schema: &'a Schema, col_name: &str) -> Vec<&'a str> {
     let idx = schema.columns.iter().position(|c| c == col_name);
     match idx {
-        Some(i) => schema.sample_rows.iter()
+        Some(i) => schema
+            .sample_rows
+            .iter()
             .filter_map(|row| row.get(i).map(|s| s.as_str()))
             .filter(|s| !s.is_empty())
             .collect(),
@@ -522,15 +597,16 @@ fn sample_values<'a>(schema: &'a Schema, col_name: &str) -> Vec<&'a str> {
 
 /// Helper: pick a representative string sample (first non-empty value).
 fn sample_str<'a>(schema: &'a Schema, col_name: &str) -> &'a str {
-    sample_values(schema, col_name).into_iter().next().unwrap_or("example")
+    sample_values(schema, col_name)
+        .into_iter()
+        .next()
+        .unwrap_or("example")
 }
 
 /// Helper: compute a numeric threshold from sample data (approximate median).
 fn sample_threshold(schema: &Schema, col_name: &str) -> String {
     let vals = sample_values(schema, col_name);
-    let mut nums: Vec<f64> = vals.iter()
-        .filter_map(|v| v.parse::<f64>().ok())
-        .collect();
+    let mut nums: Vec<f64> = vals.iter().filter_map(|v| v.parse::<f64>().ok()).collect();
     if nums.is_empty() {
         return "100".to_string();
     }
@@ -550,7 +626,10 @@ fn sample_threshold(schema: &Schema, col_name: &str) -> String {
 fn pick_best_category(schema: &Schema) -> Option<&str> {
     use std::collections::HashSet;
 
-    let str_cols: Vec<(usize, &str)> = schema.columns.iter().enumerate()
+    let str_cols: Vec<(usize, &str)> = schema
+        .columns
+        .iter()
+        .enumerate()
         .filter(|(i, _)| schema.types.get(*i) == Some(&ColType::String))
         .map(|(i, c)| (i, c.as_str()))
         .collect();
@@ -563,7 +642,9 @@ fn pick_best_category(schema: &Schema) -> Option<&str> {
     let mut best: Option<(&str, usize)> = None;
 
     for (idx, name) in &str_cols {
-        let unique: HashSet<&str> = schema.sample_rows.iter()
+        let unique: HashSet<&str> = schema
+            .sample_rows
+            .iter()
             .filter_map(|row| row.get(*idx).map(|s| s.as_str()))
             .filter(|s| !s.is_empty())
             .collect();
@@ -586,19 +667,33 @@ fn pick_best_category(schema: &Schema) -> Option<&str> {
 /// want to do with this data."
 pub fn print_suggest(schema: &Schema, file_hint: &str) {
     let flags = build_flags(schema);
-    let fp = if file_hint.is_empty() { String::new() } else { format!(" {}", file_hint) };
+    let fp = if file_hint.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", file_hint)
+    };
 
-    let floats: Vec<&str> = schema.columns.iter().enumerate()
+    let floats: Vec<&str> = schema
+        .columns
+        .iter()
+        .enumerate()
         .filter(|(i, _)| schema.types.get(*i) == Some(&ColType::Float))
-        .map(|(_, c)| c.as_str()).collect();
-    let nums: Vec<&str> = schema.columns.iter().enumerate()
+        .map(|(_, c)| c.as_str())
+        .collect();
+    let nums: Vec<&str> = schema
+        .columns
+        .iter()
+        .enumerate()
         .filter(|(i, _)| matches!(schema.types.get(*i), Some(ColType::Int | ColType::Float)))
-        .map(|(_, c)| c.as_str()).collect();
+        .map(|(_, c)| c.as_str())
+        .collect();
 
     // Pick the best category column: the string column with the lowest
     // cardinality (most repeated values) — that's the best group-by target.
     let s1 = pick_best_category(schema).unwrap_or("$1");
-    let n1 = floats.first().copied()
+    let n1 = floats
+        .first()
+        .copied()
         .or_else(|| nums.last().copied())
         .unwrap_or("$1");
 
@@ -613,55 +708,89 @@ pub fn print_suggest(schema: &Schema, file_hint: &str) {
 
     // 1. Always: filter by a real value
     if s1 != "$1" {
-        suggest_cmd(&flags, &fp,
+        suggest_cmd(
+            &flags,
+            &fp,
             &format!("{} == \"{}\"", sr1, s1_val),
-            &format!("show rows where {} is \"{}\"", s1, s1_val));
+            &format!("show rows where {} is \"{}\"", s1, s1_val),
+        );
     }
 
     // 2. If numeric column: aggregate it
     if n1 != "$1" {
-        suggest_cmd(&flags, &fp,
-            &format!("{{ s += {} }} END {{ printf \"total=%.2f  n=%d  avg=%.2f\\n\", s, NR, s/NR }}", nr1),
-            &format!("sum and average {}", n1));
+        suggest_cmd(
+            &flags,
+            &fp,
+            &format!(
+                "{{ s += {} }} END {{ printf \"total=%.2f  n=%d  avg=%.2f\\n\", s, NR, s/NR }}",
+                nr1
+            ),
+            &format!("sum and average {}", n1),
+        );
     }
 
     // 3. If string + numeric: group by
     if s1 != "$1" && n1 != "$1" {
-        suggest_cmd(&flags, &fp,
-            &format!("{{ a[{}] += {}; n[{}]++ }} END {{ for (k in a) printf \"%-20s total=%8.2f  avg=%8.2f  n=%d\\n\", k, a[k], a[k]/n[k], n[k] }}", sr1, nr1, sr1),
-            &format!("total and average {} by {}", n1, s1));
+        suggest_cmd(
+            &flags,
+            &fp,
+            &format!(
+                "{{ a[{}] += {}; n[{}]++ }} END {{ for (k in a) printf \"%-20s total=%8.2f  avg=%8.2f  n=%d\\n\", k, a[k], a[k]/n[k], n[k] }}",
+                sr1, nr1, sr1
+            ),
+            &format!("total and average {} by {}", n1, s1),
+        );
     }
 
     // 4. If numeric: stats
     if n1 != "$1" {
-        suggest_cmd(&flags, &fp,
-            &format!("{{ a[NR] = {} }} END {{ printf \"min=%.2f  median=%.2f  mean=%.2f  p95=%.2f  max=%.2f\\n\", min(a), median(a), mean(a), p(a,95), max(a) }}", nr1),
-            &format!("distribution of {}", n1));
+        suggest_cmd(
+            &flags,
+            &fp,
+            &format!(
+                "{{ a[NR] = {} }} END {{ printf \"min=%.2f  median=%.2f  mean=%.2f  p95=%.2f  max=%.2f\\n\", min(a), median(a), mean(a), p(a,95), max(a) }}",
+                nr1
+            ),
+            &format!("distribution of {}", n1),
+        );
     }
 
     // 5. If numeric: filter by threshold
     if n1 != "$1" && s1 != "$1" {
-        suggest_cmd(&flags, &fp,
+        suggest_cmd(
+            &flags,
+            &fp,
             &format!("{} > {}", nr1, n1_thresh),
-            &format!("rows where {} > {} (median)", n1, n1_thresh));
+            &format!("rows where {} > {} (median)", n1, n1_thresh),
+        );
     } else if n1 != "$1" {
-        suggest_cmd(&flags, &fp,
+        suggest_cmd(
+            &flags,
+            &fp,
             &format!("{} > {}", nr1, n1_thresh),
-            &format!("rows where {} > {}", n1, n1_thresh));
+            &format!("rows where {} > {}", n1, n1_thresh),
+        );
     }
 
     // 6. If multiple strings: unique values of category column
     if s1 != "$1" {
-        suggest_cmd(&flags, &fp,
+        suggest_cmd(
+            &flags,
+            &fp,
             &format!("!seen[{}]++", sr1),
-            &format!("unique values of {}", s1));
+            &format!("unique values of {}", s1),
+        );
     }
 
     eprintln!();
 }
 
 fn suggest_cmd(flags: &str, file_part: &str, program: &str, why: &str) {
-    let flag_part = if flags.is_empty() { String::new() } else { format!(" {}", flags) };
+    let flag_part = if flags.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", flags)
+    };
     eprintln!("  \x1b[90m# {}\x1b[0m", why);
     let highlighted = crate::format::highlight(program).unwrap_or_else(|_| program.to_string());
     eprintln!("  \x1b[32mfk{}\x1b[0m \x1b[93m'\x1b[0m", flag_part);
@@ -704,4 +833,3 @@ pub fn run_describe(files: &[String], suggest: bool) {
         }
     }
 }
-

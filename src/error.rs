@@ -28,7 +28,10 @@ pub struct FkError {
 impl FkError {
     #[must_use]
     pub fn new(span: Span, message: impl Into<String>) -> Self {
-        FkError { span, message: message.into() }
+        FkError {
+            span,
+            message: message.into(),
+        }
     }
 }
 

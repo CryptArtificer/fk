@@ -40,7 +40,8 @@ pub trait Theme {
 
 /// Built-in variable names (constants) — get a distinct style from user identifiers.
 const BUILTIN_VARS: &[&str] = &[
-    "ARGC", "ARGV", "CONVFMT", "ENVIRON", "FILENAME", "FNR", "FS", "NF", "NR", "OFMT", "OFS", "ORS", "RS", "SUBSEP",
+    "ARGC", "ARGV", "CONVFMT", "ENVIRON", "FILENAME", "FNR", "FS", "NF", "NR", "OFMT", "OFS",
+    "ORS", "RS", "SUBSEP",
 ];
 
 /// Default ANSI theme for terminal output.
@@ -65,15 +66,15 @@ impl AnsiTheme {
     pub fn dark() -> Self {
         Self {
             reset: "\x1b[0m".into(),
-            keyword: "\x1b[38;5;208m".into(),   // orange (BEGIN, if, print, etc.)
-            string: "\x1b[38;5;113m".into(),   // green
-            number: "\x1b[38;5;179m".into(),   // gold/amber
+            keyword: "\x1b[38;5;208m".into(), // orange (BEGIN, if, print, etc.)
+            string: "\x1b[38;5;113m".into(),  // green
+            number: "\x1b[38;5;179m".into(),  // gold/amber
             regex: "\x1b[38;5;170m".into(),   // purple/magenta
-            ident: "\x1b[38;5;223m".into(),    // light sand (variables)
+            ident: "\x1b[38;5;223m".into(),   // light sand (variables)
             builtin_var: "\x1b[38;5;117m".into(), // light blue (NR, NF, FS, etc.)
             field: "\x1b[1;38;5;221m".into(), // bold yellow ($1, $name)
             comment: "\x1b[38;5;246m".into(), // gray
-            operator: "\x1b[38;5;81m".into(),  // cyan
+            operator: "\x1b[38;5;81m".into(), // cyan
             delimiter: "\x1b[38;5;102m".into(), // dim gray (braces, parens)
         }
     }
@@ -153,7 +154,9 @@ pub fn token_style(t: &Token) -> Style {
         Token::Regex(..) => Style::Regex,
 
         Token::Ident(..) => {
-            if t.as_ident_str().is_some_and(|s| BUILTIN_VARS.binary_search(&s).is_ok()) {
+            if t.as_ident_str()
+                .is_some_and(|s| BUILTIN_VARS.binary_search(&s).is_ok())
+            {
                 Style::BuiltinVar
             } else {
                 Style::Identifier

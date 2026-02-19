@@ -139,13 +139,16 @@ pub fn parse_args() -> Args {
     }
 
     if field_separator.is_some() && input_mode != InputMode::Line {
-        eprintln!("fk: -F is ignored when -i {} is set", match input_mode {
-            InputMode::Csv => "csv",
-            InputMode::Tsv => "tsv",
-            InputMode::Json => "json",
-            InputMode::Parquet => "parquet",
-            InputMode::Line => unreachable!(),
-        });
+        eprintln!(
+            "fk: -F is ignored when -i {} is set",
+            match input_mode {
+                InputMode::Csv => "csv",
+                InputMode::Tsv => "tsv",
+                InputMode::Json => "json",
+                InputMode::Parquet => "parquet",
+                InputMode::Line => unreachable!(),
+            }
+        );
         process::exit(1);
     }
 
@@ -168,16 +171,21 @@ pub fn parse_args() -> Args {
     }
 
     // In describe mode, all positional args are files, not a program (unless --highlight / --format)
-    if describe && !highlight && !format
-        && let Some(p) = program.take() {
-            files.insert(0, p);
+    if describe
+        && !highlight
+        && !format
+        && let Some(p) = program.take()
+    {
+        files.insert(0, p);
     }
 
     // If the "program" looks like a file path, treat all positional args
     // as files and default to `{ print }`.
     // Guard: only trigger when the arg looks path-like (contains '/' or '.')
     // to avoid false positives on short programs like `1` or `NR>5`.
-    if program_files.is_empty() && !describe && !repl
+    if program_files.is_empty()
+        && !describe
+        && !repl
         && let Some(ref p) = program
         && (p.contains('/') || p.contains('.'))
         && std::path::Path::new(p).exists()
@@ -214,7 +222,10 @@ pub fn parse_args() -> Args {
 }
 
 fn print_usage() {
-    eprintln!("fk {} — filter-kernel, a fast awk for structured data", env!("CARGO_PKG_VERSION"));
+    eprintln!(
+        "fk {} — filter-kernel, a fast awk for structured data",
+        env!("CARGO_PKG_VERSION")
+    );
     eprintln!();
     eprintln!("Usage: fk [options] 'program' [file ...]");
     eprintln!("       fk [options] file ...              # defaults to {{ print }}");
@@ -278,16 +289,46 @@ fn interpret_escapes(s: &str) -> String {
     while i < chars.len() {
         if chars[i] == '\\' && i + 1 < chars.len() {
             match chars[i + 1] {
-                'n' => { out.push('\n'); i += 2; }
-                't' => { out.push('\t'); i += 2; }
-                'r' => { out.push('\r'); i += 2; }
-                'a' => { out.push('\x07'); i += 2; }
-                'b' => { out.push('\x08'); i += 2; }
-                'f' => { out.push('\x0C'); i += 2; }
-                'v' => { out.push('\x0B'); i += 2; }
-                '\\' => { out.push('\\'); i += 2; }
-                '"' => { out.push('"'); i += 2; }
-                '/' => { out.push('/'); i += 2; }
+                'n' => {
+                    out.push('\n');
+                    i += 2;
+                }
+                't' => {
+                    out.push('\t');
+                    i += 2;
+                }
+                'r' => {
+                    out.push('\r');
+                    i += 2;
+                }
+                'a' => {
+                    out.push('\x07');
+                    i += 2;
+                }
+                'b' => {
+                    out.push('\x08');
+                    i += 2;
+                }
+                'f' => {
+                    out.push('\x0C');
+                    i += 2;
+                }
+                'v' => {
+                    out.push('\x0B');
+                    i += 2;
+                }
+                '\\' => {
+                    out.push('\\');
+                    i += 2;
+                }
+                '"' => {
+                    out.push('"');
+                    i += 2;
+                }
+                '/' => {
+                    out.push('/');
+                    i += 2;
+                }
                 'x' => {
                     i += 2;
                     if let Some((ch, consumed)) = read_hex(&chars, i, 2) {

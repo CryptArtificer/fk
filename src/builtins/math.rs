@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use super::{to_number, format_number};
+use super::{format_number, to_number};
 
 thread_local! {
     static RNG_STATE: Cell<u64> = const { Cell::new(0) };

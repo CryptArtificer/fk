@@ -28,8 +28,12 @@ pub(crate) const MAX_CALL_DEPTH: usize = 200;
 /// Compute the p-th percentile from a *sorted* slice using linear interpolation.
 pub(crate) fn percentile_sorted(sorted: &[f64], pct: f64) -> f64 {
     let n = sorted.len();
-    if n == 0 { return 0.0; }
-    if n == 1 { return sorted[0]; }
+    if n == 0 {
+        return 0.0;
+    }
+    if n == 1 {
+        return sorted[0];
+    }
     let pct = pct.clamp(0.0, 100.0);
     let rank = (pct / 100.0) * (n as f64 - 1.0);
     let lo = rank.floor() as usize;
@@ -79,7 +83,11 @@ impl<'a> Executor<'a> {
             }
         }
         Executor {
-            program, rt, info, functions, range_active,
+            program,
+            rt,
+            info,
+            functions,
+            range_active,
             output_files: HashMap::new(),
             output_pipes: HashMap::new(),
             input_files: HashMap::new(),
@@ -103,7 +111,10 @@ impl<'a> Executor<'a> {
             return true;
         }
         match Regex::new(pattern) {
-            Ok(re) => { self.regex_cache.insert(pattern.to_string(), re); true }
+            Ok(re) => {
+                self.regex_cache.insert(pattern.to_string(), re);
+                true
+            }
             Err(_) => {
                 eprintln!("fk: invalid regex: {}", pattern);
                 false
@@ -190,9 +201,10 @@ impl<'a> Executor<'a> {
 
     pub fn run_begin(&mut self) {
         if let Some(ref block) = self.program.begin
-            && let Some(Signal::Exit(code)) = self.exec_block(block) {
-                self.exit_code = Some(code);
-            }
+            && let Some(Signal::Exit(code)) = self.exec_block(block)
+        {
+            self.exit_code = Some(code);
+        }
     }
 
     pub fn run_end(&mut self) {
@@ -205,16 +217,18 @@ impl<'a> Executor<'a> {
 
     pub fn run_beginfile(&mut self) {
         if let Some(ref block) = self.program.beginfile
-            && let Some(Signal::Exit(code)) = self.exec_block(block) {
-                self.exit_code = Some(code);
-            }
+            && let Some(Signal::Exit(code)) = self.exec_block(block)
+        {
+            self.exit_code = Some(code);
+        }
     }
 
     pub fn run_endfile(&mut self) {
         if let Some(ref block) = self.program.endfile
-            && let Some(Signal::Exit(code)) = self.exec_block(block) {
-                self.exit_code = Some(code);
-            }
+            && let Some(Signal::Exit(code)) = self.exec_block(block)
+        {
+            self.exit_code = Some(code);
+        }
     }
 
     /// Returns the exit code if `exit` was called, or None.
@@ -245,7 +259,9 @@ impl<'a> Executor<'a> {
     }
 
     pub fn run_record(&mut self, record: &Record) {
-        if self.exit_code.is_some() { return; }
+        if self.exit_code.is_some() {
+            return;
+        }
         self.next_record = false;
         self.rt.increment_nr();
         match &record.fields {
@@ -265,12 +281,13 @@ impl<'a> Executor<'a> {
 
         let program = self.program;
         for i in 0..program.rules.len() {
-            if self.next_record || self.next_file || self.exit_code.is_some() { break; }
+            if self.next_record || self.next_file || self.exit_code.is_some() {
+                break;
+            }
             let matched = self.match_rule(i, &record.text);
-            if matched
-                && let Some(Signal::Exit(code)) = self.exec_block(&program.rules[i].action) {
-                    self.exit_code = Some(code);
-                    break;
+            if matched && let Some(Signal::Exit(code)) = self.exec_block(&program.rules[i].action) {
+                self.exit_code = Some(code);
+                break;
             }
         }
     }
@@ -283,12 +300,8 @@ impl<'a> Executor<'a> {
         let pattern = &program.rules[rule_idx].pattern;
         match pattern {
             None => true,
-            Some(Pattern::Regex(pat)) => {
-                self.regex_is_match(pat, line)
-            }
-            Some(Pattern::Expression(expr)) => {
-                self.eval_expr(expr).is_truthy()
-            }
+            Some(Pattern::Regex(pat)) => self.regex_is_match(pat, line),
+            Some(Pattern::Expression(expr)) => self.eval_expr(expr).is_truthy(),
             Some(Pattern::Range(start, end)) => {
                 if self.range_active[rule_idx] {
                     if self.match_single_pattern(end, line) {
@@ -307,12 +320,8 @@ impl<'a> Executor<'a> {
 
     fn match_single_pattern(&mut self, pattern: &Pattern, line: &str) -> bool {
         match pattern {
-            Pattern::Regex(pat) => {
-                self.regex_is_match(pat, line)
-            }
-            Pattern::Expression(expr) => {
-                self.eval_expr(expr).is_truthy()
-            }
+            Pattern::Regex(pat) => self.regex_is_match(pat, line),
+            Pattern::Expression(expr) => self.eval_expr(expr).is_truthy(),
             Pattern::Range(_, _) => false,
         }
     }
@@ -328,10 +337,26 @@ pub(crate) fn is_valid_ident(s: &str) -> bool {
 }
 
 pub(crate) fn is_builtin_var(name: &str) -> bool {
-    matches!(name,
-        "NR" | "NF" | "FNR" | "FS" | "OFS" | "RS" | "ORS" | "SUBSEP" |
-        "OFMT" | "CONVFMT" | "FILENAME" | "RSTART" | "RLENGTH" | "ARGC" | "ARGV" |
-        "ENVIRON" | "BEGIN" | "END" | "HDR"
+    matches!(
+        name,
+        "NR" | "NF"
+            | "FNR"
+            | "FS"
+            | "OFS"
+            | "RS"
+            | "ORS"
+            | "SUBSEP"
+            | "OFMT"
+            | "CONVFMT"
+            | "FILENAME"
+            | "RSTART"
+            | "RLENGTH"
+            | "ARGC"
+            | "ARGV"
+            | "ENVIRON"
+            | "BEGIN"
+            | "END"
+            | "HDR"
     )
 }
 

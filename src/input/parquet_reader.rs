@@ -10,8 +10,8 @@ pub fn read_parquet_file(path: &str) -> io::Result<(Vec<String>, Vec<Vec<String>
     use parquet::arrow::arrow_reader::{ArrowReaderOptions, ParquetRecordBatchReaderBuilder};
     use std::fs::File;
 
-    let file = File::open(path)
-        .map_err(|e| io::Error::new(e.kind(), format!("fk: {}: {}", path, e)))?;
+    let file =
+        File::open(path).map_err(|e| io::Error::new(e.kind(), format!("fk: {}: {}", path, e)))?;
 
     let options = ArrowReaderOptions::new().with_skip_arrow_metadata(true);
     let builder = ParquetRecordBatchReaderBuilder::try_new_with_options(file, options)
@@ -20,14 +20,16 @@ pub fn read_parquet_file(path: &str) -> io::Result<(Vec<String>, Vec<Vec<String>
     let schema = builder.schema().clone();
     let columns: Vec<String> = schema.fields().iter().map(|f| f.name().clone()).collect();
 
-    let reader = builder.build()
+    let reader = builder
+        .build()
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("fk: parquet: {}", e)))?;
 
     let mut rows = Vec::new();
 
     for batch_result in reader {
-        let batch = batch_result
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("fk: parquet: {}", e)))?;
+        let batch = batch_result.map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidData, format!("fk: parquet: {}", e))
+        })?;
 
         let num_rows = batch.num_rows();
         let num_cols = batch.num_columns();
@@ -57,7 +59,11 @@ fn array_value_to_string(array: &dyn arrow::array::Array, idx: usize) -> String 
     match array.data_type() {
         DataType::Boolean => {
             let a = array.as_any().downcast_ref::<BooleanArray>().unwrap();
-            if a.value(idx) { "1".to_string() } else { "0".to_string() }
+            if a.value(idx) {
+                "1".to_string()
+            } else {
+                "0".to_string()
+            }
         }
         DataType::Int8 => {
             let a = array.as_any().downcast_ref::<Int8Array>().unwrap();
@@ -154,27 +160,45 @@ fn array_value_to_string(array: &dyn arrow::array::Array, idx: usize) -> String 
             }
         }
         DataType::Dictionary(_, _) => {
-            if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::UInt32Type>>() {
+            if let Some(a) = array
+                .as_any()
+                .downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::UInt32Type>>()
+            {
                 let values = a.values();
                 let key = a.keys().value(idx) as usize;
                 array_value_to_string(values.as_ref(), key)
-            } else if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::Int32Type>>() {
+            } else if let Some(a) = array
+                .as_any()
+                .downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::Int32Type>>()
+            {
                 let values = a.values();
                 let key = a.keys().value(idx) as usize;
                 array_value_to_string(values.as_ref(), key)
-            } else if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::UInt16Type>>() {
+            } else if let Some(a) = array
+                .as_any()
+                .downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::UInt16Type>>()
+            {
                 let values = a.values();
                 let key = a.keys().value(idx) as usize;
                 array_value_to_string(values.as_ref(), key)
-            } else if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::Int16Type>>() {
+            } else if let Some(a) = array
+                .as_any()
+                .downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::Int16Type>>()
+            {
                 let values = a.values();
                 let key = a.keys().value(idx) as usize;
                 array_value_to_string(values.as_ref(), key)
-            } else if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::UInt8Type>>() {
+            } else if let Some(a) = array
+                .as_any()
+                .downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::UInt8Type>>()
+            {
                 let values = a.values();
                 let key = a.keys().value(idx) as usize;
                 array_value_to_string(values.as_ref(), key)
-            } else if let Some(a) = array.as_any().downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::Int8Type>>() {
+            } else if let Some(a) = array
+                .as_any()
+                .downcast_ref::<arrow::array::DictionaryArray<arrow::datatypes::Int8Type>>()
+            {
                 let values = a.values();
                 let key = a.keys().value(idx) as usize;
                 array_value_to_string(values.as_ref(), key)
@@ -201,16 +225,40 @@ fn format_epoch_date(secs: i64) -> String {
     let mut y = 1970i64;
     let mut remaining = days;
     loop {
-        let yd = if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) { 366 } else { 365 };
-        if remaining < yd { break; }
+        let yd = if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) {
+            366
+        } else {
+            365
+        };
+        if remaining < yd {
+            break;
+        }
         remaining -= yd;
         y += 1;
     }
-    let months = [31, if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) { 29 } else { 28 },
-                  31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let months = [
+        31,
+        if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) {
+            29
+        } else {
+            28
+        },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut m = 0;
     for &md in &months {
-        if remaining < md { break; }
+        if remaining < md {
+            break;
+        }
         remaining -= md;
         m += 1;
     }

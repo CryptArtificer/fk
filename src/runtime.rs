@@ -33,21 +33,37 @@ pub struct Value {
 
 impl Default for Value {
     fn default() -> Self {
-        Value { s: String::new(), n: 0.0, flags: STR_VALID | NUM_VALID }
+        Value {
+            s: String::new(),
+            n: 0.0,
+            flags: STR_VALID | NUM_VALID,
+        }
     }
 }
 
 impl Value {
     pub fn from_string(s: String) -> Self {
-        Value { s, n: 0.0, flags: STR_VALID }
+        Value {
+            s,
+            n: 0.0,
+            flags: STR_VALID,
+        }
     }
 
     pub fn from_str_ref(s: &str) -> Self {
-        Value { s: s.to_string(), n: 0.0, flags: STR_VALID }
+        Value {
+            s: s.to_string(),
+            n: 0.0,
+            flags: STR_VALID,
+        }
     }
 
     pub fn from_number(n: f64) -> Self {
-        Value { s: String::new(), n, flags: NUM_VALID }
+        Value {
+            s: String::new(),
+            n,
+            flags: NUM_VALID,
+        }
     }
 
     /// Get numeric value (fast path if number is already cached).
@@ -116,7 +132,9 @@ impl Value {
 
     /// Check if this value looks numeric (for comparison semantics).
     pub fn looks_numeric(&self) -> bool {
-        if self.flags & NUM_VALID != 0 { return true; }
+        if self.flags & NUM_VALID != 0 {
+            return true;
+        }
         if self.flags & STR_VALID != 0 {
             let s = self.s.trim();
             !s.is_empty() && s.parse::<f64>().is_ok()
@@ -219,7 +237,9 @@ impl Runtime {
             "OFMT" => self.ofmt = val.into_string(),
             "CONVFMT" => self.convfmt = val.into_string(),
             "FILENAME" => self.filename = val.into_string(),
-            _ => { self.variables.insert(name.to_string(), val); }
+            _ => {
+                self.variables.insert(name.to_string(), val);
+            }
         }
     }
 
@@ -252,7 +272,9 @@ impl Runtime {
             "OFMT" => self.ofmt = "%.6g".to_string(),
             "CONVFMT" => self.convfmt = "%.6g".to_string(),
             "FILENAME" => self.filename = String::new(),
-            _ => { self.variables.remove(name); }
+            _ => {
+                self.variables.remove(name);
+            }
         }
     }
 
@@ -267,16 +289,26 @@ impl Runtime {
     }
 
     /// Borrow OFS directly (avoids clone in hot print path).
-    pub fn ofs(&self) -> &str { &self.ofs }
+    pub fn ofs(&self) -> &str {
+        &self.ofs
+    }
 
     /// Borrow ORS directly (avoids clone in hot print path).
-    pub fn ors(&self) -> &str { &self.ors }
+    pub fn ors(&self) -> &str {
+        &self.ors
+    }
 
-    pub fn nf(&self) -> usize { self.nf }
+    pub fn nf(&self) -> usize {
+        self.nf
+    }
 
-    pub fn ofmt(&self) -> &str { &self.ofmt }
+    pub fn ofmt(&self) -> &str {
+        &self.ofmt
+    }
 
-    pub fn convfmt(&self) -> &str { &self.convfmt }
+    pub fn convfmt(&self) -> &str {
+        &self.convfmt
+    }
 
     pub fn get_field(&self, idx: usize) -> String {
         if idx == 0 {
@@ -291,10 +323,7 @@ impl Runtime {
         if self.fields_lazy {
             return self.field_from_offset(idx - 1);
         }
-        self.fields
-            .get(idx - 1)
-            .cloned()
-            .unwrap_or_default()
+        self.fields.get(idx - 1).cloned().unwrap_or_default()
     }
 
     /// Write a field directly to a writer without cloning (zero-copy print).
@@ -307,13 +336,17 @@ impl Runtime {
             if self.fields_lazy {
                 let rt = self.record_text.as_bytes();
                 for (i, &(start, end)) in self.field_offsets.iter().enumerate() {
-                    if i > 0 { let _ = w.write_all(self.ofs.as_bytes()); }
+                    if i > 0 {
+                        let _ = w.write_all(self.ofs.as_bytes());
+                    }
                     let _ = w.write_all(&rt[start..end]);
                 }
                 return;
             }
             for (i, f) in self.fields.iter().enumerate() {
-                if i > 0 { let _ = w.write_all(self.ofs.as_bytes()); }
+                if i > 0 {
+                    let _ = w.write_all(self.ofs.as_bytes());
+                }
                 let _ = w.write_all(f.as_bytes());
             }
         } else if self.fields_lazy {
@@ -405,7 +438,9 @@ impl Runtime {
         let mut out = String::new();
         let rt = &self.record_text;
         for (i, &(start, end)) in self.field_offsets.iter().enumerate() {
-            if i > 0 { out.push_str(&self.ofs); }
+            if i > 0 {
+                out.push_str(&self.ofs);
+            }
             out.push_str(&rt[start..end]);
         }
         out
@@ -483,9 +518,7 @@ impl Runtime {
     }
 
     pub fn array_has_key(&self, name: &str, key: &str) -> bool {
-        self.arrays
-            .get(name)
-            .is_some_and(|a| a.contains_key(key))
+        self.arrays.get(name).is_some_and(|a| a.contains_key(key))
     }
 
     /// Check if an array exists (may be empty).

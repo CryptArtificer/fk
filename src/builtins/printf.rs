@@ -47,7 +47,14 @@ fn parse_flags(spec: &str) -> FmtFlags {
         zero_pad = false;
     }
 
-    FmtFlags { left_align, zero_pad, force_sign, space_sign, width, precision }
+    FmtFlags {
+        left_align,
+        zero_pad,
+        force_sign,
+        space_sign,
+        width,
+        precision,
+    }
 }
 
 /// Apply width / alignment / padding to an already-formatted string.
@@ -124,7 +131,15 @@ pub fn format_printf(fmt: &str, args: &[String]) -> String {
                 'd' | 'i' => {
                     let val = args.get(arg_idx).map(|s| to_number(s)).unwrap_or(0.0) as i64;
                     arg_idx += 1;
-                    let prefix = if val < 0 { "" } else if flags.force_sign { "+" } else if flags.space_sign { " " } else { "" };
+                    let prefix = if val < 0 {
+                        ""
+                    } else if flags.force_sign {
+                        "+"
+                    } else if flags.space_sign {
+                        " "
+                    } else {
+                        ""
+                    };
                     let s = format!("{}{}", prefix, val);
                     let pad = if flags.zero_pad { '0' } else { ' ' };
                     if flags.zero_pad && (val < 0 || flags.force_sign || flags.space_sign) {
@@ -144,7 +159,15 @@ pub fn format_printf(fmt: &str, args: &[String]) -> String {
                     let val = args.get(arg_idx).map(|s| to_number(s)).unwrap_or(0.0);
                     arg_idx += 1;
                     let prec = flags.precision.unwrap_or(6);
-                    let prefix = if val < 0.0 || val.is_sign_negative() { "" } else if flags.force_sign { "+" } else if flags.space_sign { " " } else { "" };
+                    let prefix = if val < 0.0 || val.is_sign_negative() {
+                        ""
+                    } else if flags.force_sign {
+                        "+"
+                    } else if flags.space_sign {
+                        " "
+                    } else {
+                        ""
+                    };
                     let s = if conv == 'e' {
                         format!("{}{:.*e}", prefix, prec, val)
                     } else {
@@ -169,7 +192,15 @@ pub fn format_printf(fmt: &str, args: &[String]) -> String {
                     let val = args.get(arg_idx).map(|s| to_number(s)).unwrap_or(0.0);
                     arg_idx += 1;
                     let prec = flags.precision.unwrap_or(6);
-                    let prefix = if val < 0.0 || val.is_sign_negative() { "" } else if flags.force_sign { "+" } else if flags.space_sign { " " } else { "" };
+                    let prefix = if val < 0.0 || val.is_sign_negative() {
+                        ""
+                    } else if flags.force_sign {
+                        "+"
+                    } else if flags.space_sign {
+                        " "
+                    } else {
+                        ""
+                    };
                     let s_f = format!("{:.*}", prec, val);
                     let s_e = format!("{:.*e}", prec, val);
                     let formatted = if s_f.len() <= s_e.len() { s_f } else { s_e };

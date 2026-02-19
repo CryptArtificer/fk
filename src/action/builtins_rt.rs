@@ -7,7 +7,7 @@ use crate::builtins::{self, string_replace};
 use crate::parser::Expr;
 use crate::runtime::{ArrayMeta, Value};
 
-use super::{percentile_sorted, Executor};
+use super::{Executor, percentile_sorted};
 
 impl<'a> Executor<'a> {
     /// Extract a regex pattern string from an expression that may be a bare
@@ -267,12 +267,14 @@ impl<'a> Executor<'a> {
         };
         let mut keys: Vec<String> = self.rt.array_keys(&array_name);
         keys.sort_by(|a, b| {
-            a.parse::<f64>().unwrap_or(f64::MAX)
+            a.parse::<f64>()
+                .unwrap_or(f64::MAX)
                 .partial_cmp(&b.parse::<f64>().unwrap_or(f64::MAX))
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| a.cmp(b))
         });
-        let parts: Vec<String> = keys.iter()
+        let parts: Vec<String> = keys
+            .iter()
             .map(|k| self.rt.get_array(&array_name, k))
             .collect();
         Value::from_string(parts.join(&sep))
@@ -312,7 +314,8 @@ impl<'a> Executor<'a> {
         };
         let mut keys = self.rt.array_keys(&array_name);
         smart_sort_keys(&mut keys);
-        let vals: Vec<String> = keys.iter()
+        let vals: Vec<String> = keys
+            .iter()
             .map(|k| self.rt.get_array(&array_name, k))
             .collect();
         let sep = self.rt.ors().to_owned();
@@ -323,7 +326,9 @@ impl<'a> Executor<'a> {
     /// Sequential arrays (1..N) print values; associative arrays print keys.
     pub(crate) fn print_array(&mut self, name: &str) {
         let mut keys = self.rt.array_keys(name);
-        if keys.is_empty() { return; }
+        if keys.is_empty() {
+            return;
+        }
         smart_sort_keys(&mut keys);
         let sequential = is_sequential(&keys);
         let ors = self.rt.ors().to_owned();
@@ -345,7 +350,10 @@ impl<'a> Executor<'a> {
     pub(crate) fn builtin_uniq(&mut self, args: &[Expr]) -> Value {
         let array_name = match extract_array_name(args) {
             Some(n) => n,
-            None => { eprintln!("fk: uniq: argument must be an array name"); return Value::from_number(0.0); }
+            None => {
+                eprintln!("fk: uniq: argument must be an array name");
+                return Value::from_number(0.0);
+            }
         };
         let mut keys = self.rt.array_keys(&array_name);
         smart_sort_keys(&mut keys);
@@ -369,10 +377,14 @@ impl<'a> Executor<'a> {
     pub(crate) fn builtin_invert(&mut self, args: &[Expr]) -> Value {
         let array_name = match extract_array_name(args) {
             Some(n) => n,
-            None => { eprintln!("fk: inv: argument must be an array name"); return Value::from_number(0.0); }
+            None => {
+                eprintln!("fk: inv: argument must be an array name");
+                return Value::from_number(0.0);
+            }
         };
         let keys = self.rt.array_keys(&array_name);
-        let pairs: Vec<(String, String)> = keys.iter()
+        let pairs: Vec<(String, String)> = keys
+            .iter()
             .map(|k| (k.clone(), self.rt.get_array(&array_name, k)))
             .collect();
         let count = pairs.len();
@@ -387,7 +399,10 @@ impl<'a> Executor<'a> {
     pub(crate) fn builtin_compact(&mut self, args: &[Expr]) -> Value {
         let array_name = match extract_array_name(args) {
             Some(n) => n,
-            None => { eprintln!("fk: tidy: argument must be an array name"); return Value::from_number(0.0); }
+            None => {
+                eprintln!("fk: tidy: argument must be an array name");
+                return Value::from_number(0.0);
+            }
         };
         let keys = self.rt.array_keys(&array_name);
         let mut to_remove = Vec::new();
@@ -407,10 +422,14 @@ impl<'a> Executor<'a> {
     pub(crate) fn builtin_shuffle(&mut self, args: &[Expr]) -> Value {
         let array_name = match extract_array_name(args) {
             Some(n) => n,
-            None => { eprintln!("fk: shuf: argument must be an array name"); return Value::from_number(0.0); }
+            None => {
+                eprintln!("fk: shuf: argument must be an array name");
+                return Value::from_number(0.0);
+            }
         };
         let keys = self.rt.array_keys(&array_name);
-        let mut vals: Vec<String> = keys.iter()
+        let mut vals: Vec<String> = keys
+            .iter()
             .map(|k| self.rt.get_array(&array_name, k))
             .collect();
         for i in (1..vals.len()).rev() {
@@ -433,14 +452,22 @@ impl<'a> Executor<'a> {
         }
         let name_a = match &args[0] {
             Expr::Var(n) => n.clone(),
-            _ => { eprintln!("fk: {}: arguments must be array names", op); return Value::from_number(0.0); }
+            _ => {
+                eprintln!("fk: {}: arguments must be array names", op);
+                return Value::from_number(0.0);
+            }
         };
         let name_b = match &args[1] {
             Expr::Var(n) => n.clone(),
-            _ => { eprintln!("fk: {}: arguments must be array names", op); return Value::from_number(0.0); }
+            _ => {
+                eprintln!("fk: {}: arguments must be array names", op);
+                return Value::from_number(0.0);
+            }
         };
-        let keys_a: std::collections::HashSet<String> = self.rt.array_keys(&name_a).into_iter().collect();
-        let keys_b: std::collections::HashSet<String> = self.rt.array_keys(&name_b).into_iter().collect();
+        let keys_a: std::collections::HashSet<String> =
+            self.rt.array_keys(&name_a).into_iter().collect();
+        let keys_b: std::collections::HashSet<String> =
+            self.rt.array_keys(&name_b).into_iter().collect();
 
         match op {
             "diff" => {
@@ -474,7 +501,10 @@ impl<'a> Executor<'a> {
         }
         let array_name = match &args[0] {
             Expr::Var(n) => n.clone(),
-            _ => { eprintln!("fk: seq: first argument must be an array name"); return Value::from_number(0.0); }
+            _ => {
+                eprintln!("fk: seq: first argument must be an array name");
+                return Value::from_number(0.0);
+            }
         };
         let from = self.eval_expr(&args[1]).to_number() as i64;
         let to = self.eval_expr(&args[2]).to_number() as i64;
@@ -483,11 +513,16 @@ impl<'a> Executor<'a> {
         let mut i = from;
         let mut idx = 1;
         loop {
-            self.rt.set_array(&array_name, &idx.to_string(), &i.to_string());
-            if i == to { break; }
+            self.rt
+                .set_array(&array_name, &idx.to_string(), &i.to_string());
+            if i == to {
+                break;
+            }
             i += step;
             idx += 1;
-            if idx > 1_000_000 { break; }
+            if idx > 1_000_000 {
+                break;
+            }
         }
         Value::from_number(idx as f64)
     }
@@ -500,11 +535,15 @@ impl<'a> Executor<'a> {
         }
         let array_name = match &args[0] {
             Expr::Var(n) => n.clone(),
-            _ => { eprintln!("fk: samp: first argument must be an array name"); return Value::from_number(0.0); }
+            _ => {
+                eprintln!("fk: samp: first argument must be an array name");
+                return Value::from_number(0.0);
+            }
         };
         let n = self.eval_expr(&args[1]).to_number() as usize;
         let keys = self.rt.array_keys(&array_name);
-        let mut vals: Vec<String> = keys.iter()
+        let mut vals: Vec<String> = keys
+            .iter()
             .map(|k| self.rt.get_array(&array_name, k))
             .collect();
         // Fisher-Yates partial shuffle for first n elements
@@ -535,7 +574,11 @@ impl<'a> Executor<'a> {
                 Ok(_) => buf,
                 Err(e) => {
                     eprintln!("fk: slurp: stdin: {}", e);
-                    return if args.len() >= 2 { Value::from_number(0.0) } else { Value::default() };
+                    return if args.len() >= 2 {
+                        Value::from_number(0.0)
+                    } else {
+                        Value::default()
+                    };
                 }
             }
         } else {
@@ -543,14 +586,21 @@ impl<'a> Executor<'a> {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!("fk: slurp: {}: {}", filename, e);
-                    return if args.len() >= 2 { Value::from_number(0.0) } else { Value::default() };
+                    return if args.len() >= 2 {
+                        Value::from_number(0.0)
+                    } else {
+                        Value::default()
+                    };
                 }
             }
         };
         if args.len() >= 2 {
             let array_name = match &args[1] {
                 Expr::Var(n) => n.clone(),
-                _ => { eprintln!("fk: slurp: second argument must be an array name"); return Value::from_number(0.0); }
+                _ => {
+                    eprintln!("fk: slurp: second argument must be an array name");
+                    return Value::from_number(0.0);
+                }
             };
             self.rt.delete_array_all(&array_name);
             let mut count = 0;
@@ -601,7 +651,11 @@ impl<'a> Executor<'a> {
     /// Bitwise operations: and, or, xor, lshift, rshift, compl.
     pub(crate) fn builtin_bitwise(&mut self, name: &str, args: &[Expr]) -> Value {
         if name == "compl" {
-            let n = if args.is_empty() { 0i64 } else { self.eval_expr(&args[0]).to_number() as i64 };
+            let n = if args.is_empty() {
+                0i64
+            } else {
+                self.eval_expr(&args[0]).to_number() as i64
+            };
             return Value::from_number(!n as f64);
         }
         if args.len() < 2 {
@@ -636,7 +690,9 @@ impl<'a> Executor<'a> {
             }
         };
 
-        let mut items: Vec<(String, String)> = self.rt.array_keys(&array_name)
+        let mut items: Vec<(String, String)> = self
+            .rt
+            .array_keys(&array_name)
             .into_iter()
             .map(|k| {
                 let v = self.rt.get_array(&array_name, &k);
@@ -673,7 +729,9 @@ impl<'a> Executor<'a> {
 
     /// Extract sorted numeric values from an array.
     fn array_sorted_values(&self, array_name: &str) -> Vec<f64> {
-        let mut vals: Vec<f64> = self.rt.array_keys(array_name)
+        let mut vals: Vec<f64> = self
+            .rt
+            .array_keys(array_name)
             .into_iter()
             .map(|k| {
                 let v = self.rt.get_array(array_name, &k);
@@ -716,8 +774,12 @@ impl<'a> Executor<'a> {
                 let v = v.to_number();
                 count += 1.0;
                 sum += v;
-                if v < min { min = v; }
-                if v > max { max = v; }
+                if v < min {
+                    min = v;
+                }
+                if v > max {
+                    max = v;
+                }
                 let delta = v - mean;
                 mean += delta / count;
                 let delta2 = v - mean;
@@ -745,9 +807,7 @@ impl<'a> Executor<'a> {
         let n = vals.len();
 
         match name {
-            "median" => {
-                Value::from_number(percentile_sorted(&vals, 50.0))
-            }
+            "median" => Value::from_number(percentile_sorted(&vals, 50.0)),
             "percentile" | "p" => {
                 let pct = if args.len() >= 2 {
                     builtins::to_number(&self.eval_string(&args[1]))
@@ -821,8 +881,12 @@ impl<'a> Executor<'a> {
         let mut data_min = source[0];
         let mut data_max = source[0];
         for &v in &source[1..] {
-            if v < data_min { data_min = v; }
-            if v > data_max { data_max = v; }
+            if v < data_min {
+                data_min = v;
+            }
+            if v > data_max {
+                data_max = v;
+            }
         }
         if let Some(expr) = args.get(3) {
             data_min = builtins::to_number(&self.eval_string(expr));
@@ -843,7 +907,9 @@ impl<'a> Executor<'a> {
 
         let (min, width, bins) = if let Some(b) = explicit_bins {
             let mut w = (data_max - data_min) / b as f64;
-            if w == 0.0 || !w.is_finite() { w = 1.0; }
+            if w == 0.0 || !w.is_finite() {
+                w = 1.0;
+            }
             (data_min, w, b)
         } else {
             nice_hist_bins(data_min, data_max, source.len())
@@ -852,8 +918,12 @@ impl<'a> Executor<'a> {
         let mut counts = vec![0usize; bins];
         for &v in &source {
             let mut idx = ((v - min) / width).floor() as i64;
-            if idx < 0 { idx = 0; }
-            if idx >= bins as i64 { idx = bins as i64 - 1; }
+            if idx < 0 {
+                idx = 0;
+            }
+            if idx >= bins as i64 {
+                idx = bins as i64 - 1;
+            }
             counts[idx as usize] += 1;
         }
 
@@ -865,18 +935,24 @@ impl<'a> Executor<'a> {
 
         let max = min + width * bins as f64;
         let filename = self.rt.get_var("FILENAME").to_string();
-        let description = self.info.array_sources.get(&array_name)
+        let description = self
+            .info
+            .array_sources
+            .get(&array_name)
             .map(|expr| build_array_description(expr, &filename, &self.info.var_sources))
             .unwrap_or_default();
-        self.rt.set_meta(&out_name, ArrayMeta::Histogram {
-            source,
-            source_name: array_name,
-            description,
-            bins,
-            min,
-            max,
-            width,
-        });
+        self.rt.set_meta(
+            &out_name,
+            ArrayMeta::Histogram {
+                source,
+                source_name: array_name,
+                description,
+                bins,
+                min,
+                max,
+                width,
+            },
+        );
 
         Value::from_string(out_name)
     }
@@ -892,7 +968,9 @@ impl<'a> Executor<'a> {
             Expr::Var(v) => v.clone(),
             _ => {
                 let s = self.eval_string(&args[0]);
-                if self.rt.has_array(&s) { s } else {
+                if self.rt.has_array(&s) {
+                    s
+                } else {
                     eprintln!("fk: plot(): first argument must be an array name");
                     return Value::from_string(String::new());
                 }
@@ -907,7 +985,11 @@ impl<'a> Executor<'a> {
         } else {
             40
         };
-        let width = if width_raw <= 0 { 40 } else { width_raw as usize };
+        let width = if width_raw <= 0 {
+            40
+        } else {
+            width_raw as usize
+        };
         let ch = if let Some(expr) = args.get(2) {
             self.eval_string(expr).chars().next().unwrap_or('▇')
         } else {
@@ -918,8 +1000,15 @@ impl<'a> Executor<'a> {
         } else {
             -1
         };
-        let precision = if precision_raw < 0 { None } else { Some(precision_raw as usize) };
-        let color_name = args.get(4).map(|expr| self.eval_string(expr)).unwrap_or_default();
+        let precision = if precision_raw < 0 {
+            None
+        } else {
+            Some(precision_raw as usize)
+        };
+        let color_name = args
+            .get(4)
+            .map(|expr| self.eval_string(expr))
+            .unwrap_or_default();
         let (color_code, color_reset) = ansi_color(&color_name);
 
         let entries = self.collect_chart_entries(&array_name);
@@ -931,7 +1020,8 @@ impl<'a> Executor<'a> {
         let hist_meta = self.rt.get_meta(&array_name).cloned();
         let labels = build_chart_labels(&entries, hist_meta.as_ref(), precision);
         let label_width = labels.iter().map(|l| l.len()).max().unwrap_or(0);
-        let count_width = entries.iter()
+        let count_width = entries
+            .iter()
             .map(|(_, v)| builtins::format_number(*v).len())
             .max()
             .unwrap_or(0);
@@ -942,8 +1032,11 @@ impl<'a> Executor<'a> {
             let count_str = builtins::format_number(*count);
             lines.push(format!(
                 "{:label_w$} | {} {:count_w$}",
-                labels[idx], bar, count_str,
-                label_w = label_width, count_w = count_width,
+                labels[idx],
+                bar,
+                count_str,
+                label_w = label_width,
+                count_w = count_width,
             ));
         }
 
@@ -961,7 +1054,9 @@ impl<'a> Executor<'a> {
             Expr::Var(v) => v.clone(),
             _ => {
                 let s = self.eval_string(&args[0]);
-                if self.rt.has_array(&s) { s } else {
+                if self.rt.has_array(&s) {
+                    s
+                } else {
                     eprintln!("fk: plotbox(): first argument must be an array name");
                     return Value::from_string(String::new());
                 }
@@ -976,7 +1071,11 @@ impl<'a> Executor<'a> {
         } else {
             40
         };
-        let width = if width_raw <= 0 { 40 } else { width_raw as usize };
+        let width = if width_raw <= 0 {
+            40
+        } else {
+            width_raw as usize
+        };
         let ch = if let Some(expr) = args.get(2) {
             self.eval_string(expr).chars().next().unwrap_or('▇')
         } else {
@@ -987,10 +1086,17 @@ impl<'a> Executor<'a> {
         } else {
             -1
         };
-        let precision = if precision_raw < 0 { None } else { Some(precision_raw as usize) };
+        let precision = if precision_raw < 0 {
+            None
+        } else {
+            Some(precision_raw as usize)
+        };
         let title_arg = args.get(4).map(|expr| self.eval_string(expr));
         let xlabel_arg = args.get(5).map(|expr| self.eval_string(expr));
-        let color_name = args.get(6).map(|expr| self.eval_string(expr)).unwrap_or_default();
+        let color_name = args
+            .get(6)
+            .map(|expr| self.eval_string(expr))
+            .unwrap_or_default();
         let (color_code, color_reset) = ansi_color(&color_name);
 
         let entries = self.collect_chart_entries(&array_name);
@@ -1002,7 +1108,11 @@ impl<'a> Executor<'a> {
         let hist_meta = self.rt.get_meta(&array_name).cloned();
         let title = title_arg.unwrap_or_default();
         let subtitle = match &hist_meta {
-            Some(ArrayMeta::Histogram { description, source_name, .. }) => {
+            Some(ArrayMeta::Histogram {
+                description,
+                source_name,
+                ..
+            }) => {
                 if !description.is_empty() {
                     description.clone()
                 } else if !source_name.is_empty() {
@@ -1015,11 +1125,16 @@ impl<'a> Executor<'a> {
             _ => String::new(),
         };
         let xlabel = xlabel_arg.unwrap_or_else(|| {
-            if hist_meta.is_some() { "Frequency".to_string() } else { String::new() }
+            if hist_meta.is_some() {
+                "Frequency".to_string()
+            } else {
+                String::new()
+            }
         });
         let labels = build_chart_labels(&entries, hist_meta.as_ref(), precision);
         let label_width = labels.iter().map(|l| l.len()).max().unwrap_or(0);
-        let count_width = entries.iter()
+        let count_width = entries
+            .iter()
             .map(|(_, v)| builtins::format_number(*v).len())
             .max()
             .unwrap_or(0);
@@ -1029,13 +1144,19 @@ impl<'a> Executor<'a> {
         let total_width = label_width + 3 + box_width + 1;
         for text in [&title, &subtitle] {
             if !text.is_empty() {
-                let pad = if total_width > text.len() { (total_width - text.len()) / 2 } else { 0 };
+                let pad = if total_width > text.len() {
+                    (total_width - text.len()) / 2
+                } else {
+                    0
+                };
                 lines.push(format!("{:pad$}{text}", ""));
             }
         }
         lines.push(format!(
             "{:>label_w$} ┌{}┐",
-            "", " ".repeat(box_width), label_w = label_width,
+            "",
+            " ".repeat(box_width),
+            label_w = label_width,
         ));
 
         for (idx, (_, count)) in entries.iter().enumerate() {
@@ -1043,18 +1164,27 @@ impl<'a> Executor<'a> {
             let count_str = builtins::format_number(*count);
             lines.push(format!(
                 "{:>label_w$} ┤{} {:count_w$}",
-                labels[idx], bar, count_str,
-                label_w = label_width, count_w = count_width,
+                labels[idx],
+                bar,
+                count_str,
+                label_w = label_width,
+                count_w = count_width,
             ));
         }
 
         lines.push(format!(
             "{:>label_w$} └{}┘",
-            "", " ".repeat(box_width), label_w = label_width,
+            "",
+            " ".repeat(box_width),
+            label_w = label_width,
         ));
         if !xlabel.is_empty() {
             let total = label_width + 3 + box_width + 1;
-            let pad = if total > xlabel.len() { (total - xlabel.len()) / 2 } else { 0 };
+            let pad = if total > xlabel.len() {
+                (total - xlabel.len()) / 2
+            } else {
+                0
+            };
             lines.push(format!("{:pad$}{}", "", xlabel, pad = pad));
         }
 
@@ -1083,12 +1213,10 @@ impl<'a> Executor<'a> {
         if let Some(rec) = record {
             match var {
                 Some(name) => self.rt.set_var(name, &rec.text),
-                None => {
-                    match &rec.fields {
-                        Some(fields) => self.rt.set_record_fields(&rec.text, fields.clone()),
-                        None => self.rt.set_record(&rec.text),
-                    }
-                }
+                None => match &rec.fields {
+                    Some(fields) => self.rt.set_record_fields(&rec.text, fields.clone()),
+                    None => self.rt.set_record(&rec.text),
+                },
             }
             self.rt.increment_nr();
             return Value::from_number(1.0);
@@ -1099,8 +1227,12 @@ impl<'a> Executor<'a> {
         match std::io::stdin().read_line(&mut line) {
             Ok(0) => Value::from_number(0.0),
             Ok(_) => {
-                if line.ends_with('\n') { line.pop(); }
-                if line.ends_with('\r') { line.pop(); }
+                if line.ends_with('\n') {
+                    line.pop();
+                }
+                if line.ends_with('\r') {
+                    line.pop();
+                }
                 match var {
                     Some(name) => self.rt.set_var(name, &line),
                     None => self.rt.set_record(&line),
@@ -1116,10 +1248,8 @@ impl<'a> Executor<'a> {
         if !self.input_files.contains_key(path) {
             match std::fs::File::open(path) {
                 Ok(file) => {
-                    self.input_files.insert(
-                        path.to_string(),
-                        std::io::BufReader::new(file),
-                    );
+                    self.input_files
+                        .insert(path.to_string(), std::io::BufReader::new(file));
                 }
                 Err(_) => return Value::from_number(-1.0),
             }
@@ -1129,8 +1259,12 @@ impl<'a> Executor<'a> {
         match reader.read_line(&mut line) {
             Ok(0) => Value::from_number(0.0),
             Ok(_) => {
-                if line.ends_with('\n') { line.pop(); }
-                if line.ends_with('\r') { line.pop(); }
+                if line.ends_with('\n') {
+                    line.pop();
+                }
+                if line.ends_with('\r') {
+                    line.pop();
+                }
                 match var {
                     Some(name) => self.rt.set_var(name, &line),
                     None => self.rt.set_record(&line),
@@ -1152,10 +1286,8 @@ impl<'a> Executor<'a> {
             {
                 Ok(mut child) => {
                     let stdout = child.stdout.take().unwrap();
-                    self.input_pipe_readers.insert(
-                        cmd.to_string(),
-                        std::io::BufReader::new(stdout),
-                    );
+                    self.input_pipe_readers
+                        .insert(cmd.to_string(), std::io::BufReader::new(stdout));
                     self.input_pipe_children.insert(cmd.to_string(), child);
                 }
                 Err(_) => return Value::from_number(-1.0),
@@ -1166,8 +1298,12 @@ impl<'a> Executor<'a> {
         match reader.read_line(&mut line) {
             Ok(0) => Value::from_number(0.0),
             Ok(_) => {
-                if line.ends_with('\n') { line.pop(); }
-                if line.ends_with('\r') { line.pop(); }
+                if line.ends_with('\n') {
+                    line.pop();
+                }
+                if line.ends_with('\r') {
+                    line.pop();
+                }
                 match var {
                     Some(name) => self.rt.set_var(name, &line),
                     None => self.rt.set_record(&line),
@@ -1201,9 +1337,12 @@ impl<'a> Executor<'a> {
             let mut keys = self.rt.array_keys(name);
             smart_sort_keys(&mut keys);
             let sequential = is_sequential(&keys);
-            buf.push_str(&format!("dump: {} = array ({} elements{})\n",
-                name, keys.len(),
-                if sequential { ", sequential" } else { "" }));
+            buf.push_str(&format!(
+                "dump: {} = array ({} elements{})\n",
+                name,
+                keys.len(),
+                if sequential { ", sequential" } else { "" }
+            ));
             for k in &keys {
                 let v = self.rt.get_array(name, k);
                 buf.push_str(&format!("  [{}] = \"{}\"\n", k, v));
@@ -1227,8 +1366,14 @@ impl<'a> Executor<'a> {
     fn dump_output(&mut self, buf: &str, args: &[Expr]) -> Value {
         if args.len() >= 2 {
             let filename = self.eval_string(&args[1]);
-            match std::fs::OpenOptions::new().create(true).append(true).open(&filename) {
-                Ok(mut f) => { let _ = f.write_all(buf.as_bytes()); }
+            match std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&filename)
+            {
+                Ok(mut f) => {
+                    let _ = f.write_all(buf.as_bytes());
+                }
                 Err(e) => eprintln!("fk: dump: {}: {}", filename, e),
             }
         } else {
@@ -1296,7 +1441,9 @@ impl<'a> Executor<'a> {
 }
 
 fn extract_array_name(args: &[Expr]) -> Option<String> {
-    if args.is_empty() { return None; }
+    if args.is_empty() {
+        return None;
+    }
     match &args[0] {
         Expr::Var(name) => Some(name.clone()),
         _ => None,
@@ -1319,9 +1466,10 @@ fn smart_sort_keys(keys: &mut [String]) {
 
 /// Check if sorted keys are sequential 1..N.
 fn is_sequential(sorted_keys: &[String]) -> bool {
-    sorted_keys.iter().enumerate().all(|(i, k)| {
-        k.parse::<usize>().is_ok_and(|n| n == i + 1)
-    })
+    sorted_keys
+        .iter()
+        .enumerate()
+        .all(|(i, k)| k.parse::<usize>().is_ok_and(|n| n == i + 1))
 }
 
 // --- Histogram binning (uplot-style nice numbers) ---
@@ -1339,10 +1487,15 @@ fn nice_hist_bins(data_min: f64, data_max: f64, n: usize) -> (f64, f64, usize) {
 
     let mag = 10.0f64.powf(rough.log10().floor());
     let frac = rough / mag;
-    let nice_frac = if frac < 1.5 { 1.0 }
-        else if frac < 3.0 { 2.0 }
-        else if frac < 7.0 { 5.0 }
-        else { 10.0 };
+    let nice_frac = if frac < 1.5 {
+        1.0
+    } else if frac < 3.0 {
+        2.0
+    } else if frac < 7.0 {
+        5.0
+    } else {
+        10.0
+    };
     let width = nice_frac * mag;
 
     let aligned_min = (data_min / width).floor() * width;
@@ -1366,10 +1519,21 @@ fn ansi_color(name: &str) -> (&'static str, &'static str) {
         "gray" | "grey" => "\x1b[90m",
         _ => "",
     };
-    if code.is_empty() { ("", "") } else { (code, "\x1b[0m") }
+    if code.is_empty() {
+        ("", "")
+    } else {
+        (code, "\x1b[0m")
+    }
 }
 
-fn render_bar(value: f64, max_val: f64, width: usize, ch: char, color: &str, reset: &str) -> String {
+fn render_bar(
+    value: f64,
+    max_val: f64,
+    width: usize,
+    ch: char,
+    color: &str,
+    reset: &str,
+) -> String {
     let mut bar_len = if max_val > 0.0 {
         ((value / max_val) * width as f64).round() as usize
     } else {
@@ -1382,7 +1546,11 @@ fn render_bar(value: f64, max_val: f64, width: usize, ch: char, color: &str, res
     if bar_len < width {
         bar.push_str(&" ".repeat(width - bar_len));
     }
-    if color.is_empty() { bar } else { format!("{}{}{}", color, bar, reset) }
+    if color.is_empty() {
+        bar
+    } else {
+        format!("{}{}{}", color, bar, reset)
+    }
 }
 
 fn build_chart_labels(
@@ -1390,25 +1558,37 @@ fn build_chart_labels(
     meta: Option<&ArrayMeta>,
     precision: Option<usize>,
 ) -> Vec<String> {
-    if let Some(ArrayMeta::Histogram { min, max, width, .. }) = meta {
+    if let Some(ArrayMeta::Histogram {
+        min, max, width, ..
+    }) = meta
+    {
         let range_decimals = precision.unwrap_or_else(|| {
             let w = width.abs();
-            if w >= 0.01 { 1 }
-            else if w >= 0.001 { 3 }
-            else { 4 }
+            if w >= 0.01 {
+                1
+            } else if w >= 0.001 {
+                3
+            } else {
+                4
+            }
         });
 
         let mut bounds: Vec<(String, String)> = Vec::new();
         let mut num_width = 0usize;
         for (idx, _) in entries.iter().enumerate() {
             let lo = min + (idx as f64) * width;
-            let hi = if idx + 1 == entries.len() { *max } else { lo + width };
+            let hi = if idx + 1 == entries.len() {
+                *max
+            } else {
+                lo + width
+            };
             let lo_s = format!("{:.*}", range_decimals, lo);
             let hi_s = format!("{:.*}", range_decimals, hi);
             num_width = num_width.max(lo_s.len()).max(hi_s.len());
             bounds.push((lo_s, hi_s));
         }
-        bounds.iter()
+        bounds
+            .iter()
             .map(|(lo_s, hi_s)| format!("[{:>w$}, {:>w$})", lo_s, hi_s, w = num_width))
             .collect()
     } else {

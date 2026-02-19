@@ -100,70 +100,40 @@ automatically displays a dimmed `# description` subtitle above the command.
 
 ### explain() revamp
 - Dropped "print" as a verb — trivial programs now return empty (no subtitle)
-- Technical vocabulary: `filter`, `frequency`, `aggregate`, `stats`, `histogram`,
-  `sum`, `count`, `unique`, `join`, `anti-join`, `semi-join`, `gsub/sub`, `transform`
-- Idiom detection: `!seen[k]++` → unique, `NR==FNR{…;next}` → join variants,
-  `/pat/{n++};END{…}` → count pattern, `a[k]+=v;c[k]++` → aggregate by
+- Human-readable vocabulary:
+  - `use col 1–2` (field selection, consecutive ranges collapsed with en-dash)
+  - `where col 2 > 50` (filter conditions), `where /pattern/`
+  - `freq of col 1` (frequency counting)
+  - `sum col 2`, `agg col 2 by col 1` (accumulation)
+  - `stats of col 2`, `histogram of col 1` (analysis)
+  - `count lines`, `count /pattern/` (counting)
+  - `deduplicate by $0` (unique idiom)
+  - `join on col 1`, `semi-join on col 1`, `anti-join on col 1`
+  - `gsub /pat/ → "repl"`, `transform` (rewrites)
+  - `generate output`, `timed` (BEGIN-only / timing)
+  - Named columns stay readable: `use host-name, cpu-usage`
+- Field humanization: `$N` → `col N` via `humanize()` post-processor
+- Range collapsing: `$1, $2, $3` → `col 1–3` via `format_field_list()`
+- Timing detection: `tic()/toc()/clk()` → `timed` annotation
+- Accumulation guard: `has_field_ref()` prevents loop variables (like `i`)
+  from being reported as "sum i"
+- Idiom detection: `!seen[k]++` → deduplicate by k, `NR==FNR{…;next}` →
+  join variants (extracts key), `/pat/{n++};END{…}` → count pattern,
+  `a[k]+=v;c[k]++` → agg by
 - CompoundAssign (`+=`) now tracked for array source resolution
-- Regex rendering: `$0 ~ "foo"` → `/foo/`, `!$0 ~ "foo"` → `!/foo/`,
-  `$7 ~ "^[a-f]"` → `$7 ~ /^[a-f]/`
-- SUBSEP in multi-dim keys rendered as comma: `$1, $2`
+- Regex rendering: `$0 ~ "foo"` → `/foo/`, `$7 ~ "^[a-f]"` → `$7 ~ /^[a-f]/`
+- SUBSEP in multi-dim keys rendered as comma: `col 1, col 2`
 - Bare `1` pattern (print-all idiom) suppressed from filter list
-- 52 analyze tests (up from 29), 420 total Rust tests
-- Generic fragment-based architecture: extract → reduce → render with budget
 - `ExplainContext`: environment-aware descriptions from CLI args + auto-detection
   (input format, compression, headers, field sep, filenames)
-- Auto-detects format from file extension (`.csv.gz` → CSV + gzip)
-- Environment rendered as parenthetical suffix: `stats $2 (CSV, headers, data.csv)`
-- Dropped when over budget or when program has no semantic fragments
-- `select` fragment: detects specific field output ($1, $2, $name, etc.)
-  - Named columns rendered without $: `select host-name, cpu-usage`
-  - >5 fields summarized: `select 7 fields`
-  - Passthrough (`print` / `print $0`) produces no fragment
-  - Significance 30 — below filter, dropped first under budget pressure
-- Extended fragment detectors (session 2):
-  - Non-compound accumulation: `x = x + expr` → `sum expr`
-  - Field assignment: `$N = expr` → `rewrite fields`
-  - Field iteration: `for(i=1;i<=NF;i++)` → `iterate fields`
-  - Collection: `a[NR]=$0` + END → `collect + emit`
-  - Line numbering: NR/FNR in print → `number lines`
-  - Output reformatting: ORS/OFS assignment → `reformat output`
-  - Computed output: function calls/binops in print → `compute`
-  - BEGIN-only with output → `generate`
-  - `match()` standalone (without printf) → `regex extract`
-  - Transforms via assignment: `safe = gensub(...)` now detected
-  - Subsumption: chart/stats/aggregate/frequency suppress `collect + emit`
-- Example coverage: all example files now use `show`/`show_pipe` wrappers
-  - 18-dashboards.sh fully converted to show/show_pipe
-  - 15-pipelines.sh section 4 converted to show_pipe
-  - show_pipe `#*fk` fix: uses shortest match for first fk invocation
-  - show_pipe `after` calculation: correctly skips past closing quote
-  - 91% of fk calls now produce `--explain` subtitles (130/142)
-  - Remaining ~9% are constant-output demos, meta-operations (--format/--highlight)
-- Refactored scan_rule_stmt into normalised architecture:
-  - `as_additive_accum()`: normalises `x += y` ≡ `x = x + y` ≡ `x++` into
-    unified `(target, delta)` form — one code path for all accumulation patterns
-  - `scan_expr()`: unified recursive expression scanner (replaces three separate
-    functions: scan_expr_for_jpath, scan_expr_for_transforms, has_computed_expr)
-  - `exprs_equal()`: structural equality for AST normalisation
-  - Constant tables replace hard-coded strings: `OUTPUT_VARS`, `RECORD_COUNTERS`,
-    `TRANSFORM_BUILTINS`
-  - `is_unit` detection: `arr[k] += 1` now treated as frequency (same as `arr[k]++`)
-  - All three frequency forms now produce identical output
-- 433 Rust + 152 shell tests, zero warnings, clippy clean
+- Environment rendered as parenthetical suffix: `stats of col 2 (CSV, headers, data.csv)`
 - Simplified explain() pipeline in analyze.rs — standard algorithm:
     scan → collect → reduce → render
   - `scan_program()`: one walk, one `ScanState`, all signals
-  - `collect_fragments()`: one function maps signals to fragments (−12 emit_*)
+  - `collect_fragments()`: one function maps signals to fragments
   - `reduce()`: table-driven via `FragTag::subsumed_by()` (data, not code)
   - `render()`: sort by `FragTag::sig()`, budget-trim
-  Eliminated: `ProgramScan` type, `ScanState::merge`, `scan_block`,
-    12 `emit_*` functions, `collect_calls` walker family (60 lines),
-    `block_has_output`/`stmt_has_output` walker (20 lines),
-    13 `SIG_*` constants, `append_env` function.
-  Kept: `ScanState` (scan signals), `FragTag` (identity + sig + subsumption),
-    `Fragment` (text + tag), `ExplainContext` (env metadata → suffix string).
-  Net: 1786 → 1634 lines (−152), 5 types → 4, ~25 explainer fns → ~10.
+- 434 Rust + 152 shell tests, zero warnings, clippy clean
 
 ## Repo state
 - `main`, working tree dirty, all tests and clippy pass.

@@ -1,8 +1,8 @@
 //! Syntax highlighting: tokenize source, build styled segments, emit ANSI (or plain).
 
+use super::theme::{Style, Theme, token_style};
 use crate::error::{FkError, Span};
 use crate::lexer::{Lexer, Spanned, Token};
-use super::theme::{token_style, Style, Theme};
 use std::io::{self, Write};
 
 /// (byte_start, byte_end, style) for a contiguous segment of source.
@@ -24,7 +24,10 @@ fn span_to_char_offset(line_starts: &[usize], line: usize, col: usize) -> usize 
     if line == 0 {
         return 0;
     }
-    let line_start = line_starts.get(line.saturating_sub(1)).copied().unwrap_or(0);
+    let line_start = line_starts
+        .get(line.saturating_sub(1))
+        .copied()
+        .unwrap_or(0);
     line_start + col.saturating_sub(1)
 }
 
@@ -52,8 +55,14 @@ fn token_segments(source: &str, tokens: &[Spanned]) -> Result<Vec<Segment>, FkEr
             continue;
         }
         let start_char = span_to_char_offset(&line_starts, s.span.line, s.span.col);
-        let end_char = tokens.get(i + 1).map(|n| span_to_char_offset(&line_starts, n.span.line, n.span.col)).unwrap_or(n_chars);
-        let byte_start = char_to_byte.get(start_char).copied().unwrap_or(source.len());
+        let end_char = tokens
+            .get(i + 1)
+            .map(|n| span_to_char_offset(&line_starts, n.span.line, n.span.col))
+            .unwrap_or(n_chars);
+        let byte_start = char_to_byte
+            .get(start_char)
+            .copied()
+            .unwrap_or(source.len());
         let byte_end = char_to_byte.get(end_char).copied().unwrap_or(source.len());
         let style = token_style(&s.token);
         segs.push((byte_start, byte_end, style));
@@ -71,7 +80,9 @@ fn comment_segments(source: &str, token_segments: &[Segment]) -> Vec<Segment> {
         .collect();
 
     let in_string = |byte_off: usize| -> bool {
-        string_ranges.iter().any(|(a, b)| *a <= byte_off && byte_off < *b)
+        string_ranges
+            .iter()
+            .any(|(a, b)| *a <= byte_off && byte_off < *b)
     };
 
     let mut segs = Vec::new();
@@ -165,7 +176,7 @@ mod tests {
         let src = "{ print $1 }";
         let out = highlight(src).unwrap();
         assert!(out.contains("print")); // content preserved
-        assert!(out.contains("\x1b["));  // has ANSI
+        assert!(out.contains("\x1b[")); // has ANSI
     }
 
     #[test]

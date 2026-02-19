@@ -1,9 +1,9 @@
 use std::env;
-use std::process;
 use std::io::Write;
+use std::process;
 
-use fk::{action, analyze, cli, describe, format, input, lexer, parser, runtime, repl};
 use fk::builtins::format_number;
+use fk::{action, analyze, cli, describe, format, input, lexer, parser, repl, runtime};
 
 #[cfg(feature = "parquet")]
 fn run_parquet(args: &cli::Args, exec: &mut action::Executor) {
@@ -15,7 +15,9 @@ fn run_parquet(args: &cli::Args, exec: &mut action::Executor) {
         exec.set_var("FILENAME", path);
         exec.reset_fnr();
         exec.run_beginfile();
-        if exec.should_exit().is_some() { return; }
+        if exec.should_exit().is_some() {
+            return;
+        }
 
         let (columns, rows) = match input::parquet_reader::read_parquet_file(path) {
             Ok(v) => v,
@@ -30,7 +32,10 @@ fn run_parquet(args: &cli::Args, exec: &mut action::Executor) {
 
         for fields in rows {
             let text = fields.join(exec.get_var("OFS").as_str());
-            let rec = input::Record { text, fields: Some(fields) };
+            let rec = input::Record {
+                text,
+                fields: Some(fields),
+            };
             exec.increment_fnr();
             exec.run_record(&rec);
             if exec.should_exit().is_some() {
@@ -42,7 +47,9 @@ fn run_parquet(args: &cli::Args, exec: &mut action::Executor) {
             }
         }
         exec.run_endfile();
-        if exec.should_exit().is_some() { return; }
+        if exec.should_exit().is_some() {
+            return;
+        }
     }
 }
 
@@ -81,11 +88,17 @@ fn main() {
     if args.explain {
         let tokens = match lexer::Lexer::new(&args.program).tokenize() {
             Ok(t) => t,
-            Err(e) => { eprintln!("fk: {e}"); process::exit(2); }
+            Err(e) => {
+                eprintln!("fk: {e}");
+                process::exit(2);
+            }
         };
         let prog = match parser::Parser::new(tokens).parse() {
             Ok(p) => p,
-            Err(e) => { eprintln!("fk: {e}"); process::exit(2); }
+            Err(e) => {
+                eprintln!("fk: {e}");
+                process::exit(2);
+            }
         };
         let mode_str = match &args.input_mode {
             cli::InputMode::Line => "line",
@@ -176,8 +189,11 @@ fn main() {
     }
 
     // BEGIN/END-only programs with no files: skip stdin (gawk behaviour)
-    if program.rules.is_empty() && program.beginfile.is_none() && program.endfile.is_none()
-        && args.files.is_empty() {
+    if program.rules.is_empty()
+        && program.beginfile.is_none()
+        && program.endfile.is_none()
+        && args.files.is_empty()
+    {
         exec.run_end();
         if let Some(code) = exec.should_exit() {
             process::exit(code);
@@ -235,7 +251,9 @@ fn main() {
         }
         #[cfg(not(feature = "parquet"))]
         {
-            eprintln!("fk: parquet support not compiled in. Rebuild with: cargo build --features parquet");
+            eprintln!(
+                "fk: parquet support not compiled in. Rebuild with: cargo build --features parquet"
+            );
             process::exit(2);
         }
     } else if fast_count_nr {
@@ -252,8 +270,8 @@ fn main() {
                 }
             } else {
                 match effective_mode {
-                    cli::InputMode::Csv  => Box::new(input::csv::CsvReader::comma()),
-                    cli::InputMode::Tsv  => Box::new(input::csv::CsvReader::tab()),
+                    cli::InputMode::Csv => Box::new(input::csv::CsvReader::comma()),
+                    cli::InputMode::Tsv => Box::new(input::csv::CsvReader::tab()),
                     cli::InputMode::Json => Box::new(input::json::JsonReader),
                     cli::InputMode::Line => Box::new(input::line::LineReader::new()),
                     cli::InputMode::Parquet => unreachable!(),
@@ -288,9 +306,8 @@ fn main() {
                 let mut reader: Box<dyn std::io::BufRead> = if src == "-" {
                     Box::new(std::io::BufReader::new(std::io::stdin()))
                 } else {
-                    let r = describe::open_maybe_compressed(&src).map_err(|e| {
-                        std::io::Error::new(e.kind(), format!("fk: {}: {}", src, e))
-                    });
+                    let r = describe::open_maybe_compressed(&src)
+                        .map_err(|e| std::io::Error::new(e.kind(), format!("fk: {}: {}", src, e)));
                     match r {
                         Ok(r) => Box::new(std::io::BufReader::new(r)),
                         Err(e) => {
@@ -310,7 +327,9 @@ fn main() {
                             process::exit(1);
                         }
                     };
-                    if bytes == 0 { break; }
+                    if bytes == 0 {
+                        break;
+                    }
                     if buf.ends_with('\n') {
                         buf.pop();
                         if buf.ends_with('\r') {
@@ -318,11 +337,15 @@ fn main() {
                         }
                     }
                     nr += 1;
-                    if nr > limit { break; }
+                    if nr > limit {
+                        break;
+                    }
                     let _ = out.write_all(buf.as_bytes());
                     let _ = out.write_all(ors.as_bytes());
                 }
-                if nr >= limit { break; }
+                if nr >= limit {
+                    break;
+                }
             }
         } else {
             let reader: Box<dyn input::RecordReader> = {
@@ -336,8 +359,8 @@ fn main() {
                     }
                 } else {
                     match effective_mode {
-                        cli::InputMode::Csv  => Box::new(input::csv::CsvReader::comma()),
-                        cli::InputMode::Tsv  => Box::new(input::csv::CsvReader::tab()),
+                        cli::InputMode::Csv => Box::new(input::csv::CsvReader::comma()),
+                        cli::InputMode::Tsv => Box::new(input::csv::CsvReader::tab()),
                         cli::InputMode::Json => Box::new(input::json::JsonReader),
                         cli::InputMode::Line => Box::new(input::line::LineReader::new()),
                         cli::InputMode::Parquet => unreachable!(),
@@ -351,7 +374,9 @@ fn main() {
                 match inp.next_record() {
                     Ok(Some(record)) => {
                         nr += 1;
-                        if nr > limit { break; }
+                        if nr > limit {
+                            break;
+                        }
                         if !record.text.is_empty() {
                             let _ = out.write_all(record.text.as_bytes());
                         }
@@ -380,8 +405,8 @@ fn main() {
                 }
             } else {
                 match effective_mode {
-                    cli::InputMode::Csv  => Box::new(input::csv::CsvReader::comma()),
-                    cli::InputMode::Tsv  => Box::new(input::csv::CsvReader::tab()),
+                    cli::InputMode::Csv => Box::new(input::csv::CsvReader::comma()),
+                    cli::InputMode::Tsv => Box::new(input::csv::CsvReader::tab()),
                     cli::InputMode::Json => Box::new(input::json::JsonReader),
                     cli::InputMode::Line => Box::new(input::line::LineReader::new()),
                     cli::InputMode::Parquet => unreachable!(),
@@ -400,13 +425,17 @@ fn main() {
                     if cur_filename != prev_filename {
                         if !prev_filename.is_empty() {
                             exec.run_endfile();
-                            if exec.should_exit().is_some() { break; }
+                            if exec.should_exit().is_some() {
+                                break;
+                            }
                         }
                         prev_filename = cur_filename;
                         exec.set_var("FILENAME", &prev_filename);
                         exec.reset_fnr();
                         exec.run_beginfile();
-                        if exec.should_exit().is_some() { break; }
+                        if exec.should_exit().is_some() {
+                            break;
+                        }
                     }
 
                     if args.header_mode && first_record {
@@ -429,7 +458,9 @@ fn main() {
                         exec.skip_input_source();
                         first_record = true;
                         prev_filename.clear();
-                        if exec.should_exit().is_some() { break; }
+                        if exec.should_exit().is_some() {
+                            break;
+                        }
                     }
                 }
                 Ok(None) => {
@@ -478,16 +509,16 @@ fn head_print_limit(program: &parser::Program) -> Option<u64> {
         Some(parser::Pattern::Expression(parser::Expr::BinOp(left, op, right))) => {
             match (left.as_ref(), op, right.as_ref()) {
                 (parser::Expr::Var(name), parser::BinOp::Gt, parser::Expr::NumberLit(n))
-                    if name == "NR" && *n >= 0.0 && n.fract() == 0.0 => *n as u64,
+                    if name == "NR" && *n >= 0.0 && n.fract() == 0.0 =>
+                {
+                    *n as u64
+                }
                 _ => return None,
             }
         }
         _ => return None,
     };
-    let exit_only = matches!(
-        first.action.as_slice(),
-        [parser::Statement::Exit(None)]
-    );
+    let exit_only = matches!(first.action.as_slice(), [parser::Statement::Exit(None)]);
     if !exit_only {
         return None;
     }

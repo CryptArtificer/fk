@@ -1,9 +1,9 @@
 pub mod csv;
 pub mod json;
 pub mod line;
-pub mod regex_rs;
 #[cfg(feature = "parquet")]
 pub mod parquet_reader;
+pub mod regex_rs;
 
 use std::io::{self, BufRead, BufReader};
 
@@ -92,10 +92,9 @@ impl Input {
                 let reader: Box<dyn BufRead> = match &self.sources[self.current] {
                     Source::Stdin => Box::new(BufReader::new(io::stdin())),
                     Source::File(path) => {
-                        let reader = crate::describe::open_maybe_compressed(path)
-                            .map_err(|e| {
-                                io::Error::new(e.kind(), format!("fk: {}: {}", path, e))
-                            })?;
+                        let reader = crate::describe::open_maybe_compressed(path).map_err(|e| {
+                            io::Error::new(e.kind(), format!("fk: {}: {}", path, e))
+                        })?;
                         Box::new(BufReader::new(reader))
                     }
                 };

@@ -7,7 +7,10 @@ pub fn call(name: &str, args: &[String]) -> String {
     match name {
         "systime" => systime(),
         "strftime" => {
-            let fmt = args.first().map(|s| s.as_str()).unwrap_or("%Y-%m-%d %H:%M:%S");
+            let fmt = args
+                .first()
+                .map(|s| s.as_str())
+                .unwrap_or("%Y-%m-%d %H:%M:%S");
             let ts = args.get(1).map(|s| to_number(s) as i64);
             strftime(fmt, ts)
         }
@@ -17,7 +20,10 @@ pub fn call(name: &str, args: &[String]) -> String {
         }
         "parsedate" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
-            let fmt = args.get(1).map(|s| s.as_str()).unwrap_or("%Y-%m-%d %H:%M:%S");
+            let fmt = args
+                .get(1)
+                .map(|s| s.as_str())
+                .unwrap_or("%Y-%m-%d %H:%M:%S");
             parsedate(s, fmt)
         }
         _ => String::new(),
@@ -69,14 +75,23 @@ fn strftime(fmt: &str, timestamp: Option<i64>) -> String {
                     let yday = day_of_year(parts.year, parts.month, parts.day);
                     result.push_str(&format!("{:03}", yday));
                 }
-                'u' => result.push_str(&format!("{}", if parts.weekday == 0 { 7 } else { parts.weekday })),
+                'u' => result.push_str(&format!(
+                    "{}",
+                    if parts.weekday == 0 { 7 } else { parts.weekday }
+                )),
                 'w' => result.push_str(&format!("{}", parts.weekday)),
                 'e' => result.push_str(&format!("{:2}", parts.day)),
                 'C' => result.push_str(&format!("{:02}", parts.year / 100)),
                 'y' => result.push_str(&format!("{:02}", parts.year % 100)),
                 'p' => result.push_str(if parts.hour < 12 { "AM" } else { "PM" }),
                 'I' => {
-                    let h = if parts.hour == 0 { 12 } else if parts.hour > 12 { parts.hour - 12 } else { parts.hour };
+                    let h = if parts.hour == 0 {
+                        12
+                    } else if parts.hour > 12 {
+                        parts.hour - 12
+                    } else {
+                        parts.hour
+                    };
                     result.push_str(&format!("{:02}", h));
                 }
                 'n' => result.push('\n'),
@@ -106,8 +121,9 @@ fn mktime(spec: &str) -> String {
         return "-1".to_string();
     }
 
-    let (year, month, day, hour, minute, second) =
-        (fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]);
+    let (year, month, day, hour, minute, second) = (
+        fields[0], fields[1], fields[2], fields[3], fields[4], fields[5],
+    );
 
     let epoch = parts_to_epoch(year, month, day, hour, minute, second);
     format!("{}", epoch)
@@ -131,9 +147,24 @@ fn is_leap(y: i64) -> bool {
 
 fn days_in_month(y: i64, m: i64) -> i64 {
     match m {
-        1 => 31, 2 => if is_leap(y) { 29 } else { 28 },
-        3 => 31, 4 => 30, 5 => 31, 6 => 30,
-        7 => 31, 8 => 31, 9 => 30, 10 => 31, 11 => 30, 12 => 31,
+        1 => 31,
+        2 => {
+            if is_leap(y) {
+                29
+            } else {
+                28
+            }
+        }
+        3 => 31,
+        4 => 30,
+        5 => 31,
+        6 => 30,
+        7 => 31,
+        8 => 31,
+        9 => 30,
+        10 => 31,
+        11 => 30,
+        12 => 31,
         _ => 30,
     }
 }
@@ -174,7 +205,15 @@ fn epoch_to_parts(ts: i64) -> DateParts {
     }
     let d = remaining + 1;
 
-    DateParts { year: y, month: m, day: d, hour, minute, second, weekday }
+    DateParts {
+        year: y,
+        month: m,
+        day: d,
+        hour,
+        minute,
+        second,
+        weekday,
+    }
 }
 
 fn parts_to_epoch(year: i64, month: i64, day: i64, hour: i64, minute: i64, second: i64) -> i64 {
@@ -193,16 +232,31 @@ fn parts_to_epoch(year: i64, month: i64, day: i64, hour: i64, minute: i64, secon
 
 fn weekday_name(d: i64) -> &'static str {
     match d {
-        0 => "Sunday", 1 => "Monday", 2 => "Tuesday", 3 => "Wednesday",
-        4 => "Thursday", 5 => "Friday", 6 => "Saturday", _ => "Unknown",
+        0 => "Sunday",
+        1 => "Monday",
+        2 => "Tuesday",
+        3 => "Wednesday",
+        4 => "Thursday",
+        5 => "Friday",
+        6 => "Saturday",
+        _ => "Unknown",
     }
 }
 
 fn month_name(m: i64) -> &'static str {
     match m {
-        1 => "January", 2 => "February", 3 => "March", 4 => "April",
-        5 => "May", 6 => "June", 7 => "July", 8 => "August",
-        9 => "September", 10 => "October", 11 => "November", 12 => "December",
+        1 => "January",
+        2 => "February",
+        3 => "March",
+        4 => "April",
+        5 => "May",
+        6 => "June",
+        7 => "July",
+        8 => "August",
+        9 => "September",
+        10 => "October",
+        11 => "November",
+        12 => "December",
         _ => "Unknown",
     }
 }
@@ -235,14 +289,37 @@ fn parsedate(s: &str, fmt: &str) -> String {
             fi += 1;
             let (val, consumed) = parse_int(&schars, si);
             match fchars[fi] {
-                'Y' => { year = val; si += consumed; }
-                'm' => { month = val; si += consumed; }
-                'd' => { day = val; si += consumed; }
-                'H' => { hour = val; si += consumed; }
-                'M' => { minute = val; si += consumed; }
-                'S' => { second = val; si += consumed; }
-                'y' => { year = 2000 + val; si += consumed; }
-                _ => { si += consumed; }
+                'Y' => {
+                    year = val;
+                    si += consumed;
+                }
+                'm' => {
+                    month = val;
+                    si += consumed;
+                }
+                'd' => {
+                    day = val;
+                    si += consumed;
+                }
+                'H' => {
+                    hour = val;
+                    si += consumed;
+                }
+                'M' => {
+                    minute = val;
+                    si += consumed;
+                }
+                'S' => {
+                    second = val;
+                    si += consumed;
+                }
+                'y' => {
+                    year = 2000 + val;
+                    si += consumed;
+                }
+                _ => {
+                    si += consumed;
+                }
             }
         } else if si < schars.len() {
             si += 1;
@@ -263,6 +340,10 @@ fn parse_int(chars: &[char], start: usize) -> (i64, usize) {
     while i < chars.len() && chars[i].is_ascii_digit() {
         i += 1;
     }
-    let val: i64 = chars[begin..i].iter().collect::<String>().parse().unwrap_or(0);
+    let val: i64 = chars[begin..i]
+        .iter()
+        .collect::<String>()
+        .parse()
+        .unwrap_or(0);
     (val, i - start)
 }

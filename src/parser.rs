@@ -39,9 +39,9 @@ pub enum Pattern {
 
 #[derive(Debug, Clone)]
 pub enum Redirect {
-    Overwrite(Expr),  // > file
-    Append(Expr),     // >> file
-    Pipe(Expr),       // | command
+    Overwrite(Expr), // > file
+    Append(Expr),    // >> file
+    Pipe(Expr),      // | command
 }
 
 #[derive(Debug, Clone)]
@@ -51,7 +51,12 @@ pub enum Statement {
     If(Expr, Block, Option<Block>),
     While(Expr, Block),
     DoWhile(Block, Expr),
-    For(Option<Box<Statement>>, Option<Expr>, Option<Box<Statement>>, Block),
+    For(
+        Option<Box<Statement>>,
+        Option<Expr>,
+        Option<Box<Statement>>,
+        Block,
+    ),
     ForIn(String, String, Block),
     Delete(String, Expr),
     DeleteAll(String),
@@ -81,7 +86,7 @@ pub enum Expr {
     NotMatch(Box<Expr>, Box<Expr>),
     Assign(Box<Expr>, Box<Expr>),
     CompoundAssign(Box<Expr>, BinOp, Box<Expr>),
-    Increment(Box<Expr>, bool),  // bool: true = pre (++x), false = post (x++)
+    Increment(Box<Expr>, bool), // bool: true = pre (++x), false = post (x++)
     Decrement(Box<Expr>, bool),
     UnaryMinus(Box<Expr>),
     Concat(Box<Expr>, Box<Expr>),
@@ -118,17 +123,23 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<Spanned>) -> Self {
-        Parser { tokens, pos: 0, in_print_expr: false }
+        Parser {
+            tokens,
+            pos: 0,
+            in_print_expr: false,
+        }
     }
 
     fn current(&self) -> &Token {
-        self.tokens.get(self.pos)
+        self.tokens
+            .get(self.pos)
             .map(|s| &s.token)
             .unwrap_or(&Token::Eof)
     }
 
     fn current_span(&self) -> Span {
-        self.tokens.get(self.pos)
+        self.tokens
+            .get(self.pos)
             .map(|s| s.span)
             .unwrap_or(Span::new(0, 0))
     }
@@ -181,13 +192,23 @@ impl Parser {
             self.skip_terminators();
         }
 
-        Ok(Program { begin, rules, end, beginfile, endfile, functions })
+        Ok(Program {
+            begin,
+            rules,
+            end,
+            beginfile,
+            endfile,
+            functions,
+        })
     }
 
     fn parse_func_def(&mut self) -> Result<FuncDef, FkError> {
         self.advance(); // consume 'function'
         let name = match self.current().clone() {
-            Token::Ident(n) => { self.advance(); n }
+            Token::Ident(n) => {
+                self.advance();
+                n
+            }
             _ => return Err(FkError::new(self.current_span(), "expected function name")),
         };
         self.expect(&Token::LParen)?;
@@ -195,13 +216,19 @@ impl Parser {
         let mut params = Vec::new();
         if !self.check(&Token::RParen) {
             match self.current().clone() {
-                Token::Ident(p) => { self.advance(); params.push(p); }
+                Token::Ident(p) => {
+                    self.advance();
+                    params.push(p);
+                }
                 _ => return Err(FkError::new(self.current_span(), "expected parameter name")),
             }
             while self.check(&Token::Comma) {
                 self.advance();
                 match self.current().clone() {
-                    Token::Ident(p) => { self.advance(); params.push(p); }
+                    Token::Ident(p) => {
+                        self.advance();
+                        params.push(p);
+                    }
                     _ => return Err(FkError::new(self.current_span(), "expected parameter name")),
                 }
             }
@@ -227,7 +254,10 @@ impl Parser {
             if self.check(&Token::LBrace) {
                 action = self.parse_brace_block()?;
             } else {
-                action = vec![Statement::Print(vec![Expr::Field(Box::new(Expr::NumberLit(0.0)))], None)];
+                action = vec![Statement::Print(
+                    vec![Expr::Field(Box::new(Expr::NumberLit(0.0)))],
+                    None,
+                )];
             }
         }
 
@@ -291,10 +321,22 @@ impl Parser {
             Token::Do => self.parse_do_while(),
             Token::For => self.parse_for(),
             Token::Delete => self.parse_delete(),
-            Token::Next => { self.advance(); Ok(Statement::Next) }
-            Token::Nextfile => { self.advance(); Ok(Statement::Nextfile) }
-            Token::Break => { self.advance(); Ok(Statement::Break) }
-            Token::Continue => { self.advance(); Ok(Statement::Continue) }
+            Token::Next => {
+                self.advance();
+                Ok(Statement::Next)
+            }
+            Token::Nextfile => {
+                self.advance();
+                Ok(Statement::Nextfile)
+            }
+            Token::Break => {
+                self.advance();
+                Ok(Statement::Break)
+            }
+            Token::Continue => {
+                self.advance();
+                Ok(Statement::Continue)
+            }
             Token::Exit => self.parse_exit(),
             Token::Return => self.parse_return(),
             Token::LBrace => {
@@ -311,8 +353,11 @@ impl Parser {
     fn parse_print(&mut self) -> Result<Statement, FkError> {
         self.advance(); // consume 'print'
         let mut args = Vec::new();
-        if !self.is_terminator() && !self.check(&Token::RBrace)
-            && !self.check(&Token::Gt) && !self.check(&Token::Append) && !self.check(&Token::Pipe)
+        if !self.is_terminator()
+            && !self.check(&Token::RBrace)
+            && !self.check(&Token::Gt)
+            && !self.check(&Token::Append)
+            && !self.check(&Token::Pipe)
         {
             args.push(self.parse_non_redirect_expr()?);
             self.skip_newlines();
@@ -541,7 +586,10 @@ impl Parser {
                 Ok(Statement::DeleteAll(name))
             }
         } else {
-            Err(FkError::new(span, "delete requires array or array[subscript]"))
+            Err(FkError::new(
+                span,
+                "delete requires array or array[subscript]",
+            ))
         }
     }
 
@@ -565,31 +613,51 @@ impl Parser {
                 self.check_lvalue(&expr)?;
                 self.advance();
                 let value = self.parse_assignment()?;
-                Ok(Expr::CompoundAssign(Box::new(expr), BinOp::Add, Box::new(value)))
+                Ok(Expr::CompoundAssign(
+                    Box::new(expr),
+                    BinOp::Add,
+                    Box::new(value),
+                ))
             }
             Token::MinusAssign => {
                 self.check_lvalue(&expr)?;
                 self.advance();
                 let value = self.parse_assignment()?;
-                Ok(Expr::CompoundAssign(Box::new(expr), BinOp::Sub, Box::new(value)))
+                Ok(Expr::CompoundAssign(
+                    Box::new(expr),
+                    BinOp::Sub,
+                    Box::new(value),
+                ))
             }
             Token::StarAssign => {
                 self.check_lvalue(&expr)?;
                 self.advance();
                 let value = self.parse_assignment()?;
-                Ok(Expr::CompoundAssign(Box::new(expr), BinOp::Mul, Box::new(value)))
+                Ok(Expr::CompoundAssign(
+                    Box::new(expr),
+                    BinOp::Mul,
+                    Box::new(value),
+                ))
             }
             Token::SlashAssign => {
                 self.check_lvalue(&expr)?;
                 self.advance();
                 let value = self.parse_assignment()?;
-                Ok(Expr::CompoundAssign(Box::new(expr), BinOp::Div, Box::new(value)))
+                Ok(Expr::CompoundAssign(
+                    Box::new(expr),
+                    BinOp::Div,
+                    Box::new(value),
+                ))
             }
             Token::PercentAssign => {
                 self.check_lvalue(&expr)?;
                 self.advance();
                 let value = self.parse_assignment()?;
-                Ok(Expr::CompoundAssign(Box::new(expr), BinOp::Mod, Box::new(value)))
+                Ok(Expr::CompoundAssign(
+                    Box::new(expr),
+                    BinOp::Mod,
+                    Box::new(value),
+                ))
             }
             _ => Ok(expr),
         }
@@ -598,7 +666,10 @@ impl Parser {
     fn check_lvalue(&self, expr: &Expr) -> Result<(), FkError> {
         match expr {
             Expr::Var(_) | Expr::ArrayRef(_, _) | Expr::Field(_) => Ok(()),
-            _ => Err(FkError::new(self.current_span(), "invalid assignment target")),
+            _ => Err(FkError::new(
+                self.current_span(),
+                "invalid assignment target",
+            )),
         }
     }
 
@@ -610,7 +681,11 @@ impl Parser {
             let then_expr = self.parse_expr()?;
             self.expect(&Token::Colon)?;
             let else_expr = self.parse_expr()?;
-            Ok(Expr::Ternary(Box::new(expr), Box::new(then_expr), Box::new(else_expr)))
+            Ok(Expr::Ternary(
+                Box::new(expr),
+                Box::new(then_expr),
+                Box::new(else_expr),
+            ))
         } else {
             Ok(expr)
         }
@@ -651,7 +726,10 @@ impl Parser {
                 self.advance();
                 return Ok(Expr::ArrayIn(Box::new(left), arr));
             } else {
-                return Err(FkError::new(self.current_span(), "expected array name after 'in'"));
+                return Err(FkError::new(
+                    self.current_span(),
+                    "expected array name after 'in'",
+                ));
             }
         }
 
@@ -693,7 +771,10 @@ impl Parser {
             self.advance();
             if let Token::Regex(pat) = self.current().clone() {
                 self.advance();
-                return Ok(Expr::NotMatch(Box::new(left), Box::new(Expr::StringLit(pat))));
+                return Ok(Expr::NotMatch(
+                    Box::new(left),
+                    Box::new(Expr::StringLit(pat)),
+                ));
             } else {
                 let expr = self.parse_primary()?;
                 return Ok(Expr::NotMatch(Box::new(left), Box::new(expr)));
@@ -919,7 +1000,10 @@ impl Parser {
 
                 // Bare `length` without parens → length($0)
                 if name == "length" {
-                    return Ok(Expr::FuncCall(name, vec![Expr::Field(Box::new(Expr::NumberLit(0.0)))]));
+                    return Ok(Expr::FuncCall(
+                        name,
+                        vec![Expr::Field(Box::new(Expr::NumberLit(0.0)))],
+                    ));
                 }
 
                 Ok(Expr::Var(name))
@@ -930,9 +1014,12 @@ impl Parser {
                 let var = if let Token::Ident(name) = self.current().clone() {
                     let saved = self.pos;
                     self.advance();
-                    if self.check(&Token::Lt) || self.is_terminator()
-                        || self.check(&Token::RBrace) || self.check(&Token::Semicolon)
-                        || self.check(&Token::RParen) || self.at_eof()
+                    if self.check(&Token::Lt)
+                        || self.is_terminator()
+                        || self.check(&Token::RBrace)
+                        || self.check(&Token::Semicolon)
+                        || self.check(&Token::RParen)
+                        || self.at_eof()
                     {
                         Some(name)
                     } else {
@@ -971,15 +1058,24 @@ impl Parser {
                             self.advance();
                             return Ok(Expr::ArrayIn(Box::new(key), arr));
                         } else {
-                            return Err(FkError::new(self.current_span(), "expected array name after 'in'"));
+                            return Err(FkError::new(
+                                self.current_span(),
+                                "expected array name after 'in'",
+                            ));
                         }
                     }
-                    return Err(FkError::new(self.current_span(), "(expr, expr) requires 'in array'"));
+                    return Err(FkError::new(
+                        self.current_span(),
+                        "(expr, expr) requires 'in array'",
+                    ));
                 }
                 self.expect(&Token::RParen)?;
                 Ok(expr)
             }
-            _ => Err(FkError::new(self.current_span(), format!("unexpected token: {:?}", self.current()))),
+            _ => Err(FkError::new(
+                self.current_span(),
+                format!("unexpected token: {:?}", self.current()),
+            )),
         }
     }
 
@@ -1068,7 +1164,10 @@ impl Parser {
     }
 
     fn is_terminator(&self) -> bool {
-        matches!(self.current(), Token::Semicolon | Token::Newline | Token::Eof)
+        matches!(
+            self.current(),
+            Token::Semicolon | Token::Newline | Token::Eof
+        )
     }
 
     fn skip_terminators(&mut self) {

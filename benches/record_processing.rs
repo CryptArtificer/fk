@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use fk::action::Executor;
 use fk::input::Record;
 use fk::lexer::Lexer;
@@ -27,7 +27,10 @@ fn bench_simple_print(c: &mut Criterion) {
             let mut exec = Executor::new(&program, &mut rt);
             exec.run_begin();
             for line in &lines {
-                let rec = Record { text: line.clone(), fields: None };
+                let rec = Record {
+                    text: line.clone(),
+                    fields: None,
+                };
                 exec.run_record(black_box(&rec));
             }
             exec.run_end();
@@ -44,7 +47,10 @@ fn bench_field_access(c: &mut Criterion) {
             let mut exec = Executor::new(&program, &mut rt);
             exec.run_begin();
             for line in &lines {
-                let rec = Record { text: line.clone(), fields: None };
+                let rec = Record {
+                    text: line.clone(),
+                    fields: None,
+                };
                 exec.run_record(black_box(&rec));
             }
             exec.run_end();
@@ -61,7 +67,10 @@ fn bench_pattern_match(c: &mut Criterion) {
             let mut exec = Executor::new(&program, &mut rt);
             exec.run_begin();
             for line in &lines {
-                let rec = Record { text: line.clone(), fields: None };
+                let rec = Record {
+                    text: line.clone(),
+                    fields: None,
+                };
                 exec.run_record(black_box(&rec));
             }
             exec.run_end();
@@ -80,7 +89,10 @@ fn bench_accumulate(c: &mut Criterion) {
                 let mut exec = Executor::new(&program, &mut rt);
                 exec.run_begin();
                 for line in lines {
-                    let rec = Record { text: line.clone(), fields: None };
+                    let rec = Record {
+                        text: line.clone(),
+                        fields: None,
+                    };
                     exec.run_record(black_box(&rec));
                 }
                 exec.run_end();
@@ -99,7 +111,10 @@ fn bench_computed_regex(c: &mut Criterion) {
             let mut exec = Executor::new(&program, &mut rt);
             exec.run_begin();
             for line in &lines {
-                let rec = Record { text: line.clone(), fields: None };
+                let rec = Record {
+                    text: line.clone(),
+                    fields: None,
+                };
                 exec.run_record(black_box(&rec));
             }
             exec.run_end();
@@ -116,7 +131,10 @@ fn bench_do_while_break(c: &mut Criterion) {
             let mut exec = Executor::new(&program, &mut rt);
             exec.run_begin();
             for line in &lines {
-                let rec = Record { text: line.clone(), fields: None };
+                let rec = Record {
+                    text: line.clone(),
+                    fields: None,
+                };
                 exec.run_record(black_box(&rec));
             }
             exec.run_end();
@@ -133,7 +151,10 @@ fn bench_multidim_array(c: &mut Criterion) {
             let mut exec = Executor::new(&program, &mut rt);
             exec.run_begin();
             for line in &lines {
-                let rec = Record { text: line.clone(), fields: None };
+                let rec = Record {
+                    text: line.clone(),
+                    fields: None,
+                };
                 exec.run_record(black_box(&rec));
             }
             exec.run_end();
@@ -150,7 +171,10 @@ fn bench_match_capture(c: &mut Criterion) {
             let mut exec = Executor::new(&program, &mut rt);
             exec.run_begin();
             for line in &lines {
-                let rec = Record { text: line.clone(), fields: None };
+                let rec = Record {
+                    text: line.clone(),
+                    fields: None,
+                };
                 exec.run_record(black_box(&rec));
             }
             exec.run_end();
@@ -159,7 +183,8 @@ fn bench_match_capture(c: &mut Criterion) {
 }
 
 fn bench_string_builtins(c: &mut Criterion) {
-    let program = compile(r#"{ x = trim("  " $2 "  "); y = reverse(x); z = startswith(x, "field") }"#);
+    let program =
+        compile(r#"{ x = trim("  " $2 "  "); y = reverse(x); z = startswith(x, "field") }"#);
     let lines = make_lines(1000);
     c.bench_function("record/string_builtins_1k", |b| {
         b.iter(|| {
@@ -167,7 +192,10 @@ fn bench_string_builtins(c: &mut Criterion) {
             let mut exec = Executor::new(&program, &mut rt);
             exec.run_begin();
             for line in &lines {
-                let rec = Record { text: line.clone(), fields: None };
+                let rec = Record {
+                    text: line.clone(),
+                    fields: None,
+                };
                 exec.run_record(black_box(&rec));
             }
             exec.run_end();
@@ -184,7 +212,10 @@ fn bench_math_builtins(c: &mut Criterion) {
             let mut exec = Executor::new(&program, &mut rt);
             exec.run_begin();
             for line in &lines {
-                let rec = Record { text: line.clone(), fields: None };
+                let rec = Record {
+                    text: line.clone(),
+                    fields: None,
+                };
                 exec.run_record(black_box(&rec));
             }
             exec.run_end();
@@ -192,7 +223,17 @@ fn bench_math_builtins(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_simple_print, bench_field_access, bench_pattern_match,
-    bench_accumulate, bench_computed_regex, bench_do_while_break, bench_multidim_array,
-    bench_match_capture, bench_string_builtins, bench_math_builtins);
+criterion_group!(
+    benches,
+    bench_simple_print,
+    bench_field_access,
+    bench_pattern_match,
+    bench_accumulate,
+    bench_computed_regex,
+    bench_do_while_break,
+    bench_multidim_array,
+    bench_match_capture,
+    bench_string_builtins,
+    bench_math_builtins
+);
 criterion_main!(benches);

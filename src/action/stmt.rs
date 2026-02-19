@@ -6,7 +6,7 @@ use crate::builtins::format_printf;
 use crate::parser::{Block, Expr, FuncDef, Redirect, Statement};
 use crate::runtime::Value;
 
-use super::{Executor, Signal, MAX_CALL_DEPTH};
+use super::{Executor, MAX_CALL_DEPTH, Signal};
 
 impl<'a> Executor<'a> {
     pub(crate) fn exec_block(&mut self, block: &Block) -> Option<Signal> {
@@ -24,8 +24,9 @@ impl<'a> Executor<'a> {
                 if redir.is_none() {
                     if exprs.len() == 1 {
                         if let Expr::Var(name) = &exprs[0]
-                            && self.rt.has_array(name) {
-                                self.print_array(name);
+                            && self.rt.has_array(name)
+                        {
+                            self.print_array(name);
                         } else {
                             self.print_expr_fast(&exprs[0]);
                             let _ = self.stdout.write_all(self.rt.ors().as_bytes());
@@ -68,48 +69,47 @@ impl<'a> Executor<'a> {
                         return Some(signal);
                     }
                 } else if let Some(eb) = else_block
-                    && let Some(signal) = self.exec_block(eb) {
-                        return Some(signal);
-                    }
-            }
-            Statement::While(cond, body) => {
-                loop {
-                    if !self.eval_expr(cond).is_truthy() {
-                        break;
-                    }
-                    match self.exec_block(body) {
-                        Some(Signal::Break) => break,
-                        Some(Signal::Continue) => continue,
-                        Some(signal) => return Some(signal),
-                        None => {}
-                    }
+                    && let Some(signal) = self.exec_block(eb)
+                {
+                    return Some(signal);
                 }
             }
-            Statement::DoWhile(body, cond) => {
-                loop {
-                    match self.exec_block(body) {
-                        Some(Signal::Break) => break,
-                        Some(Signal::Continue) => {}
-                        Some(signal) => return Some(signal),
-                        None => {}
-                    }
-                    if !self.eval_expr(cond).is_truthy() {
-                        break;
-                    }
+            Statement::While(cond, body) => loop {
+                if !self.eval_expr(cond).is_truthy() {
+                    break;
                 }
-            }
+                match self.exec_block(body) {
+                    Some(Signal::Break) => break,
+                    Some(Signal::Continue) => continue,
+                    Some(signal) => return Some(signal),
+                    None => {}
+                }
+            },
+            Statement::DoWhile(body, cond) => loop {
+                match self.exec_block(body) {
+                    Some(Signal::Break) => break,
+                    Some(Signal::Continue) => {}
+                    Some(signal) => return Some(signal),
+                    None => {}
+                }
+                if !self.eval_expr(cond).is_truthy() {
+                    break;
+                }
+            },
             Statement::For(init, cond, update, body) => {
                 if let Some(init_stmt) = init
-                    && let Some(signal) = self.exec_stmt(init_stmt) {
-                        match signal {
-                            Signal::Return(_) | Signal::Exit(_) => return Some(signal),
-                            _ => {}
-                        }
+                    && let Some(signal) = self.exec_stmt(init_stmt)
+                {
+                    match signal {
+                        Signal::Return(_) | Signal::Exit(_) => return Some(signal),
+                        _ => {}
                     }
+                }
                 loop {
                     if let Some(cond_expr) = cond
-                        && !self.eval_expr(cond_expr).is_truthy() {
-                            break;
+                        && !self.eval_expr(cond_expr).is_truthy()
+                    {
+                        break;
                     }
                     match self.exec_block(body) {
                         Some(Signal::Break) => break,
@@ -118,12 +118,13 @@ impl<'a> Executor<'a> {
                         None => {}
                     }
                     if let Some(update_stmt) = update
-                        && let Some(signal) = self.exec_stmt(update_stmt) {
-                            match signal {
-                                Signal::Return(_) | Signal::Exit(_) => return Some(signal),
-                                _ => {}
-                            }
+                        && let Some(signal) = self.exec_stmt(update_stmt)
+                    {
+                        match signal {
+                            Signal::Return(_) | Signal::Exit(_) => return Some(signal),
+                            _ => {}
                         }
+                    }
                 }
             }
             Statement::ForIn(var, array, body) => {
@@ -226,7 +227,11 @@ impl<'a> Executor<'a> {
                         .spawn()
                         .unwrap_or_else(|e| {
                             eprintln!("fk: cannot run '{}': {}", cmd, e);
-                            Command::new("cat").stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap()
+                            Command::new("cat")
+                                .stdin(Stdio::piped())
+                                .stdout(Stdio::null())
+                                .spawn()
+                                .unwrap()
                         })
                 });
                 if let Some(ref mut stdin) = child.stdin {

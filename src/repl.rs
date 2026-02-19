@@ -1,4 +1,4 @@
-use std::io::{self, Write, BufRead};
+use std::io::{self, BufRead, Write};
 
 use crate::action::Executor;
 use crate::input::Record;
@@ -92,7 +92,10 @@ fn try_run_program(source: &str, rt: &mut Runtime) -> Result<String, crate::erro
     exec.run_begin();
     // In REPL, execute main rules once with an empty record
     if !program.rules.is_empty() {
-        let rec = Record { text: String::new(), fields: None };
+        let rec = Record {
+            text: String::new(),
+            fields: None,
+        };
         exec.run_record(&rec);
     }
     exec.run_end();

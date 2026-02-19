@@ -74,22 +74,34 @@ fn walk_block(block: &Block, info: &mut ProgramInfo) {
 fn walk_stmt(stmt: &Statement, info: &mut ProgramInfo) {
     match stmt {
         Statement::Print(exprs, redir) | Statement::Printf(exprs, redir) => {
-            for e in exprs { walk_expr(e, info); }
-            if let Some(r) = redir { walk_redirect(r, info); }
+            for e in exprs {
+                walk_expr(e, info);
+            }
+            if let Some(r) = redir {
+                walk_redirect(r, info);
+            }
         }
         Statement::If(cond, then_b, else_b) => {
             walk_expr(cond, info);
             walk_block(then_b, info);
-            if let Some(eb) = else_b { walk_block(eb, info); }
+            if let Some(eb) = else_b {
+                walk_block(eb, info);
+            }
         }
         Statement::While(cond, body) | Statement::DoWhile(body, cond) => {
             walk_expr(cond, info);
             walk_block(body, info);
         }
         Statement::For(init, cond, update, body) => {
-            if let Some(s) = init { walk_stmt(s, info); }
-            if let Some(e) = cond { walk_expr(e, info); }
-            if let Some(s) = update { walk_stmt(s, info); }
+            if let Some(s) = init {
+                walk_stmt(s, info);
+            }
+            if let Some(e) = cond {
+                walk_expr(e, info);
+            }
+            if let Some(s) = update {
+                walk_stmt(s, info);
+            }
             walk_block(body, info);
         }
         Statement::ForIn(_, _, body) => walk_block(body, info),
@@ -98,33 +110,39 @@ fn walk_stmt(stmt: &Statement, info: &mut ProgramInfo) {
         Statement::Return(Some(e)) => walk_expr(e, info),
         Statement::Block(b) => walk_block(b, info),
         Statement::Expression(e) => walk_expr(e, info),
-        Statement::DeleteAll(_) | Statement::Next | Statement::Nextfile
-        | Statement::Break | Statement::Continue
-        | Statement::Exit(None) | Statement::Return(None) => {}
+        Statement::DeleteAll(_)
+        | Statement::Next
+        | Statement::Nextfile
+        | Statement::Break
+        | Statement::Continue
+        | Statement::Exit(None)
+        | Statement::Return(None) => {}
     }
 }
 
 fn walk_expr(expr: &Expr, info: &mut ProgramInfo) {
     match expr {
-        Expr::Field(inner) => {
-            match inner.as_ref() {
-                Expr::NumberLit(n) => {
-                    let idx = *n as isize;
-                    if idx != 0 {
-                        info.needs_fields = true;
-                        if idx > 0 && let Some(ref mut max) = info.max_field {
-                            let u = idx as usize;
-                            if u > *max { *max = u; }
+        Expr::Field(inner) => match inner.as_ref() {
+            Expr::NumberLit(n) => {
+                let idx = *n as isize;
+                if idx != 0 {
+                    info.needs_fields = true;
+                    if idx > 0
+                        && let Some(ref mut max) = info.max_field
+                    {
+                        let u = idx as usize;
+                        if u > *max {
+                            *max = u;
                         }
                     }
                 }
-                _ => {
-                    info.needs_fields = true;
-                    info.max_field = None;
-                    walk_expr(inner, info);
-                }
             }
-        }
+            _ => {
+                info.needs_fields = true;
+                info.max_field = None;
+                walk_expr(inner, info);
+            }
+        },
         Expr::Var(name) => {
             if name == "NF" {
                 info.needs_nf = true;
@@ -133,10 +151,14 @@ fn walk_expr(expr: &Expr, info: &mut ProgramInfo) {
         Expr::Getline(None, source) => {
             info.needs_fields = true;
             info.max_field = None;
-            if let Some(e) = source { walk_expr(e, info); }
+            if let Some(e) = source {
+                walk_expr(e, info);
+            }
         }
         Expr::Getline(Some(_), source) => {
-            if let Some(e) = source { walk_expr(e, info); }
+            if let Some(e) = source {
+                walk_expr(e, info);
+            }
         }
         Expr::GetlinePipe(cmd, _) => walk_expr(cmd, info),
         Expr::ArrayRef(_, key) => walk_expr(key, info),
@@ -144,11 +166,13 @@ fn walk_expr(expr: &Expr, info: &mut ProgramInfo) {
         Expr::Assign(target, val) | Expr::CompoundAssign(target, _, val) => {
             match target.as_ref() {
                 Expr::ArrayRef(name, _) => {
-                    info.array_sources.entry(name.clone())
+                    info.array_sources
+                        .entry(name.clone())
                         .or_insert_with(|| val.as_ref().clone());
                 }
                 Expr::Var(name) if matches!(expr, Expr::Assign(..)) => {
-                    info.var_sources.entry(name.clone())
+                    info.var_sources
+                        .entry(name.clone())
                         .or_insert_with(|| val.as_ref().clone());
                 }
                 _ => {}
@@ -160,14 +184,19 @@ fn walk_expr(expr: &Expr, info: &mut ProgramInfo) {
             walk_expr(target, info);
             walk_expr(val, info);
         }
-        Expr::BinOp(l, _, r) | Expr::LogicalAnd(l, r)
-        | Expr::LogicalOr(l, r) | Expr::Concat(l, r)
-        | Expr::Match(l, r) | Expr::NotMatch(l, r) => {
+        Expr::BinOp(l, _, r)
+        | Expr::LogicalAnd(l, r)
+        | Expr::LogicalOr(l, r)
+        | Expr::Concat(l, r)
+        | Expr::Match(l, r)
+        | Expr::NotMatch(l, r) => {
             walk_expr(l, info);
             walk_expr(r, info);
         }
-        Expr::LogicalNot(e) | Expr::UnaryMinus(e)
-        | Expr::Increment(e, _) | Expr::Decrement(e, _) => {
+        Expr::LogicalNot(e)
+        | Expr::UnaryMinus(e)
+        | Expr::Increment(e, _)
+        | Expr::Decrement(e, _) => {
             walk_expr(e, info);
         }
         Expr::Ternary(c, t, f) => {
@@ -176,7 +205,9 @@ fn walk_expr(expr: &Expr, info: &mut ProgramInfo) {
             walk_expr(f, info);
         }
         Expr::Sprintf(args) | Expr::FuncCall(_, args) => {
-            for a in args { walk_expr(a, info); }
+            for a in args {
+                walk_expr(a, info);
+            }
         }
         Expr::NumberLit(_) | Expr::StringLit(_) => {}
     }
@@ -252,7 +283,8 @@ pub fn build_array_description(
 
 fn describe_expr(expr: &Expr) -> String {
     if let Expr::FuncCall(name, args) = expr
-        && name == "jpath" && args.len() >= 2
+        && name == "jpath"
+        && args.len() >= 2
         && matches!(&args[0], Expr::Field(inner)
             if matches!(inner.as_ref(), Expr::NumberLit(n) if *n == 0.0))
         && let Expr::StringLit(path) = &args[1]
@@ -285,8 +317,17 @@ fn friendly_filename(filename: &str) -> &str {
 // ── Program explainer ───────────────────────────────────────────
 
 const STAT_BUILTINS: &[&str] = &[
-    "mean", "median", "stddev", "variance", "sum", "min", "max",
-    "p", "percentile", "quantile", "iqm",
+    "mean",
+    "median",
+    "stddev",
+    "variance",
+    "sum",
+    "min",
+    "max",
+    "p",
+    "percentile",
+    "quantile",
+    "iqm",
 ];
 const CHART_BUILTINS: &[&str] = &["hist", "plotbox", "plot"];
 
@@ -295,24 +336,23 @@ const EXPLAIN_BUDGET: usize = 72;
 /// Runtime environment context for explain().
 #[derive(Debug, Default)]
 pub struct ExplainContext {
-    pub input_mode: Option<String>,   // "CSV", "TSV", "JSON", "Parquet"
-    pub headers: bool,                // -H flag
-    pub compressed: Option<String>,   // "gzip", "zstd", "bz2", "xz", "lz4"
-    pub field_sep: Option<String>,    // -F value
-    pub files: Vec<String>,           // input filenames
+    pub input_mode: Option<String>, // "CSV", "TSV", "JSON", "Parquet"
+    pub headers: bool,              // -H flag
+    pub compressed: Option<String>, // "gzip", "zstd", "bz2", "xz", "lz4"
+    pub field_sep: Option<String>,  // -F value
+    pub files: Vec<String>,         // input filenames
 }
 
 impl ExplainContext {
-    pub fn from_cli(
-        mode: &str, headers: bool, field_sep: Option<&str>, files: &[String],
-    ) -> Self {
+    pub fn from_cli(mode: &str, headers: bool, field_sep: Option<&str>, files: &[String]) -> Self {
         let mut input_mode = match mode {
             "line" => None,
             m => Some(m.to_uppercase()),
         };
 
         // Auto-detect from file extension when mode is line and no -F
-        if input_mode.is_none() && field_sep.is_none()
+        if input_mode.is_none()
+            && field_sep.is_none()
             && let Some(f) = files.first()
         {
             input_mode = detect_format_from_ext(f);
@@ -320,9 +360,13 @@ impl ExplainContext {
 
         let compressed = files.first().and_then(|f| detect_compression(f));
 
-        let filenames: Vec<String> = files.iter()
-            .map(|f| Path::new(f).file_name()
-                .map_or_else(|| f.clone(), |n| n.to_string_lossy().into_owned()))
+        let filenames: Vec<String> = files
+            .iter()
+            .map(|f| {
+                Path::new(f)
+                    .file_name()
+                    .map_or_else(|| f.clone(), |n| n.to_string_lossy().into_owned())
+            })
             .collect();
 
         Self {
@@ -336,61 +380,102 @@ impl ExplainContext {
 
     fn to_suffix(&self) -> Option<String> {
         let mut parts: Vec<String> = Vec::new();
-        if let Some(ref m) = self.input_mode   { parts.push(m.clone()); }
-        if let Some(ref c) = self.compressed   { parts.push(c.clone()); }
-        if self.headers                        { parts.push("headers".into()); }
-        if let Some(ref f) = self.field_sep    { parts.push(format!("-F '{f}'")); }
+        if let Some(ref m) = self.input_mode {
+            parts.push(m.clone());
+        }
+        if let Some(ref c) = self.compressed {
+            parts.push(c.clone());
+        }
+        if self.headers {
+            parts.push("headers".into());
+        }
+        if let Some(ref f) = self.field_sep {
+            parts.push(format!("-F '{f}'"));
+        }
         match self.files.len() {
             0 => {}
             1 => parts.push(self.files[0].clone()),
             n => parts.push(format!("{n} files")),
         }
-        if parts.is_empty() { return None; }
+        if parts.is_empty() {
+            return None;
+        }
         Some(format!("({})", parts.join(", ")))
     }
 }
 
 fn detect_format_from_ext(path: &str) -> Option<String> {
-    let base = path.trim_end_matches(".gz")
-        .trim_end_matches(".zst").trim_end_matches(".zstd")
-        .trim_end_matches(".bz2").trim_end_matches(".xz")
+    let base = path
+        .trim_end_matches(".gz")
+        .trim_end_matches(".zst")
+        .trim_end_matches(".zstd")
+        .trim_end_matches(".bz2")
+        .trim_end_matches(".xz")
         .trim_end_matches(".lz4");
-    if base.ends_with(".csv") { Some("CSV".into()) }
-    else if base.ends_with(".tsv") || base.ends_with(".tab") { Some("TSV".into()) }
-    else if base.ends_with(".json") || base.ends_with(".jsonl") || base.ends_with(".ndjson") { Some("JSON".into()) }
-    else if base.ends_with(".parquet") { Some("Parquet".into()) }
-    else { None }
+    if base.ends_with(".csv") {
+        Some("CSV".into())
+    } else if base.ends_with(".tsv") || base.ends_with(".tab") {
+        Some("TSV".into())
+    } else if base.ends_with(".json") || base.ends_with(".jsonl") || base.ends_with(".ndjson") {
+        Some("JSON".into())
+    } else if base.ends_with(".parquet") {
+        Some("Parquet".into())
+    } else {
+        None
+    }
 }
 
 fn detect_compression(path: &str) -> Option<String> {
-    if path.ends_with(".gz") { Some("gzip".into()) }
-    else if path.ends_with(".zst") || path.ends_with(".zstd") { Some("zstd".into()) }
-    else if path.ends_with(".bz2") { Some("bzip2".into()) }
-    else if path.ends_with(".xz") { Some("xz".into()) }
-    else if path.ends_with(".lz4") { Some("lz4".into()) }
-    else { None }
+    if path.ends_with(".gz") {
+        Some("gzip".into())
+    } else if path.ends_with(".zst") || path.ends_with(".zstd") {
+        Some("zstd".into())
+    } else if path.ends_with(".bz2") {
+        Some("bzip2".into())
+    } else if path.ends_with(".xz") {
+        Some("xz".into())
+    } else if path.ends_with(".lz4") {
+        Some("lz4".into())
+    } else {
+        None
+    }
 }
 
 /// Fragment tag — each variant carries its own priority and subsumption rules.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FragTag {
-    Chart, Stats, Aggregate, Frequency, Sum, Count,
-    Transform, Extract, Filter, Rewrite, Select,
-    Compute, Number, Collect, Generate, Slurp,
+    Chart,
+    Stats,
+    Aggregate,
+    Frequency,
+    Sum,
+    Count,
+    Transform,
+    Extract,
+    Filter,
+    Rewrite,
+    Select,
+    Number,
+    Collect,
+    Generate,
+    Slurp,
 }
 
 impl FragTag {
     fn sig(self) -> u8 {
         match self {
-            Self::Chart     => 90, Self::Stats     => 85,
-            Self::Aggregate => 80, Self::Frequency => 75,
-            Self::Sum       => 70,
+            Self::Chart => 90,
+            Self::Stats => 85,
+            Self::Aggregate => 80,
+            Self::Frequency => 75,
+            Self::Sum => 70,
             Self::Count | Self::Collect => 65,
             Self::Transform => 60,
             Self::Extract | Self::Slurp => 55,
-            Self::Filter    => 40, Self::Rewrite   => 35,
-            Self::Select | Self::Compute | Self::Generate => 30,
-            Self::Number    => 25,
+            Self::Filter => 40,
+            Self::Rewrite => 35,
+            Self::Select | Self::Generate => 30,
+            Self::Number => 25,
         }
     }
 
@@ -398,23 +483,27 @@ impl FragTag {
     fn subsumed_by(self) -> &'static [FragTag] {
         use FragTag::*;
         match self {
-            Stats     => &[Chart],
+            Stats => &[Chart],
             Aggregate | Sum => &[Stats],
-            Collect   => &[Chart, Stats, Aggregate, Frequency],
-            Compute   => &[Chart, Stats, Aggregate, Frequency, Sum, Count,
-                           Transform, Extract, Select, Slurp],
-            Number    => &[Select, Compute, Count],
-            _         => &[],
+            Collect => &[Chart, Stats, Aggregate, Frequency],
+            Number => &[Select, Count],
+            _ => &[],
         }
     }
 }
 
 #[derive(Debug, Clone)]
-struct Fragment { text: String, tag: FragTag }
+struct Fragment {
+    text: String,
+    tag: FragTag,
+}
 
 impl Fragment {
     fn new(text: impl Into<String>, tag: FragTag) -> Self {
-        Self { text: text.into(), tag }
+        Self {
+            text: text.into(),
+            tag,
+        }
     }
 }
 
@@ -435,23 +524,30 @@ pub fn explain(program: &Program, ctx: Option<&ExplainContext>) -> String {
         Some(e) if base.is_empty() && e.len() <= EXPLAIN_BUDGET => e.to_string(),
         Some(e) => {
             let combined = format!("{base} {e}");
-            if combined.len() <= EXPLAIN_BUDGET { combined } else { base }
+            if combined.len() <= EXPLAIN_BUDGET {
+                combined
+            } else {
+                base
+            }
         }
     }
 }
 
 fn detect_idioms(program: &Program) -> Option<String> {
-    if program.end.is_none() && program.begin.is_none() && program.rules.len() == 1
+    if program.end.is_none()
+        && program.begin.is_none()
+        && program.rules.len() == 1
         && let Some(key) = detect_dedup_pattern(&program.rules[0])
     {
-        return Some(format!("unique {key}"));
+        return Some(humanize(&format!("deduplicate by {key}")));
     }
     detect_join_idiom(program).or_else(|| detect_count_match(program))
 }
 
+
 /// Walk → emit: one scan, one function, all fragments.
 fn collect_fragments(program: &Program, info: &ProgramInfo) -> Vec<Fragment> {
-    let s = scan_program(program);
+    let s = scan_program(program, &info.var_sources);
     let source = resolve_source(info);
     let has_end = program.end.is_some();
     let has_rules = !program.rules.is_empty();
@@ -461,37 +557,65 @@ fn collect_fragments(program: &Program, info: &ProgramInfo) -> Vec<Fragment> {
 
     // Filters
     for rule in &program.rules {
-        if let Some(pat) = &rule.pattern && !is_nr_eq_fnr(pat) {
-            let p = describe_pattern(pat);
-            if p != "1" { f.push(Fragment::new(format!("filter {p}"), FragTag::Filter)); }
+        if let Some(pat) = &rule.pattern
+            && !is_nr_eq_fnr(pat)
+        {
+            let p = humanize(&describe_pattern(pat));
+            if p != "1" {
+                f.push(Fragment::new(format!("where {p}"), FragTag::Filter));
+            }
         }
     }
     // END builtins (chart/stats)
     if has_end {
-        if s.called_fns.iter().any(|c| CHART_BUILTINS.contains(&c.as_str())) {
-            let op = if s.called_fns.iter().any(|c| c == "hist") { "histogram" } else { "chart" };
-            let text = source.as_ref().map_or_else(|| op.into(), |s| format!("{op} {s}"));
+        if s.called_fns
+            .iter()
+            .any(|c| CHART_BUILTINS.contains(&c.as_str()))
+        {
+            let op = if s.called_fns.iter().any(|c| c == "hist") {
+                "histogram"
+            } else {
+                "chart"
+            };
+            let text = match &source {
+                Some(s) => format!("{op} of {}", humanize(s)),
+                None => op.into(),
+            };
             f.push(Fragment::new(text, FragTag::Chart));
         }
-        if s.called_fns.iter().any(|c| STAT_BUILTINS.contains(&c.as_str())) {
-            let text = source.as_ref().map_or_else(|| "stats".into(), |s| format!("stats {s}"));
+        if s.called_fns
+            .iter()
+            .any(|c| STAT_BUILTINS.contains(&c.as_str()))
+        {
+            let text = match &source {
+                Some(s) => format!("stats of {}", humanize(s)),
+                None => "stats".into(),
+            };
             f.push(Fragment::new(text, FragTag::Stats));
         }
     }
     // Accumulation
     if let Some((ref v, ref k)) = s.aggregate_by {
-        f.push(Fragment::new(format!("sum {v} by {k}"), FragTag::Aggregate));
+        f.push(Fragment::new(
+            humanize(&format!("sum {v} by {k}")),
+            FragTag::Aggregate,
+        ));
     }
     if let Some(ref k) = s.frequency_key {
-        f.push(Fragment::new(format!("frequency {k}"), FragTag::Frequency));
+        f.push(Fragment::new(
+            humanize(&format!("freq of {k}")),
+            FragTag::Frequency,
+        ));
     }
     if let Some(ref fld) = s.accum_field {
-        f.push(Fragment::new(format!("sum {fld}"), FragTag::Sum));
+        f.push(Fragment::new(humanize(&format!("sum {fld}")), FragTag::Sum));
     }
     // Count
-    let hi = f.iter().any(|x| matches!(x.tag, FragTag::Chart | FragTag::Stats));
+    let hi = f
+        .iter()
+        .any(|x| matches!(x.tag, FragTag::Chart | FragTag::Stats));
     if has_end && !has_rules && !hi {
-        f.push(Fragment::new("count", FragTag::Count));
+        f.push(Fragment::new("count lines", FragTag::Count));
     }
     if s.has_collect && has_end {
         f.push(Fragment::new("collect + emit", FragTag::Collect));
@@ -499,54 +623,83 @@ fn collect_fragments(program: &Program, info: &ProgramInfo) -> Vec<Fragment> {
     // Transform
     if s.has_transform {
         f.push(Fragment::new(
-            s.transform_desc.as_deref().unwrap_or("transform"), FragTag::Transform));
+            s.transform_desc.as_deref().unwrap_or("transform"),
+            FragTag::Transform,
+        ));
     }
     if s.has_field_iteration {
         f.push(Fragment::new("iterate fields", FragTag::Transform));
     }
-    // Extraction
-    match (s.has_match, s.has_jpath, s.has_format) {
-        (true, _, true)  => f.push(Fragment::new("regex extract + format", FragTag::Extract)),
+    // Extraction — skip JSON extract when paths visible (in select_fields or source)
+    let jpath_visible = s.jpath_resolved || source.as_ref().is_some_and(|src| src.contains("[]"));
+    match (s.has_match, s.has_jpath && !jpath_visible, s.has_format) {
+        (true, _, true) => f.push(Fragment::new("regex extract + format", FragTag::Extract)),
         (true, _, false) => f.push(Fragment::new("regex extract", FragTag::Extract)),
-        (false, true, true)  => f.push(Fragment::new("extract + format JSON fields", FragTag::Extract)),
-        (false, true, false) => f.push(Fragment::new("extract JSON fields", FragTag::Extract)),
+        (false, true, true) => f.push(Fragment::new("JSON extract + format", FragTag::Extract)),
+        (false, true, false) => f.push(Fragment::new("JSON extract", FragTag::Extract)),
         _ => {}
     }
     // Rewrite
-    if s.has_field_assign  { f.push(Fragment::new("rewrite fields", FragTag::Rewrite)); }
-    if s.has_reformat      { f.push(Fragment::new("reformat output", FragTag::Rewrite)); }
+    if s.has_field_assign {
+        f.push(Fragment::new("rewrite fields", FragTag::Rewrite));
+    }
+    if s.has_reformat {
+        f.push(Fragment::new("reformat output", FragTag::Rewrite));
+    }
     // Selection
     if !s.select_fields.is_empty() && !s.has_field_iteration {
         let n = s.select_fields.len();
         let text = if n > SELECT_FIELD_LIMIT {
-            format!("select {n} fields")
+            format!("use {n} fields")
         } else {
-            format!("select {}", s.select_fields.join(", "))
+            format!("use {}", format_field_list(&s.select_fields))
         };
         f.push(Fragment::new(text, FragTag::Select));
     }
-    if s.prints_computed   { f.push(Fragment::new("compute", FragTag::Compute)); }
     if s.prints_line_no && s.has_output {
         f.push(Fragment::new("number lines", FragTag::Number));
     }
+    // Timing (low priority annotation)
+    if s.has_timing {
+        f.push(Fragment::new("timed", FragTag::Number));
+    }
     // BEGIN-only
     if begin_only {
-        if s.called_fns.iter().any(|c| CHART_BUILTINS.contains(&c.as_str())) {
+        if s.called_fns
+            .iter()
+            .any(|c| CHART_BUILTINS.contains(&c.as_str()))
+        {
             f.push(Fragment::new("chart", FragTag::Chart));
         } else if s.called_fns.iter().any(|c| c == "slurp") {
-            f.push(Fragment::new("slurp + aggregate", FragTag::Slurp));
+            f.push(Fragment::new("slurp + process", FragTag::Slurp));
         } else if s.has_output {
-            f.push(Fragment::new("generate", FragTag::Generate));
+            f.push(Fragment::new("generate output", FragTag::Generate));
         }
+    }
+    // Fallback: output but nothing descriptive → "generate output"
+    if f.is_empty() && s.has_output {
+        f.push(Fragment::new("generate output", FragTag::Generate));
     }
     f
 }
 
-fn scan_program(program: &Program) -> ScanState {
+fn scan_program(program: &Program, vs: &HashMap<String, Expr>) -> ScanState {
     let mut s = ScanState::default();
-    if let Some(b) = &program.begin { for stmt in b { scan_stmt(stmt, &mut s); } }
-    for rule in &program.rules { for stmt in &rule.action { scan_stmt(stmt, &mut s); } }
-    if let Some(b) = &program.end { for stmt in b { scan_stmt(stmt, &mut s); } }
+    if let Some(b) = &program.begin {
+        for stmt in b {
+            scan_stmt(stmt, &mut s, vs);
+        }
+    }
+    for rule in &program.rules {
+        for stmt in &rule.action {
+            scan_stmt(stmt, &mut s, vs);
+        }
+    }
+    if let Some(b) = &program.end {
+        for stmt in b {
+            scan_stmt(stmt, &mut s, vs);
+        }
+    }
     s
 }
 
@@ -559,7 +712,7 @@ fn reduce(frags: &mut Vec<Fragment>) {
     if has(FragTag::Aggregate) && has(FragTag::Frequency) {
         for f in frags.iter_mut() {
             if f.tag == FragTag::Aggregate {
-                f.text = f.text.replacen("sum ", "aggregate ", 1);
+                f.text = f.text.replacen("sum ", "agg ", 1);
             }
         }
         frags.retain(|f| f.tag != FragTag::Frequency);
@@ -569,14 +722,18 @@ fn reduce(frags: &mut Vec<Fragment>) {
 }
 
 fn render(frags: &[Fragment], budget: usize) -> String {
-    if frags.is_empty() { return String::new(); }
+    if frags.is_empty() {
+        return String::new();
+    }
     let mut sorted: Vec<&Fragment> = frags.iter().collect();
     sorted.sort_by_key(|f| std::cmp::Reverse(f.tag.sig()));
 
     for take in (1..=sorted.len()).rev() {
         let parts: Vec<&str> = sorted[..take].iter().map(|f| f.text.as_str()).collect();
         let mut text = parts.join(", ");
-        if sorted.len() - take > 0 { text.push_str(", …"); }
+        if sorted.len() - take > 0 {
+            text.push_str(", …");
+        }
         if text.len() <= budget || take == 1 {
             if text.len() > budget {
                 text.truncate(budget.saturating_sub(1));
@@ -601,32 +758,52 @@ fn detect_dedup_pattern(rule: &Rule) -> Option<String> {
 
 /// Detect NR==FNR{...;next} + second rule → join/anti-join/semi-join.
 fn detect_join_idiom(program: &Program) -> Option<String> {
-    if program.rules.len() < 2 { return None; }
+    if program.rules.len() < 2 {
+        return None;
+    }
     let first = &program.rules[0];
-    if !is_nr_eq_fnr(first.pattern.as_ref()?) { return None; }
-    if !first.action.iter().any(|s| matches!(s, Statement::Next)) { return None; }
+    if !is_nr_eq_fnr(first.pattern.as_ref()?) {
+        return None;
+    }
+    if !first.action.iter().any(|s| matches!(s, Statement::Next)) {
+        return None;
+    }
+
+    // Extract key from first rule's array assignment: a[$1] → "col 1"
+    let key = first.action.iter().find_map(|s| {
+        if let Statement::Expression(Expr::Assign(target, _)) = s
+            && let Expr::ArrayRef(_, k) = target.as_ref()
+        {
+            Some(humanize(&expr_to_source(k)))
+        } else {
+            None
+        }
+    });
 
     let second = &program.rules[1];
     let second_pat = second.pattern.as_ref().map(describe_pattern);
-
-    match second_pat.as_deref() {
-        Some(p) if p.contains("!") && p.contains("in") => Some("anti-join".to_string()),
-        Some(p) if p.contains("in") => Some("semi-join".to_string()),
-        _ => Some("join".to_string()),
-    }
+    let kind = match second_pat.as_deref() {
+        Some(p) if p.contains("!") && p.contains("in") => "anti-join",
+        Some(p) if p.contains("in") => "semi-join",
+        _ => "join",
+    };
+    Some(match key {
+        Some(k) => format!("{kind} on {k}"),
+        None => kind.to_string(),
+    })
 }
 
 fn is_nr_eq_fnr(pat: &Pattern) -> bool {
     if let Pattern::Expression(Expr::BinOp(l, BinOp::Eq, r)) = pat {
         return (matches!(l.as_ref(), Expr::Var(n) if n == "NR")
-                && matches!(r.as_ref(), Expr::Var(n) if n == "FNR"))
+            && matches!(r.as_ref(), Expr::Var(n) if n == "FNR"))
             || (matches!(l.as_ref(), Expr::Var(n) if n == "FNR")
                 && matches!(r.as_ref(), Expr::Var(n) if n == "NR"));
     }
     false
 }
 
-/// Detect {n++} END{print n} → "count" or /pat/{n++} END{…} → "count /pat/".
+/// Detect {n++} END{print n} → "count lines" or /pat/{n++} → "count /pat/".
 fn detect_count_match(program: &Program) -> Option<String> {
     program.end.as_ref()?;
     for rule in &program.rules {
@@ -635,8 +812,8 @@ fn detect_count_match(program: &Program) -> Option<String> {
         });
         if has_incr {
             return Some(match &rule.pattern {
-                Some(pat) => format!("count {}", describe_pattern(pat)),
-                None => "count".to_string(),
+                Some(pat) => format!("count {}", humanize(&describe_pattern(pat))),
+                None => "count lines".to_string(),
             });
         }
     }
@@ -647,7 +824,9 @@ fn resolve_source(info: &ProgramInfo) -> Option<String> {
     info.array_sources.iter().next().and_then(|(_, expr)| {
         let expr = unwrap_coercion(expr);
         let expr = if let Expr::Var(name) = expr {
-            info.var_sources.get(name).map_or(expr, |e| unwrap_coercion(e))
+            info.var_sources
+                .get(name)
+                .map_or(expr, |e| unwrap_coercion(e))
         } else {
             expr
         };
@@ -681,7 +860,8 @@ struct ScanState {
     has_reformat: bool,
     has_collect: bool,
     prints_line_no: bool,
-    prints_computed: bool,
+    has_timing: bool,
+    jpath_resolved: bool,
     called_fns: Vec<String>,
 }
 
@@ -690,42 +870,148 @@ const SELECT_FIELD_LIMIT: usize = 5;
 fn field_display(inner: &Expr) -> Option<String> {
     match inner {
         Expr::NumberLit(n) if *n == 0.0 => None,
-        Expr::NumberLit(n) => Some(format!("${}", *n as i64)),
+        Expr::NumberLit(n) => Some(format!("{}", *n as i64)),
         Expr::StringLit(s) => Some(s.clone()),
         Expr::Var(name) if matches!(name.as_str(), "NR" | "NF" | "FNR" | "FILENAME") => None,
-        Expr::Var(name) => Some(format!("${name}")),
+        Expr::Var(name) => Some(name.clone()),
         _ => None,
     }
 }
 
-fn collect_output_fields(exprs: &[Expr], fields: &mut Vec<String>) {
-    for e in exprs {
-        if let Expr::Field(inner) = e
-            && let Some(name) = field_display(inner)
-            && !fields.contains(&name)
-        {
-            fields.push(name);
-        }
+/// Format a field list for display: collapses consecutive numeric ranges.
+///   ["1","2","3"] → "col 1–3"
+///   ["1","3"]     → "col 1, 3"
+///   ["host","cpu"]→ "host, cpu"
+fn format_field_list(fields: &[String]) -> String {
+    let nums: Option<Vec<usize>> = fields.iter().map(|f| f.parse::<usize>().ok()).collect();
+    if let Some(ref idx) = nums {
+        let consecutive = idx.len() > 1 && idx.windows(2).all(|w| w[1] == w[0] + 1);
+        let body = if consecutive {
+            format!("{}–{}", idx[0], idx.last().unwrap())
+        } else {
+            idx.iter()
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        format!("col {body}")
+    } else {
+        fields.join(", ")
     }
 }
 
+/// Replace `$N` (N>0) with `col N` and strip `+ 0` coercions.
+fn humanize(s: &str) -> String {
+    let s = s.replace(" + 0", "").replace("0 + ", "");
+    let mut out = String::with_capacity(s.len());
+    let b = s.as_bytes();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'$' {
+            let start = i + 1;
+            let mut end = start;
+            while end < b.len() && b[end].is_ascii_digit() {
+                end += 1;
+            }
+            if end > start {
+                let n: usize = s[start..end].parse().unwrap_or(0);
+                if n > 0 {
+                    out.push_str("col ");
+                    out.push_str(&s[start..end]);
+                    i = end;
+                    continue;
+                }
+            }
+        }
+        out.push(b[i] as char);
+        i += 1;
+    }
+    out
+}
+
+fn collect_output_fields(
+    exprs: &[Expr],
+    s: &mut ScanState,
+    vs: &HashMap<String, Expr>,
+) {
+    for e in exprs {
+        collect_output_field(e, s, vs, 5);
+    }
+}
+
+/// Recurse into an output expression to find all field refs.
+/// Follows vars through var_sources, jpath paths, concat, binop, funccall args.
+/// One function, no separate lineage pass.
+fn collect_output_field(
+    e: &Expr,
+    s: &mut ScanState,
+    vs: &HashMap<String, Expr>,
+    depth: u8,
+) {
+    if depth == 0 {
+        return;
+    }
+    let e = unwrap_coercion(e);
+    match e {
+        Expr::Field(inner) => {
+            if let Some(name) = field_display(inner)
+                && !s.select_fields.contains(&name)
+            {
+                s.select_fields.push(name);
+            }
+        }
+        Expr::Var(name)
+            if !matches!(
+                name.as_str(),
+                "NR" | "NF" | "FNR" | "FILENAME" | "ORS" | "OFS" | "OFMT"
+            ) =>
+        {
+            if let Some(src) = vs.get(name.as_str()) {
+                collect_output_field(src, s, vs, depth - 1);
+            }
+        }
+        Expr::FuncCall(name, args) if name == "jpath" && args.len() >= 2 => {
+            if let Expr::StringLit(path) = &args[1] {
+                let clean = path.trim_start_matches('.').to_string();
+                if !clean.is_empty() && !s.select_fields.contains(&clean) {
+                    s.select_fields.push(clean);
+                    s.jpath_resolved = true;
+                }
+            }
+        }
+        Expr::FuncCall(_, args) => {
+            for a in args {
+                collect_output_field(a, s, vs, depth - 1);
+            }
+        }
+        Expr::Concat(l, r) | Expr::BinOp(l, _, r) => {
+            collect_output_field(l, s, vs, depth - 1);
+            collect_output_field(r, s, vs, depth - 1);
+        }
+        Expr::Ternary(_, then_e, else_e) => {
+            collect_output_field(then_e, s, vs, depth - 1);
+            collect_output_field(else_e, s, vs, depth - 1);
+        }
+        Expr::UnaryMinus(inner) | Expr::LogicalNot(inner) => {
+            collect_output_field(inner, s, vs, depth - 1);
+        }
+        _ => {}
+    }
+}
 
 // ── AST normalisation helpers ────────────────────────────────────
 
 const OUTPUT_VARS: &[&str] = &["ORS", "OFS", "OFMT"];
 const RECORD_COUNTERS: &[&str] = &["NR", "FNR"];
 const TRANSFORM_BUILTINS: &[&str] = &[
-    "gsub", "sub", "gensub", "trim", "ltrim", "rtrim",
-    "reverse", "toupper", "tolower",
+    "gsub", "sub", "gensub", "trim", "ltrim", "rtrim", "reverse", "toupper", "tolower",
 ];
 
 /// Structural equality — enough for `x = x + y` ≡ `x += y` normalisation.
 fn exprs_equal(a: &Expr, b: &Expr) -> bool {
     match (a, b) {
         (Expr::Var(n1), Expr::Var(n2)) => n1 == n2,
-        (Expr::ArrayRef(n1, k1), Expr::ArrayRef(n2, k2)) => {
-            n1 == n2 && exprs_equal(k1, k2)
-        }
+        (Expr::ArrayRef(n1, k1), Expr::ArrayRef(n2, k2)) => n1 == n2 && exprs_equal(k1, k2),
         (Expr::Field(e1), Expr::Field(e2)) => exprs_equal(e1, e2),
         (Expr::NumberLit(a), Expr::NumberLit(b)) => a == b,
         (Expr::StringLit(a), Expr::StringLit(b)) => a == b,
@@ -740,9 +1026,7 @@ fn exprs_equal(a: &Expr, b: &Expr) -> bool {
 ///   x = x - y        →  (x, y)      (detected as subtraction, still accumulation)
 fn as_additive_accum(expr: &Expr) -> Option<(&Expr, Option<&Expr>)> {
     match expr {
-        Expr::CompoundAssign(target, BinOp::Add, val) => {
-            Some((target, Some(val)))
-        }
+        Expr::CompoundAssign(target, BinOp::Add, val) => Some((target, Some(val))),
         Expr::Assign(target, val) => {
             if let Expr::BinOp(l, BinOp::Add, r) = val.as_ref() {
                 if exprs_equal(target, l) {
@@ -754,9 +1038,7 @@ fn as_additive_accum(expr: &Expr) -> Option<(&Expr, Option<&Expr>)> {
             }
             None
         }
-        Expr::Increment(inner, _) | Expr::Decrement(inner, _) => {
-            Some((inner, None))
-        }
+        Expr::Increment(inner, _) | Expr::Decrement(inner, _) => Some((inner, None)),
         _ => None,
     }
 }
@@ -764,9 +1046,6 @@ fn as_additive_accum(expr: &Expr) -> Option<(&Expr, Option<&Expr>)> {
 // ── Unified recursive expression scanner ─────────────────────────
 
 /// Walk an expression tree and set signal flags in ScanState.
-/// Returns true if the expression contains non-trivial computation
-/// (function calls, arithmetic) — used by the caller to detect
-/// "computed output" vs plain field selection.
 fn scan_expr(expr: &Expr, s: &mut ScanState) -> bool {
     match expr {
         Expr::FuncCall(name, args) => {
@@ -776,9 +1055,11 @@ fn scan_expr(expr: &Expr, s: &mut ScanState) -> bool {
             match name.as_str() {
                 "jpath" => s.has_jpath = true,
                 "match" => s.has_match = true,
+                "tic" | "toc" | "clk" => s.has_timing = true,
                 n if TRANSFORM_BUILTINS.contains(&n) => {
                     s.has_transform = true;
-                    if s.transform_desc.is_none() && args.len() >= 2
+                    if s.transform_desc.is_none()
+                        && args.len() >= 2
                         && matches!(n, "gsub" | "sub" | "gensub")
                     {
                         let pat = fmt_regex_or_expr(&args[0]);
@@ -788,7 +1069,9 @@ fn scan_expr(expr: &Expr, s: &mut ScanState) -> bool {
                 }
                 _ => {}
             }
-            for a in args { scan_expr(a, s); }
+            for a in args {
+                scan_expr(a, s);
+            }
             true
         }
         Expr::BinOp(l, _, r) => {
@@ -800,14 +1083,16 @@ fn scan_expr(expr: &Expr, s: &mut ScanState) -> bool {
             scan_expr(e, s);
             true
         }
-        Expr::Concat(l, r) | Expr::Assign(l, r) | Expr::CompoundAssign(l, _, r)
-        | Expr::LogicalAnd(l, r) | Expr::LogicalOr(l, r) => {
+        Expr::Concat(l, r)
+        | Expr::Assign(l, r)
+        | Expr::CompoundAssign(l, _, r)
+        | Expr::LogicalAnd(l, r)
+        | Expr::LogicalOr(l, r) => {
             let a = scan_expr(l, s);
             let b = scan_expr(r, s);
             a || b
         }
-        Expr::LogicalNot(e) | Expr::Field(e)
-        | Expr::Increment(e, _) | Expr::Decrement(e, _) => {
+        Expr::LogicalNot(e) | Expr::Field(e) | Expr::Increment(e, _) | Expr::Decrement(e, _) => {
             scan_expr(e, s)
         }
         _ => false,
@@ -816,13 +1101,13 @@ fn scan_expr(expr: &Expr, s: &mut ScanState) -> bool {
 
 // ── Statement scanning ───────────────────────────────────────────
 
-fn scan_stmt(stmt: &Statement, s: &mut ScanState) {
+fn scan_stmt(stmt: &Statement, s: &mut ScanState, vs: &HashMap<String, Expr>) {
     match stmt {
         Statement::Print(exprs, _) => {
             s.has_output = true;
-            collect_output_fields(exprs, &mut s.select_fields);
-            if exprs.iter().any(|e| scan_expr(e, s)) {
-                s.prints_computed = true;
+            collect_output_fields(exprs, s, vs);
+            for e in exprs {
+                scan_expr(e, s);
             }
             if exprs.iter().any(|e| expr_mentions_any(e, RECORD_COUNTERS)) {
                 s.prints_line_no = true;
@@ -832,9 +1117,11 @@ fn scan_stmt(stmt: &Statement, s: &mut ScanState) {
             s.has_output = true;
             s.has_format = true;
             if exprs.len() > 1 {
-                collect_output_fields(&exprs[1..], &mut s.select_fields);
+                collect_output_fields(&exprs[1..], s, vs);
             }
-            for e in exprs { scan_expr(e, s); }
+            for e in exprs {
+                scan_expr(e, s);
+            }
             if exprs.iter().any(|e| expr_mentions_any(e, RECORD_COUNTERS)) {
                 s.prints_line_no = true;
             }
@@ -851,29 +1138,51 @@ fn scan_stmt(stmt: &Statement, s: &mut ScanState) {
             if for_mentions(stmt, "NF") {
                 s.has_field_iteration = true;
             }
-            for st in body { scan_stmt(st, s); }
+            for st in body {
+                scan_stmt(st, s, vs);
+            }
         }
         Statement::Block(b) => {
-            for st in b { scan_stmt(st, s); }
+            for st in b {
+                scan_stmt(st, s, vs);
+            }
         }
         Statement::If(_, then_b, else_b) => {
-            for st in then_b { scan_stmt(st, s); }
+            for st in then_b {
+                scan_stmt(st, s, vs);
+            }
             if let Some(eb) = else_b {
-                for st in eb { scan_stmt(st, s); }
+                for st in eb {
+                    scan_stmt(st, s, vs);
+                }
             }
         }
         _ => {}
     }
 }
 
+fn has_field_ref(e: &Expr) -> bool {
+    match e {
+        Expr::Field(_) => true,
+        Expr::BinOp(l, _, r) | Expr::Concat(l, r) => has_field_ref(l) || has_field_ref(r),
+        Expr::UnaryMinus(inner) | Expr::LogicalNot(inner) => has_field_ref(inner),
+        Expr::FuncCall(_, args) => args.iter().any(has_field_ref),
+        Expr::Var(name) => matches!(name.as_str(), "NF"),
+        _ => false,
+    }
+}
+
 /// Detect accumulation patterns via normalisation.
 fn scan_accum(expr: &Expr, s: &mut ScanState) {
-    let Some((target, delta)) = as_additive_accum(expr) else { return };
-    let is_unit = delta.is_none()
-        || matches!(delta, Some(Expr::NumberLit(n)) if *n == 1.0);
+    let Some((target, delta)) = as_additive_accum(expr) else {
+        return;
+    };
+    let is_unit = delta.is_none() || matches!(delta, Some(Expr::NumberLit(n)) if *n == 1.0);
     match target {
         Expr::Var(_) => {
-            if let Some(d) = delta {
+            if let Some(d) = delta
+                && (has_field_ref(d) || matches!(d, Expr::Var(n) if n == "NF"))
+            {
                 s.accum_field = Some(expr_to_source(d));
             }
         }
@@ -890,10 +1199,11 @@ fn scan_accum(expr: &Expr, s: &mut ScanState) {
 
 /// Detect assign-level signals: field writes, ORS/OFS changes, collection.
 fn scan_assign(expr: &Expr, s: &mut ScanState) {
-    let Expr::Assign(target, _) = expr else { return };
+    let Expr::Assign(target, _) = expr else {
+        return;
+    };
     match target.as_ref() {
-        Expr::ArrayRef(_, key)
-            if expr_mentions_any(key, RECORD_COUNTERS) => s.has_collect = true,
+        Expr::ArrayRef(_, key) if expr_mentions_any(key, RECORD_COUNTERS) => s.has_collect = true,
         Expr::Field(_) => s.has_field_assign = true,
         Expr::Var(n) if OUTPUT_VARS.contains(&n.as_str()) => s.has_reformat = true,
         _ => {}
@@ -917,13 +1227,19 @@ fn fmt_regex_or_expr(expr: &Expr) -> String {
 fn expr_mentions(expr: &Expr, var: &str) -> bool {
     match expr {
         Expr::Var(name) => name == var,
-        Expr::BinOp(l, _, r) | Expr::Concat(l, r) | Expr::LogicalAnd(l, r)
-        | Expr::LogicalOr(l, r) | Expr::Match(l, r) | Expr::NotMatch(l, r)
-        | Expr::Assign(l, r) | Expr::CompoundAssign(l, _, r) => {
-            expr_mentions(l, var) || expr_mentions(r, var)
-        }
-        Expr::UnaryMinus(e) | Expr::LogicalNot(e) | Expr::Field(e)
-        | Expr::Increment(e, _) | Expr::Decrement(e, _) => expr_mentions(e, var),
+        Expr::BinOp(l, _, r)
+        | Expr::Concat(l, r)
+        | Expr::LogicalAnd(l, r)
+        | Expr::LogicalOr(l, r)
+        | Expr::Match(l, r)
+        | Expr::NotMatch(l, r)
+        | Expr::Assign(l, r)
+        | Expr::CompoundAssign(l, _, r) => expr_mentions(l, var) || expr_mentions(r, var),
+        Expr::UnaryMinus(e)
+        | Expr::LogicalNot(e)
+        | Expr::Field(e)
+        | Expr::Increment(e, _)
+        | Expr::Decrement(e, _) => expr_mentions(e, var),
         Expr::FuncCall(_, args) => args.iter().any(|a| expr_mentions(a, var)),
         _ => false,
     }
@@ -935,20 +1251,17 @@ fn expr_mentions_any(expr: &Expr, vars: &[&str]) -> bool {
 
 fn for_mentions(stmt: &Statement, var: &str) -> bool {
     if let Statement::For(init, cond, incr, _) = stmt {
-        let in_init = init.as_ref().is_some_and(|s| {
-            matches!(s.as_ref(), Statement::Expression(e) if expr_mentions(e, var))
-        });
+        let in_init = init.as_ref().is_some_and(
+            |s| matches!(s.as_ref(), Statement::Expression(e) if expr_mentions(e, var)),
+        );
         let in_cond = cond.as_ref().is_some_and(|e| expr_mentions(e, var));
-        let in_incr = incr.as_ref().is_some_and(|s| {
-            matches!(s.as_ref(), Statement::Expression(e) if expr_mentions(e, var))
-        });
+        let in_incr = incr.as_ref().is_some_and(
+            |s| matches!(s.as_ref(), Statement::Expression(e) if expr_mentions(e, var)),
+        );
         return in_init || in_cond || in_incr;
     }
     false
 }
-
-
-
 
 /// Format an Expr back to readable fk source (truncated at 80 chars).
 pub fn expr_to_source(expr: &Expr) -> String {
@@ -974,15 +1287,24 @@ fn fmt_regex_lit_or_expr(expr: &Expr, buf: &mut String, depth: usize) {
 }
 
 fn fmt_expr(expr: &Expr, buf: &mut String, depth: usize) {
-    if depth > 10 { buf.push_str("..."); return; }
+    if depth > 10 {
+        buf.push_str("...");
+        return;
+    }
     match expr {
         Expr::Field(inner) => {
             buf.push('$');
-            let needs_parens = !matches!(inner.as_ref(),
-                Expr::NumberLit(_) | Expr::Var(_) | Expr::StringLit(_));
-            if needs_parens { buf.push('('); }
+            let needs_parens = !matches!(
+                inner.as_ref(),
+                Expr::NumberLit(_) | Expr::Var(_) | Expr::StringLit(_)
+            );
+            if needs_parens {
+                buf.push('(');
+            }
             fmt_expr(inner, buf, depth + 1);
-            if needs_parens { buf.push(')'); }
+            if needs_parens {
+                buf.push(')');
+            }
         }
         Expr::NumberLit(n) => {
             if *n == (*n as i64) as f64 {
@@ -991,7 +1313,9 @@ fn fmt_expr(expr: &Expr, buf: &mut String, depth: usize) {
                 let _ = write!(buf, "{n}");
             }
         }
-        Expr::StringLit(s) => { let _ = write!(buf, "\"{s}\""); }
+        Expr::StringLit(s) => {
+            let _ = write!(buf, "\"{s}\"");
+        }
         Expr::Var(name) => buf.push_str(name),
         Expr::ArrayRef(name, key) => {
             buf.push_str(name);
@@ -1007,12 +1331,18 @@ fn fmt_expr(expr: &Expr, buf: &mut String, depth: usize) {
         Expr::BinOp(l, op, r) => {
             fmt_expr(l, buf, depth + 1);
             buf.push_str(match op {
-                BinOp::Add => " + ", BinOp::Sub => " - ",
-                BinOp::Mul => " * ", BinOp::Div => " / ",
-                BinOp::Mod => " % ", BinOp::Pow => " ** ",
-                BinOp::Eq => " == ", BinOp::Ne => " != ",
-                BinOp::Lt => " < ",  BinOp::Le => " <= ",
-                BinOp::Gt => " > ",  BinOp::Ge => " >= ",
+                BinOp::Add => " + ",
+                BinOp::Sub => " - ",
+                BinOp::Mul => " * ",
+                BinOp::Div => " / ",
+                BinOp::Mod => " % ",
+                BinOp::Pow => " ** ",
+                BinOp::Eq => " == ",
+                BinOp::Ne => " != ",
+                BinOp::Lt => " < ",
+                BinOp::Le => " <= ",
+                BinOp::Gt => " > ",
+                BinOp::Ge => " >= ",
             });
             fmt_expr(r, buf, depth + 1);
         }
@@ -1060,22 +1390,33 @@ fn fmt_expr(expr: &Expr, buf: &mut String, depth: usize) {
         Expr::CompoundAssign(target, op, val) => {
             fmt_expr(target, buf, depth + 1);
             buf.push_str(match op {
-                BinOp::Add => " += ", BinOp::Sub => " -= ",
-                BinOp::Mul => " *= ", BinOp::Div => " /= ",
-                BinOp::Mod => " %= ", BinOp::Pow => " **= ",
+                BinOp::Add => " += ",
+                BinOp::Sub => " -= ",
+                BinOp::Mul => " *= ",
+                BinOp::Div => " /= ",
+                BinOp::Mod => " %= ",
+                BinOp::Pow => " **= ",
                 _ => " ?= ",
             });
             fmt_expr(val, buf, depth + 1);
         }
         Expr::Increment(e, pre) => {
-            if *pre { buf.push_str("++"); }
+            if *pre {
+                buf.push_str("++");
+            }
             fmt_expr(e, buf, depth + 1);
-            if !*pre { buf.push_str("++"); }
+            if !*pre {
+                buf.push_str("++");
+            }
         }
         Expr::Decrement(e, pre) => {
-            if *pre { buf.push_str("--"); }
+            if *pre {
+                buf.push_str("--");
+            }
             fmt_expr(e, buf, depth + 1);
-            if !*pre { buf.push_str("--"); }
+            if !*pre {
+                buf.push_str("--");
+            }
         }
         Expr::UnaryMinus(e) => {
             buf.push('-');
@@ -1101,18 +1442,26 @@ fn fmt_expr(expr: &Expr, buf: &mut String, depth: usize) {
             fmt_expr(f, buf, depth + 1);
         }
         Expr::Sprintf(args) | Expr::FuncCall(_, args) => {
-            let name = if let Expr::FuncCall(n, _) = expr { n.as_str() } else { "sprintf" };
+            let name = if let Expr::FuncCall(n, _) = expr {
+                n.as_str()
+            } else {
+                "sprintf"
+            };
             buf.push_str(name);
             buf.push('(');
             for (i, a) in args.iter().enumerate() {
-                if i > 0 { buf.push_str(", "); }
+                if i > 0 {
+                    buf.push_str(", ");
+                }
                 fmt_expr(a, buf, depth + 1);
             }
             buf.push(')');
         }
         Expr::Getline(var, source) => {
             buf.push_str("getline");
-            if let Some(v) = var { let _ = write!(buf, " {v}"); }
+            if let Some(v) = var {
+                let _ = write!(buf, " {v}");
+            }
             if let Some(src) = source {
                 buf.push_str(" < ");
                 fmt_expr(src, buf, depth + 1);
@@ -1121,7 +1470,9 @@ fn fmt_expr(expr: &Expr, buf: &mut String, depth: usize) {
         Expr::GetlinePipe(cmd, var) => {
             fmt_expr(cmd, buf, depth + 1);
             buf.push_str(" | getline");
-            if let Some(v) = var { let _ = write!(buf, " {v}"); }
+            if let Some(v) = var {
+                let _ = write!(buf, " {v}");
+            }
         }
     }
 }
@@ -1220,7 +1571,10 @@ mod tests {
     #[test]
     fn var_source_tracked() {
         let info = analyze_program("{ x = $1 + $2; a[NR] = x }");
-        assert_eq!(expr_to_source(info.var_sources.get("x").unwrap()), "$1 + $2");
+        assert_eq!(
+            expr_to_source(info.var_sources.get("x").unwrap()),
+            "$1 + $2"
+        );
         assert_eq!(expr_to_source(info.array_sources.get("a").unwrap()), "x");
     }
 
@@ -1278,20 +1632,20 @@ mod tests {
 
     #[test]
     fn explain_select_fields() {
-        assert_eq!(explain_program("{ print $1, $2 }"), "select $1, $2");
+        assert_eq!(explain_program("{ print $1, $2 }"), "use col 1–2");
     }
 
     #[test]
     fn explain_passthrough_is_empty() {
-        assert_eq!(explain_program("{ print }"), "");
-        assert_eq!(explain_program("{ print $0 }"), "");
+        assert_eq!(explain_program("{ print }"), "generate output");
+        assert_eq!(explain_program("{ print $0 }"), "generate output");
     }
 
     #[test]
     fn explain_filter_pattern() {
         assert_eq!(
             explain_program("/Math/ { print $1, $2 }"),
-            "filter /Math/, select $1, $2",
+            "where /Math/, use col 1–2",
         );
     }
 
@@ -1299,25 +1653,31 @@ mod tests {
     fn explain_filter_comparison() {
         assert_eq!(
             explain_program("$2 > 90 { print $1 }"),
-            "filter $2 > 90, select $1",
+            "where col 2 > 90, use col 1",
         );
     }
 
     #[test]
     fn explain_sum() {
-        assert_eq!(explain_program("{ sum += $2 } END { print sum }"), "sum $2");
+        assert_eq!(
+            explain_program("{ sum += $2 } END { print sum }"),
+            "sum col 2"
+        );
     }
 
     #[test]
     fn explain_frequency() {
-        assert_eq!(explain_program("{ a[$1]++ } END { for (k in a) print k }"), "frequency $1");
+        assert_eq!(
+            explain_program("{ a[$1]++ } END { for (k in a) print k }"),
+            "freq of col 1"
+        );
     }
 
     #[test]
     fn explain_histogram() {
         assert_eq!(
             explain_program("{ a[NR]=$1 } END { print plotbox(hist(a)) }"),
-            "histogram $1",
+            "histogram of col 1",
         );
     }
 
@@ -1325,13 +1685,13 @@ mod tests {
     fn explain_stats() {
         assert_eq!(
             explain_program("{ a[NR]=$2 } END { print mean(a), median(a) }"),
-            "stats $2",
+            "stats of col 2",
         );
     }
 
     #[test]
     fn explain_count() {
-        assert_eq!(explain_program("END { print NR }"), "count");
+        assert_eq!(explain_program("END { print NR }"), "count lines");
     }
 
     #[test]
@@ -1346,7 +1706,7 @@ mod tests {
     fn explain_jpath_format() {
         assert_eq!(
             explain_program("{ m = jpath($0, \".method\"); printf \"%s\\n\", m }"),
-            "extract + format JSON fields",
+            "use method",
         );
     }
 
@@ -1354,25 +1714,28 @@ mod tests {
     fn explain_compound_assign_tracked() {
         assert_eq!(
             explain_program("{ rev[$1] += $2 } END { print mean(rev) }"),
-            "stats $2",
+            "stats of col 2",
         );
     }
 
     #[test]
     fn explain_unique() {
-        assert_eq!(explain_program("!seen[$0]++"), "unique $0");
+        assert_eq!(explain_program("!seen[$0]++"), "deduplicate by $0");
     }
 
     #[test]
     fn explain_unique_multikey() {
-        assert_eq!(explain_program("!seen[$1,$2]++"), "unique $1, $2");
+        assert_eq!(
+            explain_program("!seen[$1,$2]++"),
+            "deduplicate by col 1, col 2"
+        );
     }
 
     #[test]
     fn explain_join() {
         assert_eq!(
             explain_program("NR==FNR{price[$1]=$2; next} {print $0, price[$1]+0}"),
-            "join",
+            "join on col 1",
         );
     }
 
@@ -1380,7 +1743,7 @@ mod tests {
     fn explain_anti_join() {
         assert_eq!(
             explain_program("NR==FNR{skip[$1]=1; next} !($1 in skip)"),
-            "anti-join",
+            "anti-join on col 1",
         );
     }
 
@@ -1388,7 +1751,7 @@ mod tests {
     fn explain_semi_join() {
         assert_eq!(
             explain_program("NR==FNR{keep[$1]=1; next} $1 in keep"),
-            "semi-join",
+            "semi-join on col 1",
         );
     }
 
@@ -1404,24 +1767,23 @@ mod tests {
     fn explain_aggregate_by() {
         assert_eq!(
             explain_program("{ s[$1]+=$2; c[$1]++ } END { for(k in s) print k, s[k]/c[k] }"),
-            "aggregate $2 by $1",
+            "agg col 2 by col 1",
         );
     }
 
     #[test]
     fn explain_sum_by_group() {
         assert_eq!(
-            explain_program("{ rev[$region] += $revenue } END { for (r in rev) printf \"%s: %.2f\\n\", r, rev[r] }"),
+            explain_program(
+                "{ rev[$region] += $revenue } END { for (r in rev) printf \"%s: %.2f\\n\", r, rev[r] }"
+            ),
             "sum $revenue by $region",
         );
     }
 
     #[test]
     fn explain_transform_suppresses_filter_1() {
-        assert_eq!(
-            explain_program("{sub(/\\r$/,\"\")};1"),
-            "sub /\\r$/ → \"\"",
-        );
+        assert_eq!(explain_program("{sub(/\\r$/,\"\")};1"), "sub /\\r$/ → \"\"",);
     }
 
     #[test]
@@ -1436,7 +1798,7 @@ mod tests {
     fn explain_multi_fragment_renders_all() {
         assert_eq!(
             explain_program("/baz/ { gsub(/foo/, \"bar\"); print }"),
-            "gsub /foo/ → \"bar\", filter /baz/",
+            "gsub /foo/ → \"bar\", where /baz/",
         );
     }
 
@@ -1444,7 +1806,7 @@ mod tests {
     fn explain_chart_subsumes_stats() {
         assert_eq!(
             explain_program("{ a[NR]=$1 } END { print plotbox(hist(a)), mean(a) }"),
-            "histogram $1",
+            "histogram of col 1",
         );
     }
 
@@ -1452,18 +1814,28 @@ mod tests {
     fn explain_stats_subsumes_sum_by() {
         assert_eq!(
             explain_program("{ rev[$1] += $2 } END { printf \"%.2f\\n\", mean(rev) }"),
-            "stats $2",
+            "stats of col 2",
         );
     }
 
     #[test]
     fn render_budget_truncation() {
         let frags = vec![
-            Fragment::new("histogram of some very long expression name", FragTag::Chart),
-            Fragment::new("filter $7 ~ /^extremely-long-pattern-that-keeps-going$/", FragTag::Filter),
+            Fragment::new(
+                "histogram of some very long expression name",
+                FragTag::Chart,
+            ),
+            Fragment::new(
+                "where col 7 ~ /^extremely-long-pattern-that-keeps-going$/",
+                FragTag::Filter,
+            ),
         ];
         let rendered = render(&frags, 72);
-        assert!(rendered.len() <= 72, "rendered len {} > 72: {rendered}", rendered.len());
+        assert!(
+            rendered.len() <= 72,
+            "rendered len {} > 72: {rendered}",
+            rendered.len()
+        );
         assert!(rendered.contains("histogram"));
         assert!(rendered.ends_with('…'));
     }
@@ -1471,11 +1843,11 @@ mod tests {
     #[test]
     fn render_drops_least_significant_first() {
         let frags = vec![
-            Fragment::new("stats $2", FragTag::Stats),
-            Fragment::new("filter /foo/", FragTag::Filter),
+            Fragment::new("stats of col 2", FragTag::Stats),
+            Fragment::new("where /foo/", FragTag::Filter),
         ];
         let rendered = render(&frags, 72);
-        assert_eq!(rendered, "stats $2, filter /foo/");
+        assert_eq!(rendered, "stats of col 2, where /foo/");
     }
 
     #[test]
@@ -1488,51 +1860,49 @@ mod tests {
         let ctx = ExplainContext::from_cli("csv", true, None, &["sales.csv".into()]);
         assert_eq!(
             explain_with_ctx("{ sum += $2 } END { print sum }", &ctx),
-            "sum $2 (CSV, headers, sales.csv)",
+            "sum col 2 (CSV, headers, sales.csv)",
         );
     }
 
     #[test]
     fn explain_env_compressed_json() {
-        let ctx = ExplainContext::from_cli(
-            "json", false, None, &["api.jsonl.gz".into()],
-        );
+        let ctx = ExplainContext::from_cli("json", false, None, &["api.jsonl.gz".into()]);
         assert_eq!(
             explain_with_ctx("{ a[NR]=$1 } END { print plotbox(hist(a)) }", &ctx),
-            "histogram $1 (JSON, gzip, api.jsonl.gz)",
+            "histogram of col 1 (JSON, gzip, api.jsonl.gz)",
         );
     }
 
     #[test]
     fn explain_env_field_sep() {
         let ctx = ExplainContext::from_cli("line", false, Some(":"), &[]);
-        assert_eq!(
-            explain_with_ctx("{ print $1 }", &ctx),
-            "select $1 (-F ':')",
-        );
+        assert_eq!(explain_with_ctx("{ print $1 }", &ctx), "use col 1 (-F ':')",);
     }
 
     #[test]
     fn explain_env_multiple_files() {
         let ctx = ExplainContext::from_cli(
-            "line", false, None, &["a.txt".into(), "b.txt".into(), "c.txt".into()],
+            "line",
+            false,
+            None,
+            &["a.txt".into(), "b.txt".into(), "c.txt".into()],
         );
         assert_eq!(
             explain_with_ctx("/foo/ { print }", &ctx),
-            "filter /foo/ (3 files)",
+            "where /foo/ (3 files)",
         );
     }
 
     #[test]
     fn explain_env_select_no_env() {
         let ctx = ExplainContext::from_cli("line", false, None, &[]);
-        assert_eq!(explain_with_ctx("{ print $1, $2 }", &ctx), "select $1, $2");
+        assert_eq!(explain_with_ctx("{ print $1, $2 }", &ctx), "use col 1–2");
     }
 
     #[test]
     fn explain_env_passthrough_no_env() {
         let ctx = ExplainContext::from_cli("line", false, None, &[]);
-        assert_eq!(explain_with_ctx("{ print }", &ctx), "");
+        assert_eq!(explain_with_ctx("{ print }", &ctx), "generate output");
     }
 
     #[test]
@@ -1540,7 +1910,7 @@ mod tests {
         let ctx = ExplainContext::from_cli("csv", true, None, &["data.csv".into()]);
         assert_eq!(
             explain_with_ctx("!seen[$0]++", &ctx),
-            "unique $0 (CSV, headers, data.csv)",
+            "deduplicate by $0 (CSV, headers, data.csv)",
         );
     }
 
@@ -1549,7 +1919,7 @@ mod tests {
         let ctx = ExplainContext::from_cli("line", false, None, &["data.txt".into()]);
         assert_eq!(
             explain_with_ctx("{ sum += $1 } END { print sum }", &ctx),
-            "sum $1 (data.txt)",
+            "sum col 1 (data.txt)",
         );
     }
 
@@ -1557,7 +1927,7 @@ mod tests {
     fn explain_select_named_columns() {
         assert_eq!(
             explain_program("{ print $\"host-name\", $\"cpu-usage\" }"),
-            "select host-name, cpu-usage",
+            "use host-name, cpu-usage",
         );
     }
 
@@ -1565,7 +1935,7 @@ mod tests {
     fn explain_select_many_fields_summarized() {
         assert_eq!(
             explain_program("{ print $1, $2, $3, $4, $5, $6 }"),
-            "select 6 fields",
+            "use 6 fields",
         );
     }
 
@@ -1573,7 +1943,7 @@ mod tests {
     fn explain_select_printf() {
         assert_eq!(
             explain_program("{ printf \"%s %s\\n\", $1, $2 }"),
-            "select $1, $2",
+            "use col 1–2",
         );
     }
 
@@ -1617,13 +1987,16 @@ mod tests {
 
     #[test]
     fn explain_reformat_output() {
-        assert_eq!(explain_program("BEGIN{ORS=\"\\n\\n\"};1"), "reformat output");
+        assert_eq!(
+            explain_program("BEGIN{ORS=\"\\n\\n\"};1"),
+            "reformat output"
+        );
     }
 
     #[test]
-    fn explain_compute() {
-        assert_eq!(explain_program("{ print length($0) }"), "compute");
-        assert_eq!(explain_program("{ print $1 + $2 }"), "compute");
+    fn explain_compute_shows_fields() {
+        assert_eq!(explain_program("{ print length($0) }"), "generate output");
+        assert_eq!(explain_program("{ print $1 + $2 }"), "use col 1–2");
     }
 
     #[test]
@@ -1631,6 +2004,86 @@ mod tests {
         assert_eq!(
             explain_program("{s=0; for (i=1; i<=NF; i++) s=s+$i; print s}"),
             "sum $i, iterate fields",
+        );
+    }
+
+    #[test]
+    fn explain_timing() {
+        assert_eq!(
+            explain_program(
+                "BEGIN { tic(); for(i=0;i<100000;i++) x+=i; printf \"%.4f\\n\",toc() }"
+            ),
+            "generate output, timed",
+        );
+    }
+
+    #[test]
+    fn explain_lineage_through_vars() {
+        assert_eq!(
+            explain_program("{ x = $3 * 2; y = $4 + 1; printf \"%s %d %d\\n\", $1, x, y }"),
+            "use col 1, 3, 4",
+        );
+    }
+
+    #[test]
+    fn explain_lineage_coercion_as_number() {
+        // +0 is coercion (as number) — resolves to the source field
+        assert_eq!(
+            explain_program("{ x = $3 + 0; printf \"%d\\n\", x }"),
+            "use col 3",
+        );
+    }
+
+    #[test]
+    fn explain_lineage_named_columns() {
+        assert_eq!(
+            explain_program(
+                "{ cpu = $\"cpu-usage\" + 0; mem = $\"mem-usage\" + 0; printf \"%s %f %f\\n\", $\"host-name\", cpu, mem }"
+            ),
+            "use host-name, cpu-usage, mem-usage",
+        );
+    }
+
+    #[test]
+    fn explain_concat_fields() {
+        assert_eq!(explain_program("{ print $1 \" \" $2 }"), "use col 1–2");
+        assert_eq!(
+            explain_program("{ print $1 \":\" $2 \":\" $3 }"),
+            "use col 1–3"
+        );
+    }
+
+    #[test]
+    fn explain_concat_lineage() {
+        assert_eq!(
+            explain_program("{ s = $1 \" - \" $2; print s }"),
+            "use col 1–2",
+        );
+    }
+
+    #[test]
+    fn explain_jpath_lineage() {
+        assert_eq!(
+            explain_program(
+                "{ m = jpath($0, \".method\"); p = jpath($0, \".path\"); printf \"%s %s\\n\", m, p }"
+            ),
+            "use method, path",
+        );
+    }
+
+    #[test]
+    fn explain_mixed_direct_and_computed() {
+        assert_eq!(
+            explain_program("{ print $1, $2, length($3) }"),
+            "use col 1–3",
+        );
+    }
+
+    #[test]
+    fn explain_ternary_in_output() {
+        assert_eq!(
+            explain_program("{ print ($1 > 50 ? \"high\" : \"low\"), $2 }"),
+            "use col 2",
         );
     }
 }

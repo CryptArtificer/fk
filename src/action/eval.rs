@@ -4,7 +4,7 @@ use crate::builtins::{self, format_printf};
 use crate::parser::{BinOp, Expr};
 use crate::runtime::Value;
 
-use super::{bool_val, Executor};
+use super::{Executor, bool_val};
 
 impl<'a> Executor<'a> {
     pub(crate) fn eval_expr(&mut self, expr: &Expr) -> Value {
@@ -134,9 +134,10 @@ impl<'a> Executor<'a> {
                     }
                     "length" if args.len() == 1 => {
                         if let Expr::Var(var_name) = &args[0]
-                            && self.rt.has_array(var_name) {
-                                return Value::from_number(self.rt.array_len(var_name) as f64);
-                            }
+                            && self.rt.has_array(var_name)
+                        {
+                            return Value::from_number(self.rt.array_len(var_name) as f64);
+                        }
                     }
                     "close" => return self.builtin_close(args),
                     "gensub" => return self.builtin_gensub(args),
@@ -163,8 +164,8 @@ impl<'a> Executor<'a> {
                     "and" | "or" | "xor" | "lshift" | "rshift" | "compl" => {
                         return self.builtin_bitwise(name, args);
                     }
-                    "sum" | "mean" | "median" | "stddev" | "variance"
-                    | "percentile" | "p" | "iqm" | "quantile" => {
+                    "sum" | "mean" | "median" | "stddev" | "variance" | "percentile" | "p"
+                    | "iqm" | "quantile" => {
                         return self.builtin_stats(name, args);
                     }
                     "hist" => return self.builtin_hist(args),
@@ -172,14 +173,16 @@ impl<'a> Executor<'a> {
                     "plotbox" => return self.builtin_plotbox(args),
                     "min" if args.len() == 1 => {
                         if let Expr::Var(v) = &args[0]
-                            && self.rt.has_array(v) {
-                                return self.builtin_stats("min", args);
+                            && self.rt.has_array(v)
+                        {
+                            return self.builtin_stats("min", args);
                         }
                     }
                     "max" if args.len() == 1 => {
                         if let Expr::Var(v) = &args[0]
-                            && self.rt.has_array(v) {
-                                return self.builtin_stats("max", args);
+                            && self.rt.has_array(v)
+                        {
+                            return self.builtin_stats("max", args);
                         }
                     }
                     _ => {}
@@ -191,9 +194,7 @@ impl<'a> Executor<'a> {
                     Value::from_string(builtins::call_builtin(name, &evaled))
                 }
             }
-            Expr::Getline(var, source) => {
-                self.exec_getline(var.as_deref(), source.as_deref())
-            }
+            Expr::Getline(var, source) => self.exec_getline(var.as_deref(), source.as_deref()),
             Expr::GetlinePipe(cmd_expr, var) => {
                 let cmd = self.eval_string(cmd_expr);
                 self.exec_getline_pipe(&cmd, var.as_deref())
@@ -211,10 +212,11 @@ impl<'a> Executor<'a> {
     #[inline]
     pub(crate) fn print_expr_fast(&mut self, expr: &Expr) {
         if let Expr::Field(idx_expr) = expr
-            && let Expr::NumberLit(n) = idx_expr.as_ref() {
-                let idx = self.resolve_field_idx(*n);
-                self.rt.write_field_to(idx, &mut self.stdout);
-                return;
+            && let Expr::NumberLit(n) = idx_expr.as_ref()
+        {
+            let idx = self.resolve_field_idx(*n);
+            self.rt.write_field_to(idx, &mut self.stdout);
+            return;
         }
         let val = self.eval_expr(expr);
         if val.is_numeric_only() {
@@ -297,11 +299,14 @@ impl<'a> Executor<'a> {
 
 fn compare_values(left: &Value, right: &Value) -> std::cmp::Ordering {
     if left.is_numeric() && right.is_numeric() {
-        return left.to_number().partial_cmp(&right.to_number())
+        return left
+            .to_number()
+            .partial_cmp(&right.to_number())
             .unwrap_or(std::cmp::Ordering::Equal);
     }
     if left.looks_numeric() && right.looks_numeric() {
-        left.to_number().partial_cmp(&right.to_number())
+        left.to_number()
+            .partial_cmp(&right.to_number())
             .unwrap_or(std::cmp::Ordering::Equal)
     } else {
         left.to_string_val().cmp(&right.to_string_val())

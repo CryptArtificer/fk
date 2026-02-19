@@ -1,5 +1,5 @@
-use crate::{action, input, lexer, parser, runtime};
 use crate::input::RecordReader;
+use crate::{action, input, lexer, parser, runtime};
 
 /// Helper: parse and run a program, return the runtime state for inspection.
 fn eval(program_text: &str, input_lines: &[&str]) -> runtime::Runtime {
@@ -13,7 +13,10 @@ fn eval(program_text: &str, input_lines: &[&str]) -> runtime::Runtime {
 
     exec.run_begin();
     for line in input_lines {
-        let rec = input::Record { text: line.to_string(), fields: None };
+        let rec = input::Record {
+            text: line.to_string(),
+            fields: None,
+        };
         exec.run_record(&rec);
     }
     exec.run_end();
@@ -38,7 +41,10 @@ fn eval_with_header(program_text: &str, fs: &str, input_lines: &[&str]) -> runti
         exec.set_header_from_text(header);
     }
     for line in lines {
-        let rec = input::Record { text: line.to_string(), fields: None };
+        let rec = input::Record {
+            text: line.to_string(),
+            fields: None,
+        };
         exec.run_record(&rec);
     }
     exec.run_end();
@@ -378,7 +384,10 @@ fn split_clears_previous_array_contents() {
 
 #[test]
 fn sub_replaces_first_occurrence_in_dollar_zero() {
-    let rt = eval("{ sub(\"world\", \"earth\"); result = $0 }", &["hello world world"]);
+    let rt = eval(
+        "{ sub(\"world\", \"earth\"); result = $0 }",
+        &["hello world world"],
+    );
     assert_eq!(rt.get_var("result"), "hello earth world");
 }
 
@@ -390,7 +399,10 @@ fn gsub_replaces_all_occurrences_in_dollar_zero() {
 
 #[test]
 fn sub_on_named_variable() {
-    let rt = eval("{ x = \"aabbcc\"; sub(\"bb\", \"BB\", x); result = x }", &["z"]);
+    let rt = eval(
+        "{ x = \"aabbcc\"; sub(\"bb\", \"BB\", x); result = x }",
+        &["z"],
+    );
     assert_eq!(rt.get_var("result"), "aaBBcc");
 }
 
@@ -410,7 +422,10 @@ fn sub_no_match_returns_zero() {
 
 #[test]
 fn match_finds_pattern_sets_rstart_rlength() {
-    let rt = eval("{ match($0, \"wor\"); rs = RSTART; rl = RLENGTH }", &["hello world"]);
+    let rt = eval(
+        "{ match($0, \"wor\"); rs = RSTART; rl = RLENGTH }",
+        &["hello world"],
+    );
     assert_eq!(rt.get_var("rs"), "7");
     assert_eq!(rt.get_var("rl"), "3");
 }
@@ -443,7 +458,14 @@ fn range_pattern_includes_start_and_stop_lines() {
 fn range_pattern_not_active_before_start() {
     let rt = eval(
         "/BEGIN_RANGE/,/END_RANGE/ { count++ }",
-        &["nothing", "here", "BEGIN_RANGE", "inside", "END_RANGE", "outside"],
+        &[
+            "nothing",
+            "here",
+            "BEGIN_RANGE",
+            "inside",
+            "END_RANGE",
+            "outside",
+        ],
     );
     assert_eq!(rt.get_var("count"), "3"); // BEGIN_RANGE, inside, END_RANGE
 }
@@ -459,10 +481,7 @@ fn range_pattern_can_reactivate() {
 
 #[test]
 fn range_stays_active_if_stop_never_seen() {
-    let rt = eval(
-        "/START/,/STOP/ { count++ }",
-        &["START", "a", "b", "c"],
-    );
+    let rt = eval("/START/,/STOP/ { count++ }", &["START", "a", "b", "c"]);
     assert_eq!(rt.get_var("count"), "4"); // all lines from START onward
 }
 
@@ -654,10 +673,7 @@ fn length_of_array() {
 
 #[test]
 fn length_of_empty_array() {
-    let rt = eval(
-        "{ split(\"\", a); result = length(a) }",
-        &["w"],
-    );
+    let rt = eval("{ split(\"\", a); result = length(a) }", &["w"]);
     assert_eq!(rt.get_var("result"), "0");
 }
 
@@ -721,39 +737,27 @@ fn systime_returns_positive_integer() {
 #[test]
 fn strftime_formats_known_epoch() {
     // Epoch 0 = 1970-01-01 00:00:00 UTC
-    let rt = eval(
-        r#"{ result = strftime("%Y-%m-%d %H:%M:%S", 0) }"#,
-        &["x"],
-    );
+    let rt = eval(r#"{ result = strftime("%Y-%m-%d %H:%M:%S", 0) }"#, &["x"]);
     assert_eq!(rt.get_var("result"), "1970-01-01 00:00:00");
 }
 
 #[test]
 fn strftime_formats_known_date() {
     // 1234567890 = 2009-02-13 23:31:30 UTC
-    let rt = eval(
-        r#"{ result = strftime("%Y-%m-%d", 1234567890) }"#,
-        &["x"],
-    );
+    let rt = eval(r#"{ result = strftime("%Y-%m-%d", 1234567890) }"#, &["x"]);
     assert_eq!(rt.get_var("result"), "2009-02-13");
 }
 
 #[test]
 fn strftime_weekday_and_month_names() {
     // Epoch 0 = Thursday, January
-    let rt = eval(
-        r#"{ result = strftime("%A %B", 0) }"#,
-        &["x"],
-    );
+    let rt = eval(r#"{ result = strftime("%A %B", 0) }"#, &["x"]);
     assert_eq!(rt.get_var("result"), "Thursday January");
 }
 
 #[test]
 fn mktime_converts_to_epoch() {
-    let rt = eval(
-        r#"{ result = mktime("1970 1 1 0 0 0") }"#,
-        &["x"],
-    );
+    let rt = eval(r#"{ result = mktime("1970 1 1 0 0 0") }"#, &["x"]);
     assert_eq!(rt.get_var("result"), "0");
 }
 
@@ -771,10 +775,7 @@ fn mktime_roundtrips_with_strftime() {
 #[test]
 fn nextfile_stops_remaining_rules_for_record() {
     // Two rules: first sets x and calls nextfile, second should not run
-    let rt = eval(
-        "{ x++ ; nextfile } { y++ }",
-        &["a", "b", "c"],
-    );
+    let rt = eval("{ x++ ; nextfile } { y++ }", &["a", "b", "c"]);
     // nextfile on single source: first record processed, rest skipped
     assert_eq!(rt.get_var("x"), "1");
     assert_eq!(rt.get_var("y"), "");
@@ -793,28 +794,19 @@ fn nextfile_parses_as_statement() {
 
 #[test]
 fn unicode_length_counts_chars() {
-    let rt = eval(
-        "{ n = length($0) }",
-        &["café"],
-    );
+    let rt = eval("{ n = length($0) }", &["café"]);
     assert_eq!(rt.get_var("n"), "4");
 }
 
 #[test]
 fn unicode_substr_indexes_by_char() {
-    let rt = eval(
-        "{ s = substr($0, 4, 1) }",
-        &["café"],
-    );
+    let rt = eval("{ s = substr($0, 4, 1) }", &["café"]);
     assert_eq!(rt.get_var("s"), "é");
 }
 
 #[test]
 fn unicode_index_returns_char_position() {
-    let rt = eval(
-        "{ p = index($0, \"é\") }",
-        &["café"],
-    );
+    let rt = eval("{ p = index($0, \"é\") }", &["café"]);
     assert_eq!(rt.get_var("p"), "4");
 }
 
@@ -840,10 +832,7 @@ fn jpath_nested_array() {
 
 #[test]
 fn jpath_missing_returns_empty() {
-    let rt = eval(
-        r#"{ x = jpath($0, ".nope") }"#,
-        &[r#"{"a":1}"#],
-    );
+    let rt = eval(r#"{ x = jpath($0, ".nope") }"#, &[r#"{"a":1}"#]);
     assert_eq!(rt.get_var("x"), "");
 }
 
@@ -872,10 +861,7 @@ fn jpath_extract_object_into_awk_array() {
 
 #[test]
 fn jpath_extract_scalar_gives_single_element() {
-    let rt = eval(
-        r#"{ n = jpath($0, ".name", arr) }"#,
-        &[r#"{"name":"Bob"}"#],
-    );
+    let rt = eval(r#"{ n = jpath($0, ".name", arr) }"#, &[r#"{"name":"Bob"}"#]);
     assert_eq!(rt.get_var("n"), "1");
     assert_eq!(rt.get_array("arr", "0"), "Bob");
 }
@@ -972,7 +958,10 @@ fn long_line_1mb() {
 
 #[test]
 fn many_fields() {
-    let line = (1..=1000).map(|i| i.to_string()).collect::<Vec<_>>().join(" ");
+    let line = (1..=1000)
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>()
+        .join(" ");
     let rt = eval("{ nf = NF; last = $NF }", &[&line]);
     assert_eq!(rt.get_var("nf"), "1000");
     assert_eq!(rt.get_var("last"), "1000");
@@ -1001,10 +990,7 @@ fn moderate_recursion_works() {
 
 #[test]
 fn field_zero_reconstructed_with_ofs() {
-    let rt = eval(
-        "BEGIN { OFS = \"-\" } { $1 = $1; x = $0 }",
-        &["a b c"],
-    );
+    let rt = eval("BEGIN { OFS = \"-\" } { $1 = $1; x = $0 }", &["a b c"]);
     assert_eq!(rt.get_var("x"), "a-b-c");
 }
 
@@ -1054,7 +1040,10 @@ fn break_in_while() {
 
 #[test]
 fn break_in_for() {
-    let rt = eval("BEGIN { for (i=0; i<10; i++) { if (i==5) break } x=i }", &[]);
+    let rt = eval(
+        "BEGIN { for (i=0; i<10; i++) { if (i==5) break } x=i }",
+        &[],
+    );
     assert_eq!(rt.get_var("x"), "5");
 }
 
@@ -1069,7 +1058,10 @@ fn break_in_for_in() {
 
 #[test]
 fn break_in_do_while() {
-    let rt = eval("BEGIN { i=0; do { i++; if (i==4) break } while (1); x=i }", &[]);
+    let rt = eval(
+        "BEGIN { i=0; do { i++; if (i==4) break } while (1); x=i }",
+        &[],
+    );
     assert_eq!(rt.get_var("x"), "4");
 }
 
@@ -1170,37 +1162,25 @@ fn exit_from_begin() {
 
 #[test]
 fn computed_regex_match() {
-    let rt = eval(
-        r#"{ pat = "hel"; result = ($0 ~ pat) }"#,
-        &["hello"],
-    );
+    let rt = eval(r#"{ pat = "hel"; result = ($0 ~ pat) }"#, &["hello"]);
     assert_eq!(rt.get_var("result"), "1");
 }
 
 #[test]
 fn computed_regex_not_match() {
-    let rt = eval(
-        r#"{ pat = "xyz"; result = ($0 !~ pat) }"#,
-        &["hello"],
-    );
+    let rt = eval(r#"{ pat = "xyz"; result = ($0 !~ pat) }"#, &["hello"]);
     assert_eq!(rt.get_var("result"), "1");
 }
 
 #[test]
 fn computed_regex_with_special_chars() {
-    let rt = eval(
-        r#"{ pat = "^[0-9]+$"; result = ($0 ~ pat) }"#,
-        &["12345"],
-    );
+    let rt = eval(r#"{ pat = "^[0-9]+$"; result = ($0 ~ pat) }"#, &["12345"]);
     assert_eq!(rt.get_var("result"), "1");
 }
 
 #[test]
 fn computed_regex_no_match() {
-    let rt = eval(
-        r#"{ pat = "^[0-9]+$"; result = ($0 ~ pat) }"#,
-        &["abc"],
-    );
+    let rt = eval(r#"{ pat = "^[0-9]+$"; result = ($0 ~ pat) }"#, &["abc"]);
     assert_eq!(rt.get_var("result"), "0");
 }
 
@@ -1215,37 +1195,25 @@ fn regex_pattern_uses_real_regex() {
 
 #[test]
 fn gensub_basic_first() {
-    let rt = eval(
-        r#"{ x = gensub("o", "0", 1) }"#,
-        &["foobar"],
-    );
+    let rt = eval(r#"{ x = gensub("o", "0", 1) }"#, &["foobar"]);
     assert_eq!(rt.get_var("x"), "f0obar");
 }
 
 #[test]
 fn gensub_global() {
-    let rt = eval(
-        r#"{ x = gensub("o", "0", "g") }"#,
-        &["foobar"],
-    );
+    let rt = eval(r#"{ x = gensub("o", "0", "g") }"#, &["foobar"]);
     assert_eq!(rt.get_var("x"), "f00bar");
 }
 
 #[test]
 fn gensub_nth_occurrence() {
-    let rt = eval(
-        r#"{ x = gensub("o", "0", 2) }"#,
-        &["foobar"],
-    );
+    let rt = eval(r#"{ x = gensub("o", "0", 2) }"#, &["foobar"]);
     assert_eq!(rt.get_var("x"), "fo0bar");
 }
 
 #[test]
 fn gensub_does_not_modify_original() {
-    let rt = eval(
-        r#"{ x = gensub("o", "0", "g"); y = $0 }"#,
-        &["foobar"],
-    );
+    let rt = eval(r#"{ x = gensub("o", "0", "g"); y = $0 }"#, &["foobar"]);
     assert_eq!(rt.get_var("x"), "f00bar");
     assert_eq!(rt.get_var("y"), "foobar");
 }
@@ -1261,10 +1229,7 @@ fn gensub_with_explicit_target() {
 
 #[test]
 fn gensub_regex_pattern() {
-    let rt = eval(
-        r#"{ x = gensub("[0-9]+", "NUM", "g") }"#,
-        &["abc123def456"],
-    );
+    let rt = eval(r#"{ x = gensub("[0-9]+", "NUM", "g") }"#, &["abc123def456"]);
     assert_eq!(rt.get_var("x"), "abcNUMdefNUM");
 }
 
@@ -1283,10 +1248,7 @@ fn subsep_multi_dim_array() {
 #[test]
 fn subsep_default_value() {
     // SUBSEP defaults to \x1c (ASCII 28)
-    let rt = eval(
-        r#"BEGIN { a[1,2] = "v" ; for (k in a) x = k }"#,
-        &[],
-    );
+    let rt = eval(r#"BEGIN { a[1,2] = "v" ; for (k in a) x = k }"#, &[]);
     assert_eq!(rt.get_var("x"), "1\x1c2");
 }
 
@@ -1392,10 +1354,7 @@ fn filename_default_is_empty() {
 
 #[test]
 fn next_skips_remaining_rules() {
-    let rt = eval(
-        "{ x++; next } { y++ }",
-        &["a", "b", "c"],
-    );
+    let rt = eval("{ x++; next } { y++ }", &["a", "b", "c"]);
     assert_eq!(rt.get_var("x"), "3");
     assert_eq!(rt.get_var("y"), "");
 }
@@ -1413,20 +1372,14 @@ fn next_in_conditional() {
 
 #[test]
 fn regex_pattern_with_backslash_escape() {
-    let rt = eval(
-        r#"/\[data\]/ { x++ }"#,
-        &["[data]", "other", "[data] more"],
-    );
+    let rt = eval(r#"/\[data\]/ { x++ }"#, &["[data]", "other", "[data] more"]);
     assert_eq!(rt.get_var("x"), "2");
 }
 
 #[test]
 fn regex_dot_is_not_literal() {
     // . in regex should match any char, not just literal dot
-    let rt = eval(
-        r#"/a.c/ { x++ }"#,
-        &["abc", "aXc", "ac", "a.c"],
-    );
+    let rt = eval(r#"/a.c/ { x++ }"#, &["abc", "aXc", "ac", "a.c"]);
     assert_eq!(rt.get_var("x"), "3");
 }
 
@@ -1456,7 +1409,12 @@ fn header_names_with_filter() {
     let rt = eval_with_header(
         r#"$age > 28 { count++ }"#,
         ",",
-        &["name,age,city", "Alice,30,NYC", "Bob,25,LA", "Carol,35,Chicago"],
+        &[
+            "name,age,city",
+            "Alice,30,NYC",
+            "Bob,25,LA",
+            "Carol,35,Chicago",
+        ],
     );
     assert_eq!(rt.get_var("count"), "2");
 }
@@ -1471,7 +1429,10 @@ fn math_abs() {
 
 #[test]
 fn math_ceil_floor_round() {
-    let rt = eval(r#"BEGIN { a = ceil(2.3); b = floor(2.7); c = round(2.5) }"#, &[]);
+    let rt = eval(
+        r#"BEGIN { a = ceil(2.3); b = floor(2.7); c = round(2.5) }"#,
+        &[],
+    );
     assert_eq!(rt.get_var("a"), "3");
     assert_eq!(rt.get_var("b"), "2");
     assert_eq!(rt.get_var("c"), "3");
@@ -1528,7 +1489,10 @@ fn string_ltrim_rtrim() {
 
 #[test]
 fn string_startswith_endswith() {
-    let rt = eval(r#"BEGIN { a = startswith("hello", "hel"); b = endswith("hello", "lo"); c = startswith("hello", "xyz") }"#, &[]);
+    let rt = eval(
+        r#"BEGIN { a = startswith("hello", "hel"); b = endswith("hello", "lo"); c = startswith("hello", "xyz") }"#,
+        &[],
+    );
     assert_eq!(rt.get_var("a"), "1");
     assert_eq!(rt.get_var("b"), "1");
     assert_eq!(rt.get_var("c"), "0");
@@ -1563,7 +1527,10 @@ fn string_hex() {
 
 #[test]
 fn date_parsedate_basic() {
-    let rt = eval(r#"BEGIN { x = parsedate("2025-01-15 10:30:00", "%Y-%m-%d %H:%M:%S") }"#, &[]);
+    let rt = eval(
+        r#"BEGIN { x = parsedate("2025-01-15 10:30:00", "%Y-%m-%d %H:%M:%S") }"#,
+        &[],
+    );
     assert_eq!(rt.get_var("x"), "1736937000");
 }
 
@@ -1580,7 +1547,10 @@ fn date_parsedate_roundtrip() {
 
 #[test]
 fn bitwise_and_or_xor() {
-    let rt = eval(r#"BEGIN { a = and(12, 10); b = or(12, 10); c = xor(12, 10) }"#, &[]);
+    let rt = eval(
+        r#"BEGIN { a = and(12, 10); b = or(12, 10); c = xor(12, 10) }"#,
+        &[],
+    );
     assert_eq!(rt.get_var("a"), "8");
     assert_eq!(rt.get_var("b"), "14");
     assert_eq!(rt.get_var("c"), "6");
@@ -1710,10 +1680,7 @@ fn quoted_field_filter() {
 
 #[test]
 fn numeric_string_field_still_works() {
-    let rt = eval(
-        r#"{ x = $"2" }"#,
-        &["hello world"],
-    );
+    let rt = eval(r#"{ x = $"2" }"#, &["hello world"]);
     assert_eq!(rt.get_var("x"), "world");
 }
 
@@ -1899,7 +1866,11 @@ fn stats_iqm() {
         &["10", "20", "30", "40", "50", "60", "70", "80", "90", "100"],
     );
     let v: f64 = rt.get_var("result").parse().unwrap();
-    assert!(v > 30.0 && v < 80.0, "iqm should be in the middle range, got {}", v);
+    assert!(
+        v > 30.0 && v < 80.0,
+        "iqm should be in the middle range, got {}",
+        v
+    );
 }
 
 #[test]
@@ -1920,7 +1891,11 @@ fn stats_hist_default_bins() {
         &["1", "2", "3", "4", "5"],
     );
     let hname = rt.get_var("hname");
-    assert!(hname.starts_with("__hist_"), "hist() should return generated name, got: {}", hname);
+    assert!(
+        hname.starts_with("__hist_"),
+        "hist() should return generated name, got: {}",
+        hname
+    );
 }
 
 #[test]
@@ -1943,7 +1918,10 @@ fn stats_plotbox_histogram() {
     let s = rt.get_var("s");
     assert!(s.contains("Title"), "should include title");
     assert!(s.contains("X"), "should include xlabel");
-    assert!(s.contains('['), "histogram plotbox should have range labels");
+    assert!(
+        s.contains('['),
+        "histogram plotbox should have range labels"
+    );
     assert!(s.contains('┤'), "should have box drawing chars");
 }
 
@@ -1955,8 +1933,14 @@ fn stats_hist_plotbox_chained() {
     );
     let s = rt.get_var("s");
     assert!(!s.is_empty());
-    assert!(s.contains('┤'), "chained plotbox(hist(a)) should produce boxed chart");
-    assert!(s.contains("Frequency"), "histogram plotbox should default to Frequency xlabel");
+    assert!(
+        s.contains('┤'),
+        "chained plotbox(hist(a)) should produce boxed chart"
+    );
+    assert!(
+        s.contains("Frequency"),
+        "histogram plotbox should default to Frequency xlabel"
+    );
 }
 
 #[test]
@@ -1979,20 +1963,14 @@ fn stats_max_array() {
 
 #[test]
 fn stats_scalar_min_max_still_works() {
-    let rt = eval(
-        r#"BEGIN { a = min(3, 7); b = max(3, 7) }"#,
-        &[],
-    );
+    let rt = eval(r#"BEGIN { a = min(3, 7); b = max(3, 7) }"#, &[]);
     assert_eq!(rt.get_var("a"), "3");
     assert_eq!(rt.get_var("b"), "7");
 }
 
 #[test]
 fn stats_empty_array() {
-    let rt = eval(
-        r#"END { result = sum(a) }"#,
-        &["ignored"],
-    );
+    let rt = eval(r#"END { result = sum(a) }"#, &["ignored"]);
     assert_eq!(rt.get_var("result"), "0");
 }
 
@@ -2010,10 +1988,7 @@ fn stats_single_element() {
 
 #[test]
 fn multiple_begin_blocks() {
-    let rt = eval(
-        r#"BEGIN { a = 1 } BEGIN { b = 2 } END { c = a + b }"#,
-        &[],
-    );
+    let rt = eval(r#"BEGIN { a = 1 } BEGIN { b = 2 } END { c = a + b }"#, &[]);
     assert_eq!(rt.get_var("a"), "1");
     assert_eq!(rt.get_var("b"), "2");
     assert_eq!(rt.get_var("c"), "3");
@@ -2084,21 +2059,42 @@ fn sniff_csv_no_header() {
     let schema = crate::describe::sniff(&mut reader);
     assert_eq!(schema.format, crate::describe::Format::Csv);
     assert!(!schema.has_header);
-    assert_eq!(schema.types, vec![
-        crate::describe::ColType::Int,
-        crate::describe::ColType::Int,
-        crate::describe::ColType::Int,
-    ]);
+    assert_eq!(
+        schema.types,
+        vec![
+            crate::describe::ColType::Int,
+            crate::describe::ColType::Int,
+            crate::describe::ColType::Int,
+        ]
+    );
 }
 
 #[test]
 fn format_from_extension_works() {
-    assert_eq!(crate::describe::format_from_extension("data.csv"), Some(crate::describe::Format::Csv));
-    assert_eq!(crate::describe::format_from_extension("data.csv.gz"), Some(crate::describe::Format::Csv));
-    assert_eq!(crate::describe::format_from_extension("data.tsv.zst"), Some(crate::describe::Format::Tsv));
-    assert_eq!(crate::describe::format_from_extension("data.json"), Some(crate::describe::Format::Json));
-    assert_eq!(crate::describe::format_from_extension("data.jsonl.bz2"), Some(crate::describe::Format::Json));
-    assert_eq!(crate::describe::format_from_extension("data.parquet"), Some(crate::describe::Format::Parquet));
+    assert_eq!(
+        crate::describe::format_from_extension("data.csv"),
+        Some(crate::describe::Format::Csv)
+    );
+    assert_eq!(
+        crate::describe::format_from_extension("data.csv.gz"),
+        Some(crate::describe::Format::Csv)
+    );
+    assert_eq!(
+        crate::describe::format_from_extension("data.tsv.zst"),
+        Some(crate::describe::Format::Tsv)
+    );
+    assert_eq!(
+        crate::describe::format_from_extension("data.json"),
+        Some(crate::describe::Format::Json)
+    );
+    assert_eq!(
+        crate::describe::format_from_extension("data.jsonl.bz2"),
+        Some(crate::describe::Format::Json)
+    );
+    assert_eq!(
+        crate::describe::format_from_extension("data.parquet"),
+        Some(crate::describe::Format::Parquet)
+    );
     assert_eq!(crate::describe::format_from_extension("data.txt"), None);
     assert_eq!(crate::describe::format_from_extension("data.log.gz"), None);
 }
@@ -2125,8 +2121,8 @@ fn compressed_csv_gz_reads_correctly() {
     }
 
     let path = fixture.to_str().unwrap();
-    let reader_box = crate::describe::open_maybe_compressed(path)
-        .expect("failed to decompress .csv.gz");
+    let reader_box =
+        crate::describe::open_maybe_compressed(path).expect("failed to decompress .csv.gz");
     let mut buf = std::io::BufReader::new(reader_box);
     let mut csv = crate::input::csv::CsvReader::comma();
 
@@ -2327,19 +2323,13 @@ fn union_merges_keys() {
 
 #[test]
 fn seq_fills_range() {
-    let rt = eval(
-        r#"BEGIN { n=seq(a,3,7); result=n ":" join(a,",") }"#,
-        &[],
-    );
+    let rt = eval(r#"BEGIN { n=seq(a,3,7); result=n ":" join(a,",") }"#, &[]);
     assert_eq!(rt.get_var("result"), "5:3,4,5,6,7");
 }
 
 #[test]
 fn seq_reverse_range() {
-    let rt = eval(
-        r#"BEGIN { seq(a,5,1); result=join(a,",") }"#,
-        &[],
-    );
+    let rt = eval(r#"BEGIN { seq(a,5,1); result=join(a,",") }"#, &[]);
     assert_eq!(rt.get_var("result"), "5,4,3,2,1");
 }
 
@@ -2356,28 +2346,19 @@ fn sample_reduces_array() {
 
 #[test]
 fn lpad_pads_left() {
-    let rt = eval(
-        r#"BEGIN { result = lpad("hi", 6, ".") }"#,
-        &[],
-    );
+    let rt = eval(r#"BEGIN { result = lpad("hi", 6, ".") }"#, &[]);
     assert_eq!(rt.get_var("result"), "....hi");
 }
 
 #[test]
 fn rpad_pads_right() {
-    let rt = eval(
-        r#"BEGIN { result = rpad("hi", 6) }"#,
-        &[],
-    );
+    let rt = eval(r#"BEGIN { result = rpad("hi", 6) }"#, &[]);
     assert_eq!(rt.get_var("result"), "hi    ");
 }
 
 #[test]
 fn lpad_no_truncate() {
-    let rt = eval(
-        r#"BEGIN { result = lpad("hello", 3) }"#,
-        &[],
-    );
+    let rt = eval(r#"BEGIN { result = lpad("hello", 3) }"#, &[]);
     assert_eq!(rt.get_var("result"), "hello");
 }
 
@@ -2442,10 +2423,7 @@ fn tic_toc_basic() {
 
 #[test]
 fn toc_without_tic_uses_epoch() {
-    let rt = eval(
-        r#"BEGIN { result = (toc() >= 0) ? "ok" : "bad" }"#,
-        &[],
-    );
+    let rt = eval(r#"BEGIN { result = (toc() >= 0) ? "ok" : "bad" }"#, &[]);
     assert_eq!(rt.get_var("result"), "ok");
 }
 
@@ -2473,10 +2451,7 @@ fn dump_returns_one() {
 
 #[test]
 fn dump_array_returns_one() {
-    let rt = eval(
-        r#"BEGIN { a[1]="x"; a[2]="y"; result = dump(a) }"#,
-        &[],
-    );
+    let rt = eval(r#"BEGIN { a[1]="x"; a[2]="y"; result = dump(a) }"#, &[]);
     assert_eq!(rt.get_var("result"), "1");
 }
 
@@ -2502,7 +2477,10 @@ fn in_operator_with_field() {
 
 #[test]
 fn in_operator_negated() {
-    let rt = eval(r#"BEGIN{a["x"]=1} !($0 in a) {result=result $0}"#, &["x", "y"]);
+    let rt = eval(
+        r#"BEGIN{a["x"]=1} !($0 in a) {result=result $0}"#,
+        &["x", "y"],
+    );
     assert_eq!(rt.get_var("result"), "y");
 }
 
@@ -2540,7 +2518,10 @@ fn gsub_regex_literal() {
 
 #[test]
 fn match_regex_literal() {
-    let rt = eval(r#"{match($0, /(\w+)=(\d+)/, m); result=m[1] ":" m[2]}"#, &["key=42"]);
+    let rt = eval(
+        r#"{match($0, /(\w+)=(\d+)/, m); result=m[1] ":" m[2]}"#,
+        &["key=42"],
+    );
     assert_eq!(rt.get_var("result"), "key:42");
 }
 
