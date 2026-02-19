@@ -315,9 +315,12 @@ impl Parser {
             && !self.check(&Token::Gt) && !self.check(&Token::Append) && !self.check(&Token::Pipe)
         {
             args.push(self.parse_non_redirect_expr()?);
+            self.skip_newlines();
             while self.check(&Token::Comma) {
                 self.advance();
+                self.skip_newlines();
                 args.push(self.parse_non_redirect_expr()?);
+                self.skip_newlines();
             }
         }
         if args.is_empty() {
@@ -333,9 +336,12 @@ impl Parser {
         let mut args = Vec::new();
         if !self.is_terminator() && !self.check(&Token::RBrace) {
             args.push(self.parse_non_redirect_expr()?);
+            self.skip_newlines();
             while self.check(&Token::Comma) {
                 self.advance();
+                self.skip_newlines();
                 args.push(self.parse_non_redirect_expr()?);
+                self.skip_newlines();
             }
         }
         if args.is_empty() {
@@ -981,11 +987,15 @@ impl Parser {
         let span = self.current_span();
         self.expect(&Token::LParen)?;
         let mut args = Vec::new();
+        self.skip_newlines();
         if !self.check(&Token::RParen) {
             args.push(self.parse_expr()?);
+            self.skip_newlines();
             while self.check(&Token::Comma) {
                 self.advance();
+                self.skip_newlines();
                 args.push(self.parse_expr()?);
+                self.skip_newlines();
             }
         }
         self.expect(&Token::RParen)?;
@@ -998,11 +1008,15 @@ impl Parser {
     fn parse_func_call(&mut self, name: String) -> Result<Expr, FkError> {
         self.expect(&Token::LParen)?;
         let mut args = Vec::new();
+        self.skip_newlines();
         if !self.check(&Token::RParen) {
             args.push(self.parse_expr()?);
+            self.skip_newlines();
             while self.check(&Token::Comma) {
                 self.advance();
+                self.skip_newlines();
                 args.push(self.parse_expr()?);
+                self.skip_newlines();
             }
         }
         self.expect(&Token::RParen)?;
@@ -1059,6 +1073,12 @@ impl Parser {
 
     fn skip_terminators(&mut self) {
         while matches!(self.current(), Token::Semicolon | Token::Newline) {
+            self.advance();
+        }
+    }
+
+    fn skip_newlines(&mut self) {
+        while matches!(self.current(), Token::Newline) {
             self.advance();
         }
     }

@@ -85,6 +85,17 @@ fn parse_function_with_no_params() {
 }
 
 #[test]
+fn parse_multiline_func_call_args() {
+    let src = "BEGIN { printf \"a\",\n \"b\",\n \"c\" }";
+    let mut lex = lexer::Lexer::new(src);
+    let tokens = lex.tokenize().unwrap();
+    let mut par = parser::Parser::new(tokens);
+    let prog = par.parse().unwrap();
+
+    assert_eq!(prog.rules.len(), 0);
+}
+
+#[test]
 fn parse_function_alongside_rules() {
     let src = "function double(x) { return x * 2 } { print double($1) }";
     let mut lex = lexer::Lexer::new(src);
