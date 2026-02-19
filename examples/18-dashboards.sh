@@ -15,7 +15,7 @@ fi
 
 section "Generating synthetic AWS logs with fk..."
 
-echo | $FK 'BEGIN {
+show "$FK" 'BEGIN {
     srand(1337)
     split("GET GET GET GET GET POST POST PUT DELETE HEAD", methods, " ")
     split("/api/users /api/orders /api/products /api/search /api/auth /api/health /static/app.js /static/style.css", paths, " ")
@@ -40,7 +40,7 @@ echo | $FK 'BEGIN {
     }
 }' > "$TMPDIR/alb.tsv"
 
-echo | $FK 'BEGIN {
+show "$FK" 'BEGIN {
     srand(42)
     split("user-svc order-svc search-svc auth-svc notify-svc", funcs, " ")
 
@@ -72,40 +72,40 @@ echo "  → $(wc -l < "$TMPDIR/alb.tsv") ALB requests, $(wc -l < "$TMPDIR/lambda
 
 section "1. Requests per hour (ALB traffic shape)"
 
-$FK -F$'\t' '{
-    match($1, "T([0-9]{2}):", c)
+show_pipe "$FK -F'\t' '{
+    match(\$1, \"T([0-9]{2}):\", c)
     hour[c[1]+0]++
 }
 END {
     for (h = 0; h <= 23; h++)
-        printf "h%02d\t%d\n", h, hour[h]+0
-}' "$TMPDIR/alb.tsv" | uplot bar -t "Requests per Hour" -c cyan
+        printf \"h%02d\t%d\n\", h, hour[h]+0
+}' $TMPDIR/alb.tsv | uplot bar -t 'Requests per Hour' -c cyan"
 
 section "2. HTTP status code breakdown"
 
-$FK -F$'\t' '{
-    s = $4 + 0
-    if (s >= 200 && s < 300) class = "2xx OK"
-    else if (s >= 300 && s < 400) class = "3xx Redirect"
-    else if (s >= 400 && s < 500) class = "4xx Client"
-    else if (s >= 500) class = "5xx Server"
-    else class = "other"
+show_pipe "$FK -F'\t' '{
+    s = \$4 + 0
+    if (s >= 200 && s < 300) class = \"2xx OK\"
+    else if (s >= 300 && s < 400) class = \"3xx Redirect\"
+    else if (s >= 400 && s < 500) class = \"4xx Client\"
+    else if (s >= 500) class = \"5xx Server\"
+    else class = \"other\"
     counts[class]++
 }
 END {
-    for (c in counts) printf "%s\t%d\n", c, counts[c]
-}' "$TMPDIR/alb.tsv" | sort | uplot bar -t "HTTP Status Classes" -c green
+    for (c in counts) printf \"%s\t%d\n\", c, counts[c]
+}' $TMPDIR/alb.tsv | sort | uplot bar -t 'HTTP Status Classes' -c green"
 
 section "3. Response latency distribution"
 
-$FK -F$'\t' '{ print $5 + 0 }' "$TMPDIR/alb.tsv" | \
-    uplot hist -n 40 -t "Latency (ms) — most fast, long tail" -c yellow
+show_pipe "$FK -F'\t' '{ print \$5 + 0 }' $TMPDIR/alb.tsv |
+    uplot hist -n 40 -t 'Latency (ms) — most fast, long tail' -c yellow"
 
 section "4. p95 latency by endpoint"
 
-$FK -F$'\t' '
+show_pipe "$FK -F'\t' '
 {
-    path = $3; latency = $5 + 0
+    path = \$3; latency = \$5 + 0
     n[path]++
     data[path, n[path]] = latency
 }
@@ -113,45 +113,45 @@ END {
     for (path in n) {
         count = n[path]
         for (i = 1; i <= count; i++) vals[i] = data[path, i] + 0
-        printf "%s\t%.0f\n", path, p(vals, 95)
+        printf \"%s\t%.0f\n\", path, p(vals, 95)
         delete vals
     }
-}' "$TMPDIR/alb.tsv" | sort -t$'\t' -k2 -n -r | \
-    uplot bar -t "p95 Latency by Endpoint (ms)" -c red
+}' $TMPDIR/alb.tsv | sort -t'\t' -k2 -n -r |
+    uplot bar -t 'p95 Latency by Endpoint (ms)' -c red"
 
 section "5. 5xx errors over the day"
 
-$FK -F$'\t' '{
-    s = $4 + 0
+show_pipe "$FK -F'\t' '{
+    s = \$4 + 0
     if (s >= 500) {
-        match($1, "T([0-9]{2}):", c)
+        match(\$1, \"T([0-9]{2}):\", c)
         hour[c[1]+0]++
     }
 }
 END {
     for (h = 0; h <= 23; h++)
-        printf "%d\t%d\n", h, hour[h]+0
-}' "$TMPDIR/alb.tsv" | uplot line -t "5xx Errors by Hour" -c red --xlabel "Hour" --ylabel "Count"
+        printf \"%d\t%d\n\", h, hour[h]+0
+}' $TMPDIR/alb.tsv | uplot line -t '5xx Errors by Hour' -c red --xlabel Hour --ylabel Count"
 
 section "6. Lambda duration by function (boxplot)"
 
-$FK -F$'\t' '{ printf "%s\t%d\n", $2, $3 }' "$TMPDIR/lambda.tsv" | \
-    uplot box -t "Lambda Duration (ms) by Function"
+show_pipe "$FK -F'\t' '{ printf \"%s\t%d\n\", \$2, \$3 }' $TMPDIR/lambda.tsv |
+    uplot box -t 'Lambda Duration (ms) by Function'"
 
 section "7. Lambda errors by function and type"
 
-$FK -F$'\t' '$7 != "none" {
-    key = $2 " " $7
+show_pipe "$FK -F'\t' '\$7 != \"none\" {
+    key = \$2 \" \" \$7
     errors[key]++
 }
 END {
-    for (k in errors) printf "%s\t%d\n", k, errors[k]
-}' "$TMPDIR/lambda.tsv" | sort -t$'\t' -k2 -n -r | \
-    uplot bar -t "Lambda Errors (function + type)" -c magenta
+    for (k in errors) printf \"%s\t%d\n\", k, errors[k]
+}' $TMPDIR/lambda.tsv | sort -t'\t' -k2 -n -r |
+    uplot bar -t 'Lambda Errors (function + type)' -c magenta"
 
 section "Summary — computed entirely by fk"
 
-$FK -F$'\t' '{
+show "$FK" -F$'\t' '{
     latency = $5 + 0; status = $4 + 0
     lat[NR] = latency
     total++
@@ -170,7 +170,7 @@ END {
 }' "$TMPDIR/alb.tsv"
 
 echo ""
-$FK -F$'\t' '{
+show "$FK" -F$'\t' '{
     total++; func = $2; dur = $3 + 0
     durations[NR] = dur
     if ($6 == "cold") colds++

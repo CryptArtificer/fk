@@ -47,20 +47,18 @@ show_pipe "awk 'BEGIN { srand(42); for (i=1;i<=6;i++) printf \"%s %d\n\", \"item
 section "4. Real pipeline — API health report from JSON logs"
 
 echo "Stage 1: extract fields from JSON → Stage 2: per-endpoint stats:"
-echo ""
-printf "  ${C_DIM}\$${C_RESET} ${C_YEL}fk -i json '{...extract...}' api.jsonl | fk '{...stats...}'${C_RESET}\n\n"
-$FK -i json '{ print $3, $4+0, $5+0 }' "$TMPDIR/api.jsonl" | \
-$FK '{
-    path=$1; status=$2+0; ms=$3+0
+show_pipe "$FK -i json '{ print \$3, \$4+0, \$5+0 }' $TMPDIR/api.jsonl |
+  $FK '{
+    path=\$1; status=\$2+0; ms=\$3+0
     total[path]++; lat[path,total[path]]=ms
     if (status >= 400) errs[path]++
 }
 END {
     for (p in total) {
         for (i=1; i<=total[p]; i++) a[i]=lat[p,i]
-        printf "  %-20s %d reqs  p50=%3.0fms  p95=%3.0fms  errors=%d\n", p, total[p], p(a,50), p(a,95), errs[p]+0
+        printf \"  %-20s %d reqs  p50=%3.0fms  p95=%3.0fms  errors=%d\n\", p, total[p], p(a,50), p(a,95), errs[p]+0
         delete a
     }
-}'
+}'"
 
 printf "\n${C_BOLD}Done.${C_RESET} fk composes freely with sort, awk, uniq, and itself.\n"

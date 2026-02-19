@@ -9,6 +9,8 @@ use crate::field;
 pub enum ArrayMeta {
     Histogram {
         source: Vec<f64>,
+        source_name: String,
+        description: String,
         bins: usize,
         min: f64,
         max: f64,

@@ -171,6 +171,15 @@ Print a syntax\-highlighted version of the program and exit.
 Pretty\-print the program with indentation and line breaks, then exit.
 .
 .TP
+\fB\-\-explain\fR
+Print a terse one\-line description of what the program does, then exit.
+Extracts semantic fragments from the AST (histogram, stats, frequency,
+aggregate, sum, filter, transform, unique, join), reduces redundancies,
+and renders within a 72\-character budget.  Environment\-aware: includes
+input format, compression, headers, and filenames when flags/files are
+given (e.g. \fBstats $2 (CSV, headers, sales.csv)\fR).
+.
+.TP
 \fB\-\-repl\fR
 Start an interactive session.
 Each line you type is parsed and executed immediately.
@@ -621,6 +630,9 @@ for range labels. \fIcolor\fR: \fBred\fR, \fBgreen\fR, \fByellow\fR,
 .TP
 \fBplotbox(\fIarr\fB [\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR [\fB,\fR \fIprecision\fR [\fB,\fR \fItitle\fR [\fB,\fR \fIxlabel\fR [\fB,\fR \fIcolor\fR]]]]]]])\fR
 Boxed horizontal bar chart with optional title/x-label and color.
+An auto-generated subtitle is derived from the source expression and
+filename via AST analysis (e.g. \fBapi.jsonl \(em [].ms\fR for data
+extracted with \fBjpath()\fR). The subtitle appears below the user title.
 .
 .SS Bitwise \fI[fk extensions]\fR
 .TP

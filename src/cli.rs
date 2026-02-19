@@ -24,6 +24,7 @@ pub struct Args {
     pub suggest: bool,
     pub highlight: bool,
     pub format: bool,
+    pub explain: bool,
 }
 
 pub fn parse_args() -> Args {
@@ -41,6 +42,7 @@ pub fn parse_args() -> Args {
     let mut suggest = false;
     let mut highlight = false;
     let mut format = false;
+    let mut explain = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -121,6 +123,8 @@ pub fn parse_args() -> Args {
             highlight = true;
         } else if arg == "--format" {
             format = true;
+        } else if arg == "--explain" {
+            explain = true;
         } else if arg.starts_with('-') && arg.len() > 1 {
             eprintln!("fk: unknown option: {}", arg);
             eprintln!("Try 'fk --help' for usage.");
@@ -205,6 +209,7 @@ pub fn parse_args() -> Args {
         suggest,
         highlight,
         format,
+        explain,
     }
 }
 
@@ -224,6 +229,7 @@ fn print_usage() {
     eprintln!("  --repl           Interactive mode");
     eprintln!("  --highlight      Print syntax-highlighted program to stdout and exit");
     eprintln!("  --format         Pretty-print program (indent, line breaks) and exit");
+    eprintln!("  --explain        Print a terse description of the program and exit");
     eprintln!("  -h, --help       Show this help (see also: man fk)");
     eprintln!();
     eprintln!("  Format auto-detected from .csv/.tsv/.json extensions (+compression).");

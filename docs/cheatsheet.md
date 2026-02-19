@@ -11,6 +11,7 @@ fk --suggest  [file ...]           # schema + smart tailored programs
 fk --repl                          # interactive mode
 fk --highlight 'program'           # syntax-highlighted program and exit
 fk --format    'program'           # pretty-print program and exit
+fk --explain   'program' [files]   # terse description + env context and exit
 fk --help / fk --version
 ```
 
@@ -29,6 +30,7 @@ fk --help / fk --version
 | `--repl` | Interactive REPL |
 | `--highlight` | Syntax-highlight program and exit |
 | `--format` | Pretty-print program and exit |
+| `--explain` | Terse description + environment context (format, headers, files) |
 
 ## Program structure
 
@@ -225,7 +227,7 @@ print ... > "/dev/stderr"   # write to stderr
 |----------|-------------|
 | `typeof(x)` | `"number"`, `"string"`, `"array"`, or `"uninitialized"` |
 | `plot(arr [, width [, char [, precision [, color]]]])` | Render simple horizontal bar chart |
-| `plotbox(arr [, width [, char [, precision [, title [, xlabel [, color]]]]]])` | Boxed horizontal bar chart |
+| `plotbox(arr [, width [, char [, precision [, title [, xlabel [, color]]]]]])` | Boxed horizontal bar chart; auto-subtitle from source expression and filename |
 
 ### Bitwise (fk extensions)
 | Function | Description |
@@ -376,10 +378,10 @@ fk 'BEGIN { slurp("-", a); print plotbox(hist(a)) }' < data.txt
 # Bar chart of frequencies
 fk '{ a[$1]++ } END { print plot(a) }' file
 
-# Histogram with per-record collection
+# Histogram with per-record collection (subtitle: "data.txt — $1")
 fk '{ a[NR]=$1 } END { print plotbox(hist(a)) }' data.txt
 
-# Histogram with custom bins, title, color
+# User title + auto-subtitle + custom bins/color
 fk '{ a[NR]=$1 } END { print plotbox(hist(a, 10), 30, "▇", 0, "Latency (ms)", "Frequency", "yellow") }' data.txt
 
 # p95 latency

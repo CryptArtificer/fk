@@ -12,9 +12,9 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~20,000 lines of Rust** across 32 source files
-- **379 Rust + 152 shell tests**, zero warnings, clippy clean
-- **Phases 0–17 complete**
+- **~13,600 lines of Rust** across 32 source files
+- **433 Rust + 152 shell tests**, zero warnings, clippy clean
+- **Phases 0–18 complete**
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
 
@@ -22,8 +22,11 @@ incrementally as a learning exercise. The user values:
 
 ```
 main.rs               — CLI dispatch, record loop
-cli.rs                — argument parsing (-F, -f, -v, -i, -H, -d, --repl)
-analyze.rs            — static AST analysis → ProgramInfo (field/NF/regex hints)
+cli.rs                — argument parsing (-F, -f, -v, -i, -H, -d, --repl, --explain)
+analyze.rs            — static AST analysis → ProgramInfo; explain() pipeline:
+                        scan_program → collect_fragments → reduce → render.
+                        FragTag enum carries sig() + subsumed_by() (data-driven).
+                        One scan, one emit function, table-driven subsumption.
 describe.rs           — format sniffer, schema inference, suggestions, decompression
 lexer.rs              — tokenizer (Spanned tokens with O(1) line:col tracking)
 parser.rs             — recursive-descent → AST (Program, Rules, Exprs, Stmts)
@@ -137,6 +140,15 @@ Phase 17: Histogram & plot overhaul — ArrayMeta enum (typed metadata on arrays
   uplot/fu), consistent ▇ glyph, auto "Frequency" xlabel on histogram plots,
   removed histplot() in favour of composable plotbox(hist(a)), slurp("-")
   reads from stdin.
+Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
+  (array_sources + var_sources in ProgramInfo, one level of variable
+  indirection), combined with FILENAME at hist() time. Smart formatting:
+  jpath → file — [].path, fields → file — $N, named cols → file — name.
+  expr_to_source() general AST→source formatter (separate from format/ module).
+  Subtitle renders below user title on its own centered line.
+  --explain mode: terse one-line program description from AST analysis
+  (detects histogram, stats, filter, count-by, sum, transform, print).
+  Integrated into showcase `show` helper as auto-subtitle for all examples.
 
 ### Future ideas (explored, deferred)
 

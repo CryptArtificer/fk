@@ -2,7 +2,7 @@ use std::env;
 use std::process;
 use std::io::Write;
 
-use fk::{action, cli, describe, format, input, lexer, parser, runtime, repl};
+use fk::{action, analyze, cli, describe, format, input, lexer, parser, runtime, repl};
 use fk::builtins::format_number;
 
 #[cfg(feature = "parquet")]
@@ -75,6 +75,36 @@ fn main() {
                 process::exit(2);
             }
         }
+    }
+
+    // Explain mode: terse description of program and exit
+    if args.explain {
+        let tokens = match lexer::Lexer::new(&args.program).tokenize() {
+            Ok(t) => t,
+            Err(e) => { eprintln!("fk: {e}"); process::exit(2); }
+        };
+        let prog = match parser::Parser::new(tokens).parse() {
+            Ok(p) => p,
+            Err(e) => { eprintln!("fk: {e}"); process::exit(2); }
+        };
+        let mode_str = match &args.input_mode {
+            cli::InputMode::Line => "line",
+            cli::InputMode::Csv => "csv",
+            cli::InputMode::Tsv => "tsv",
+            cli::InputMode::Json => "json",
+            cli::InputMode::Parquet => "parquet",
+        };
+        let ctx = analyze::ExplainContext::from_cli(
+            mode_str,
+            args.header_mode,
+            args.field_separator.as_deref(),
+            &args.files,
+        );
+        let desc = analyze::explain(&prog, Some(&ctx));
+        if !desc.is_empty() {
+            println!("{desc}");
+        }
+        return;
     }
 
     // Describe / suggest mode

@@ -2,6 +2,7 @@ use std::io::{BufRead, Read, Write};
 use std::process::{Command, Stdio};
 use std::time::Instant;
 
+use crate::analyze::build_array_description;
 use crate::builtins::{self, string_replace};
 use crate::parser::Expr;
 use crate::runtime::{ArrayMeta, Value};
@@ -863,8 +864,14 @@ impl<'a> Executor<'a> {
         }
 
         let max = min + width * bins as f64;
+        let filename = self.rt.get_var("FILENAME").to_string();
+        let description = self.info.array_sources.get(&array_name)
+            .map(|expr| build_array_description(expr, &filename, &self.info.var_sources))
+            .unwrap_or_default();
         self.rt.set_meta(&out_name, ArrayMeta::Histogram {
             source,
+            source_name: array_name,
+            description,
             bins,
             min,
             max,
@@ -981,9 +988,7 @@ impl<'a> Executor<'a> {
             -1
         };
         let precision = if precision_raw < 0 { None } else { Some(precision_raw as usize) };
-        let title = args.get(4).map(|expr| self.eval_string(expr)).unwrap_or_else(|| {
-            if array_name.starts_with("__") { String::new() } else { array_name.clone() }
-        });
+        let title_arg = args.get(4).map(|expr| self.eval_string(expr));
         let xlabel_arg = args.get(5).map(|expr| self.eval_string(expr));
         let color_name = args.get(6).map(|expr| self.eval_string(expr)).unwrap_or_default();
         let (color_code, color_reset) = ansi_color(&color_name);
@@ -995,6 +1000,20 @@ impl<'a> Executor<'a> {
         let max_val = entries.iter().map(|(_, v)| *v).fold(0.0f64, f64::max);
 
         let hist_meta = self.rt.get_meta(&array_name).cloned();
+        let title = title_arg.unwrap_or_default();
+        let subtitle = match &hist_meta {
+            Some(ArrayMeta::Histogram { description, source_name, .. }) => {
+                if !description.is_empty() {
+                    description.clone()
+                } else if !source_name.is_empty() {
+                    source_name.clone()
+                } else {
+                    String::new()
+                }
+            }
+            _ if !array_name.starts_with("__") => array_name.clone(),
+            _ => String::new(),
+        };
         let xlabel = xlabel_arg.unwrap_or_else(|| {
             if hist_meta.is_some() { "Frequency".to_string() } else { String::new() }
         });
@@ -1007,10 +1026,12 @@ impl<'a> Executor<'a> {
 
         let box_width = width + count_width + 1;
         let mut lines: Vec<String> = Vec::new();
-        if !title.is_empty() {
-            let total = label_width + 3 + box_width + 1;
-            let title_pad = if total > title.len() { (total - title.len()) / 2 } else { 0 };
-            lines.push(format!("{:pad$}{}", "", title, pad = title_pad));
+        let total_width = label_width + 3 + box_width + 1;
+        for text in [&title, &subtitle] {
+            if !text.is_empty() {
+                let pad = if total_width > text.len() { (total_width - text.len()) / 2 } else { 0 };
+                lines.push(format!("{:pad$}{text}", ""));
+            }
         }
         lines.push(format!(
             "{:>label_w$} ┌{}┐",

@@ -21,30 +21,46 @@ C_SEC=$'\033[1;36m'
 section() { printf "\n${C_SEC}━━ %s ━━${C_RESET}\n\n" "$1"; }
 
 # Print the full fk command (program + switches), then run it.
+# Automatically shows a terse --explain subtitle for the program.
 show() {
     local flags="" prog="" files="" found_prog=false
+    local -a raw_flags=() raw_files=()
     for arg in "$@"; do
         if [[ "$arg" == "$FK" ]]; then
             continue
         elif [[ "$found_prog" == false && "$arg" == -* ]]; then
             flags+=" ${C_FLAG}${arg}${C_RESET}"
+            raw_flags+=("$arg")
         elif [[ "$found_prog" == false && ("$arg" == *"{"* || "$arg" == *"/"* && -f "$arg") ]]; then
             if [[ -f "$arg" ]]; then
                 files+=" ${C_FILE}$(basename "$arg")${C_RESET}"
+                raw_files+=("$arg")
             else
                 prog="$arg"
                 found_prog=true
             fi
         elif $found_prog && [[ -f "$arg" ]]; then
             files+=" ${C_FILE}$(basename "$arg")${C_RESET}"
+            raw_files+=("$arg")
         elif $found_prog; then
             files+=" ${C_FILE}${arg}${C_RESET}"
+            raw_files+=("$arg")
         else
             flags+=" ${C_FLAG}${arg}${C_RESET}"
+            raw_flags+=("$arg")
         fi
     done
 
-    printf "\n  ${C_DIM}\$${C_RESET} ${C_CYAN}${C_BOLD}fk${C_RESET}%s" "$flags"
+    # Auto-subtitle from --explain (pass flags + files for env context)
+    if [[ -n "$prog" ]]; then
+        local explanation
+        explanation=$("$FK" --explain "${raw_flags[@]}" "$prog" "${raw_files[@]}" 2>/dev/null || true)
+        if [[ -n "$explanation" ]]; then
+            printf "\n  ${C_CYAN}→ %s${C_RESET}\n" "$explanation"
+        fi
+    fi
+
+    printf "  ${C_DIM}\$${C_RESET} ${C_CYAN}${C_BOLD}fk${C_RESET}%s" "$flags"
     [[ -n "$files" ]] && printf "%b" "$files"
 
     if [[ -n "$prog" ]]; then
@@ -68,10 +84,41 @@ show() {
 }
 
 # Print a readable pipeline description, then run it via eval.
+# Extracts the fk program + flags/files from the pipeline for --explain.
 show_pipe() {
     local desc="$1"
     local display="${desc//$FK/fk}"
     display="${display//$TMPDIR\//}"
+
+    # Extract flags, program, and files from the FIRST fk invocation
+    local prog="" rest="${desc#*fk }"
+    local -a pre_flags=() post_files=()
+    while [[ "$rest" == -* ]]; do
+        pre_flags+=("${rest%% *}")
+        rest="${rest#* }"
+    done
+    if [[ "$rest" == \'* ]]; then
+        local raw="${rest#\'}"
+        raw="${raw%%\'*}"
+        prog="${raw//\\$/\$}"
+        prog="${prog//\\\"/\"}"
+        prog="${prog//\\\\/\\}"
+        local after="${rest:${#raw}+2}"
+        after="${after# }"
+        for word in $after; do
+            [[ "$word" == "|"* || "$word" == ">"* || "$word" == *"fk"* ]] && break
+            post_files+=("$word")
+        done
+    fi
+
+    if [[ -n "$prog" ]]; then
+        local explanation
+        explanation=$("$FK" --explain "${pre_flags[@]}" "$prog" "${post_files[@]}" 2>/dev/null || true)
+        if [[ -n "$explanation" ]]; then
+            printf "\n  ${C_CYAN}→ %s${C_RESET}" "$explanation"
+        fi
+    fi
+
     printf "\n  ${C_DIM}\$${C_RESET} ${C_YEL}%s${C_RESET}\n\n" "$display"
     eval "$desc"
 }

@@ -62,7 +62,8 @@ END {
 
 section "5. Histogram — distribution at a glance"
 
-echo "One-liner — just the data, everything else is automatic:"
+echo "One-liner — just the data, everything else is automatic."
+echo "Title and subtitle are derived from the source expression and filename:"
 show $FK '{
     ms = jpath($0, ".ms") + 0; lat[NR] = ms
 }
@@ -71,7 +72,7 @@ END {
 }' "$TMPDIR/api.jsonl"
 
 echo ""
-echo "Customised (explicit bins, width, title, color):"
+echo "User title plus auto-subtitle:"
 show $FK '{
     ms = jpath($0, ".ms") + 0; lat[NR] = ms
 }
