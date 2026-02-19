@@ -982,11 +982,7 @@ impl<'a> Executor<'a> {
         };
         let precision = if precision_raw < 0 { None } else { Some(precision_raw as usize) };
         let title = args.get(4).map(|expr| self.eval_string(expr)).unwrap_or_else(|| {
-            if let Some(stripped) = array_name.strip_prefix("__hist_") {
-                stripped.to_string()
-            } else {
-                array_name.clone()
-            }
+            display_name(&array_name)
         });
         let xlabel_arg = args.get(5).map(|expr| self.eval_string(expr));
         let color_name = args.get(6).map(|expr| self.eval_string(expr)).unwrap_or_default();
@@ -1305,6 +1301,17 @@ fn is_sequential(sorted_keys: &[String]) -> bool {
     sorted_keys.iter().enumerate().all(|(i, k)| {
         k.parse::<usize>().is_ok_and(|n| n == i + 1)
     })
+}
+
+/// Derive a display name from an array name.
+/// Strips internal `__<op>_` prefixes (e.g. `__hist_lat` → `lat`).
+fn display_name(name: &str) -> String {
+    if let Some(rest) = name.strip_prefix("__")
+        && let Some(pos) = rest.find('_')
+    {
+        return rest[pos + 1..].to_string();
+    }
+    name.to_string()
 }
 
 // --- Histogram binning (uplot-style nice numbers) ---
