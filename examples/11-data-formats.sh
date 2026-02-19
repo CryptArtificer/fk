@@ -30,14 +30,14 @@ show $FK -H '{
 section "3. JSON Lines with jpath() — no jq needed"
 # awk: zero JSON support. fk: jpath() navigates objects and arrays.
 
-show_pipe "cat $TMPDIR/api.jsonl | $FK '{
-    method = jpath(\$0, \".method\"); status = jpath(\$0, \".status\") + 0
-    ms = jpath(\$0, \".ms\") + 0; path = jpath(\$0, \".path\")
-    tag = \"\"
-    if (status >= 500) tag = \" ** ERROR\"
-    if (ms > 100) tag = tag \" SLOW\"
-    printf \"  %-6s %-20s %3d %4dms%s\\n\", method, path, status, ms, tag
-}'"
+show $FK '{
+    method = jpath($0, ".method"); status = jpath($0, ".status") + 0
+    ms = jpath($0, ".ms") + 0; path = jpath($0, ".path")
+    tag = ""
+    if (status >= 500) tag = " ** ERROR"
+    if (ms > 100) tag = tag " SLOW"
+    printf "  %-6s %-20s %3d %4dms%s\n", method, path, status, ms, tag
+}' "$TMPDIR/api.jsonl"
 
 section "4. Nested JSON iteration"
 # awk: completely impossible. fk: jpath with array extraction.

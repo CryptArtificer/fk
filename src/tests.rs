@@ -998,6 +998,28 @@ fn field_zero_reconstructed_with_ofs() {
 }
 
 #[test]
+fn json_mode_preserves_raw_record_text_for_jpath() {
+    let program_text = "{ x = jpath($0, \".a\") }";
+    let mut lex = lexer::Lexer::new(program_text);
+    let tokens = lex.tokenize().expect("lexer error");
+    let mut par = parser::Parser::new(tokens);
+    let program = par.parse().expect("parse error");
+
+    let mut rt = runtime::Runtime::new();
+    let mut exec = action::Executor::new(&program, &mut rt);
+
+    exec.run_begin();
+    let rec = input::Record {
+        text: r#"{"a":1}"#.to_string(),
+        fields: Some(vec!["1".to_string()]),
+    };
+    exec.run_record(&rec);
+    exec.run_end();
+
+    assert_eq!(rt.get_var("x"), "1");
+}
+
+#[test]
 fn assign_field_zero_re_splits() {
     let rt = eval("{ $0 = \"x y z\"; nf = NF; f2 = $2 }", &["a"]);
     assert_eq!(rt.get_var("nf"), "3");

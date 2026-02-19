@@ -365,9 +365,11 @@ impl Runtime {
     }
 
     /// Set the record with pre-split fields (used by CSV/TSV/JSON readers).
-    /// $0 is reconstructed from fields via OFS (no raw text available).
-    pub fn set_record_fields(&mut self, _text: &str, fields: Vec<String>) {
-        self.record_text_valid = false;
+    /// Preserve raw text for $0 while still serving fields directly.
+    pub fn set_record_fields(&mut self, text: &str, fields: Vec<String>) {
+        self.record_text.clear();
+        self.record_text.push_str(text);
+        self.record_text_valid = true;
         self.fields_dirty = false;
         self.fields_lazy = false;
         self.nf = fields.len();
