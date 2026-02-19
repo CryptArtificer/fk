@@ -76,6 +76,7 @@
 - [x] Strict perf suite with warmup + median/p90 reporting (`tests/suite/perf_strict.sh`)
 - [x] Strict perf baseline captured (`docs/perf-baseline.md`)
 - [x] Fast path for `END { print NR }` (count-only, skips per-record runtime)
+- [x] Fast path for `NR>limit { exit } 1` in line mode (head-style)
 
 #### Phase 5 — Tutorial & showcase
 - [x] `examples/` directory with annotated scripts

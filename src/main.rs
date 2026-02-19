@@ -1,5 +1,6 @@
 use std::env;
 use std::process;
+use std::io::Write;
 
 use fk::{action, cli, describe, format, input, lexer, parser, runtime, repl};
 use fk::builtins::format_number;
@@ -183,6 +184,18 @@ fn main() {
         && program.functions.is_empty()
         && !args.header_mode
         && is_end_print_nr_only(&program);
+    // Fast path: head-style NR>limit { exit } 1
+    let fast_head_limit = if program.begin.is_none()
+        && program.end.is_none()
+        && program.beginfile.is_none()
+        && program.endfile.is_none()
+        && program.functions.is_empty()
+        && !args.header_mode
+    {
+        head_print_limit(&program)
+    } else {
+        None
+    };
 
     // Parquet mode: reads entire file upfront (not streaming)
     if effective_mode == cli::InputMode::Parquet {
@@ -229,6 +242,94 @@ fn main() {
                 }
             }
         }
+    } else if let Some(limit) = fast_head_limit {
+        // Head-like program: print first N records and exit.
+        let rs = exec.get_var("RS");
+        let ors = exec.get_var("ORS");
+        let mut out = std::io::BufWriter::new(std::io::stdout());
+        if effective_mode == cli::InputMode::Line && rs.len() == 1 {
+            let mut nr: u64 = 0;
+            let sources = if args.files.is_empty() {
+                vec!["-".to_string()]
+            } else {
+                args.files.clone()
+            };
+            for src in sources {
+                let mut reader: Box<dyn std::io::BufRead> = if src == "-" {
+                    Box::new(std::io::BufReader::new(std::io::stdin()))
+                } else {
+                    let r = describe::open_maybe_compressed(&src).map_err(|e| {
+                        std::io::Error::new(e.kind(), format!("fk: {}: {}", src, e))
+                    });
+                    match r {
+                        Ok(r) => Box::new(std::io::BufReader::new(r)),
+                        Err(e) => {
+                            eprintln!("{}", e);
+                            process::exit(1);
+                        }
+                    }
+                };
+
+                let mut buf = String::with_capacity(256);
+                loop {
+                    buf.clear();
+                    let bytes = reader.read_line(&mut buf).unwrap_or(0);
+                    if bytes == 0 { break; }
+                    if buf.ends_with('\n') {
+                        buf.pop();
+                        if buf.ends_with('\r') {
+                            buf.pop();
+                        }
+                    }
+                    nr += 1;
+                    if nr > limit { break; }
+                    let _ = out.write_all(buf.as_bytes());
+                    let _ = out.write_all(ors.as_bytes());
+                }
+                if nr >= limit { break; }
+            }
+        } else {
+            let reader: Box<dyn input::RecordReader> = {
+                if effective_mode == cli::InputMode::Line && rs.len() > 1 {
+                    match input::regex_rs::RegexReader::new(&rs) {
+                        Ok(r) => Box::new(r),
+                        Err(e) => {
+                            eprintln!("fk: {}", e);
+                            process::exit(2);
+                        }
+                    }
+                } else {
+                    match effective_mode {
+                        cli::InputMode::Csv  => Box::new(input::csv::CsvReader::comma()),
+                        cli::InputMode::Tsv  => Box::new(input::csv::CsvReader::tab()),
+                        cli::InputMode::Json => Box::new(input::json::JsonReader),
+                        cli::InputMode::Line => Box::new(input::line::LineReader::new()),
+                        cli::InputMode::Parquet => unreachable!(),
+                    }
+                }
+            };
+
+            let mut inp = input::Input::with_reader(&args.files, reader);
+            let mut nr: u64 = 0;
+            loop {
+                match inp.next_record() {
+                    Ok(Some(record)) => {
+                        nr += 1;
+                        if nr > limit { break; }
+                        if !record.text.is_empty() {
+                            let _ = out.write_all(record.text.as_bytes());
+                        }
+                        let _ = out.write_all(ors.as_bytes());
+                    }
+                    Ok(None) => break,
+                    Err(e) => {
+                        eprintln!("{}", e);
+                        process::exit(1);
+                    }
+                }
+            }
+        }
+        let _ = out.flush();
     } else {
         // Select record reader based on input mode and RS (which may be set in BEGIN)
         let reader: Box<dyn input::RecordReader> = {
@@ -330,4 +431,40 @@ fn is_end_print_nr_only(program: &parser::Program) -> bool {
         },
         _ => false,
     }
+}
+
+fn head_print_limit(program: &parser::Program) -> Option<u64> {
+    if program.rules.len() != 2 {
+        return None;
+    }
+    let (first, second) = (&program.rules[0], &program.rules[1]);
+    let limit = match &first.pattern {
+        Some(parser::Pattern::Expression(parser::Expr::BinOp(left, op, right))) => {
+            match (left.as_ref(), op, right.as_ref()) {
+                (parser::Expr::Var(name), parser::BinOp::Gt, parser::Expr::NumberLit(n))
+                    if name == "NR" && *n >= 0.0 && n.fract() == 0.0 => *n as u64,
+                _ => return None,
+            }
+        }
+        _ => return None,
+    };
+    let exit_only = matches!(
+        first.action.as_slice(),
+        [parser::Statement::Exit(None)]
+    );
+    if !exit_only {
+        return None;
+    }
+    let print_default = match (&second.pattern, second.action.as_slice()) {
+        (Some(parser::Pattern::Expression(expr)), [parser::Statement::Print(exprs, None)]) => {
+            matches!(expr, parser::Expr::NumberLit(n) if *n != 0.0)
+                && matches!(
+                    exprs.as_slice(),
+                    [parser::Expr::Field(inner)]
+                        if matches!(inner.as_ref(), parser::Expr::NumberLit(n) if *n == 0.0)
+                )
+        }
+        _ => false,
+    };
+    if print_default { Some(limit) } else { None }
 }
