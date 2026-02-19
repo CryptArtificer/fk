@@ -133,7 +133,7 @@ print ... > "/dev/stderr"   # write to stderr
 | `repeat(s, n)` | Repeat string n times |
 | `reverse(s)` | Reverse a string (unicode-aware) |
 | `chr(n)` / `ord(s)` | Character ↔ codepoint |
-| `hex(n)` | Format number as hexadecimal |
+| `hex(n)` | Format number as hexadecimal (0x...) |
 | `lpad(s, width [, char])` | Left-pad to width (default: space) |
 | `rpad(s, width [, char])` | Right-pad to width (default: space) |
 

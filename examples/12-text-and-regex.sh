@@ -56,7 +56,7 @@ section "4. Character-level operations — chr, ord, hex"
 echo "Build an ASCII table:"
 show $FK 'BEGIN {
     for (i = 33; i <= 126; i++) {
-        printf "  %3d  0x%02s  %s", i, hex(i), chr(i)
+        printf "  %3d  %4s  %s", i, hex(i), chr(i)
         if ((i - 32) % 6 == 0) print ""
     }
     print ""
@@ -64,7 +64,7 @@ show $FK 'BEGIN {
 
 echo ""
 echo "Encode a string to hex:"
-show_pipe "echo 'Hello' | $FK '{ for (i=1; i<=length(\$0); i++) { c=substr(\$0,i,1); printf \"  %s → %d → 0x%s\n\", c, ord(c), hex(ord(c)) } }'"
+show_pipe "echo 'Hello' | $FK '{ for (i=1; i<=length(\$0); i++) { c=substr(\$0,i,1); printf \"  %s → %d → %s\n\", c, ord(c), hex(ord(c)) } }'"
 
 section "5. startswith / endswith — filter without regex"
 
