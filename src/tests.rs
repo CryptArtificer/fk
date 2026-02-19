@@ -1922,7 +1922,7 @@ fn stats_plot_histogram() {
         r#"BEGIN { h[1]=2; h[2]=1; h["_min"]=0; h["_max"]=2; h["_width"]=1; s = plot(h, 4, "*") }"#,
         &[],
     );
-    assert_eq!(rt.get_var("s"), "0..1 | ****\n1..2 | **");
+    assert_eq!(rt.get_var("s"), "0..1 | **** 2\n1..2 | ** 1");
 }
 
 #[test]

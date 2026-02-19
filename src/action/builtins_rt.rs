@@ -930,8 +930,19 @@ impl<'a> Executor<'a> {
             label_with_range = !numeric_keys.is_empty();
         }
 
-        let mut lines: Vec<String> = Vec::new();
-        for (idx, (key, count)) in entries.iter().enumerate() {
+        let range_decimals = if !bin_width.is_finite() || bin_width == 0.0 {
+            0
+        } else {
+            let w = bin_width.abs();
+            if w >= 1.0 { 0 }
+            else if w >= 0.1 { 1 }
+            else if w >= 0.01 { 2 }
+            else if w >= 0.001 { 3 }
+            else { 4 }
+        };
+
+        let mut labels: Vec<String> = Vec::new();
+        for (idx, (key, _count)) in entries.iter().enumerate() {
             let label = if label_with_range {
                 let lo = min + (idx as f64) * bin_width;
                 let hi = if idx + 1 == entries.len() {
@@ -939,10 +950,16 @@ impl<'a> Executor<'a> {
                 } else {
                     lo + bin_width
                 };
-                format!("{}..{}", builtins::format_number(lo), builtins::format_number(hi))
+                format!("{:.*}..{:.*}", range_decimals, lo, range_decimals, hi)
             } else {
                 key.clone()
             };
+            labels.push(label);
+        }
+        let label_width = labels.iter().map(|l| l.len()).max().unwrap_or(0);
+
+        let mut lines: Vec<String> = Vec::new();
+        for (idx, (_key, count)) in entries.iter().enumerate() {
             let mut bar_len = if max_count > 0.0 {
                 ((count / max_count) * width as f64).round() as usize
             } else {
@@ -952,7 +969,8 @@ impl<'a> Executor<'a> {
                 bar_len = 1;
             }
             let bar = ch.to_string().repeat(bar_len);
-            lines.push(format!("{} | {}", label, bar));
+            let count_str = builtins::format_number(*count);
+            lines.push(format!("{:width$} | {} {}", labels[idx], bar, count_str, width = label_width));
         }
 
         Value::from_string(lines.join("\n"))
