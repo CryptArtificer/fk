@@ -83,7 +83,7 @@ show $FK '{
 }
 END {
     hist(lat, 6, h)
-    print plot(h, 24, "#")
+    print plot(h, 28, ".", 0, "cyan")
 }' "$TMPDIR/api.jsonl"
 
 printf "\n${C_BOLD}Done.${C_RESET} 15 stats builtins — no awk equivalent.\n"

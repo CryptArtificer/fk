@@ -206,7 +206,7 @@ print ... > "/dev/stderr"   # write to stderr
 | Function | Description |
 |----------|-------------|
 | `typeof(x)` | `"number"`, `"string"`, `"array"`, or `"uninitialized"` |
-| `plot(arr [, width [, char]])` | Render simple horizontal bar chart |
+| `plot(arr [, width [, char [, precision [, color]]]])` | Render simple horizontal bar chart |
 
 ### Bitwise (fk extensions)
 | Function | Description |
@@ -352,7 +352,7 @@ fk -F, -H '{ ts = parsedate($created, "%Y-%m-%d"); if (ts > 1700000000) print $n
 fk '{ a[NR]=$1 } END { printf "n=%d mean=%.2f median=%.2f stddev=%.2f\n", length(a), mean(a), median(a), stddev(a) }' data.txt
 
 # Histogram plot
-fk '{ a[NR]=$1 } END { hist(a, 10, h); print plot(h, 30, "#") }' data.txt
+fk '{ a[NR]=$1 } END { hist(a, 10, h); print plot(h, 30, ".", 0, "cyan") }' data.txt
 
 # p95 latency
 fk '{ a[NR]=$3 } END { print "p95:", p(a, 95) }' latency.log

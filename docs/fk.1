@@ -582,8 +582,10 @@ Minimum / maximum value in the array.
 \fBtypeof(\fIx\fB)\fR
 Returns \fB"number"\fR, \fB"string"\fR, \fB"array"\fR, or \fB"uninitialized"\fR.
 .TP
-\fBplot(\fIarr\fB [\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR]]])\fR
-Render a simple horizontal bar chart from array values.
+\fBplot(\fIarr\fB [\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR [\fB,\fR \fIprecision\fR [\fB,\fR \fIcolor\fR]]]]])\fR
+Render a simple horizontal bar chart from array values. Optional \fIprecision\fR
+controls range label decimals; \fIcolor\fR can be \fBred\fR, \fBgreen\fR, \fByellow\fR,
+\fBblue\fR, \fBmagenta\fR, \fBcyan\fR, \fBgray\fR, or \fBnone\fR.
 .
 .SS Bitwise \fI[fk extensions]\fR
 .TP

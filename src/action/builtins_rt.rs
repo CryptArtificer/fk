@@ -853,7 +853,7 @@ impl<'a> Executor<'a> {
         Value::from_number(bins as f64)
     }
 
-    /// plot(arr [, width [, char]]) — render a simple horizontal bar chart.
+    /// plot(arr [, width [, char [, precision [, color]]]]) — render a simple horizontal bar chart.
     /// Uses numeric keys in ascending order if present (ignores keys starting with '_').
     /// If histogram metadata keys (_min/_max/_width) exist, labels bins by range.
     pub(crate) fn builtin_plot(&mut self, args: &[Expr]) -> Value {
@@ -883,6 +883,25 @@ impl<'a> Executor<'a> {
         } else {
             '#'
         };
+        let precision_raw = if let Some(expr) = args.get(3) {
+            builtins::to_number(&self.eval_string(expr)).round() as i64
+        } else {
+            -1
+        };
+        let precision = if precision_raw < 0 { None } else { Some(precision_raw as usize) };
+        let color_name = args.get(4).map(|expr| self.eval_string(expr)).unwrap_or_default();
+        let color_code = match color_name.as_str() {
+            "" | "none" => "",
+            "red" => "\x1b[31m",
+            "green" => "\x1b[32m",
+            "yellow" => "\x1b[33m",
+            "blue" => "\x1b[34m",
+            "magenta" => "\x1b[35m",
+            "cyan" => "\x1b[36m",
+            "gray" | "grey" => "\x1b[90m",
+            _ => "",
+        };
+        let color_reset = if color_code.is_empty() { "" } else { "\x1b[0m" };
 
         let mut numeric_keys: Vec<(i64, String)> = Vec::new();
         let mut other_keys: Vec<String> = Vec::new();
@@ -930,7 +949,9 @@ impl<'a> Executor<'a> {
             label_with_range = !numeric_keys.is_empty();
         }
 
-        let range_decimals = if !bin_width.is_finite() || bin_width == 0.0 {
+        let range_decimals = if let Some(p) = precision {
+            p
+        } else if !bin_width.is_finite() || bin_width == 0.0 {
             0
         } else {
             let w = bin_width.abs();
@@ -957,6 +978,10 @@ impl<'a> Executor<'a> {
             labels.push(label);
         }
         let label_width = labels.iter().map(|l| l.len()).max().unwrap_or(0);
+        let count_width = entries.iter()
+            .map(|(_k, v)| builtins::format_number(*v).len())
+            .max()
+            .unwrap_or(0);
 
         let mut lines: Vec<String> = Vec::new();
         for (idx, (_key, count)) in entries.iter().enumerate() {
@@ -968,9 +993,24 @@ impl<'a> Executor<'a> {
             if *count > 0.0 && bar_len == 0 {
                 bar_len = 1;
             }
-            let bar = ch.to_string().repeat(bar_len);
+            let mut bar = ch.to_string().repeat(bar_len);
+            if bar_len < width {
+                bar.push_str(&" ".repeat(width - bar_len));
+            }
             let count_str = builtins::format_number(*count);
-            lines.push(format!("{:width$} | {} {}", labels[idx], bar, count_str, width = label_width));
+            let colored_bar = if color_code.is_empty() {
+                bar
+            } else {
+                format!("{}{}{}", color_code, bar, color_reset)
+            };
+            lines.push(format!(
+                "{:label_w$} | {} {:count_w$}",
+                labels[idx],
+                colored_bar,
+                count_str,
+                label_w = label_width,
+                count_w = count_width,
+            ));
         }
 
         Value::from_string(lines.join("\n"))
