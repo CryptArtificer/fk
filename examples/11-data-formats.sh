@@ -48,4 +48,47 @@ show_pipe "echo '{\"team\":\"eng\",\"members\":[{\"name\":\"Alice\",\"role\":\"l
     for (i=1; i<=n; i++) printf \"  %s: %s (%s)\n\", team, jpath(m[i], \".name\"), jpath(m[i], \".role\")
 }'"
 
+section "5. Formatted JSON — pretty, multi-line input"
+
+cat > "$TMPDIR/pretty.json" <<'JSON'
+{
+  "service": "search",
+  "version": 3,
+  "limits": {
+    "timeout_ms": 1500,
+    "retries": 2
+  }
+}
+JSON
+
+echo "Parse a formatted JSON object (multi-line):"
+show $FK 'BEGIN {
+    json = slurp("'"$TMPDIR/pretty.json"'")
+    printf "  service=%s  version=%s  timeout=%sms  retries=%s\n",
+        jpath(json, ".service"),
+        jpath(json, ".version"),
+        jpath(json, ".limits.timeout_ms"),
+        jpath(json, ".limits.retries")
+}'
+
+cat > "$TMPDIR/pretty-array.json" <<'JSON'
+{
+  "items": [
+    { "id": 101, "name": "alpha" },
+    { "id": 102, "name": "beta" },
+    { "id": 103, "name": "gamma" }
+  ]
+}
+JSON
+
+echo ""
+echo "Parse a formatted JSON array (repeated items):"
+show $FK 'BEGIN {
+    json = slurp("'"$TMPDIR/pretty-array.json"'")
+    n = jpath(json, ".items", items)
+    for (i=1; i<=n; i++) {
+        printf "  %s: %s\n", jpath(items[i], ".id"), jpath(items[i], ".name")
+    }
+}'
+
 printf "\n${C_BOLD}Done.${C_RESET} fk handles CSV, TSV, JSON natively — awk needs external tools.\n"

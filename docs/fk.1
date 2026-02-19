@@ -130,6 +130,8 @@ Input format.
 \fBcsv\fR reads RFC\ 4180 CSV (quoted fields, embedded commas and newlines).
 \fBtsv\fR reads tab-delimited (with quoting).
 \fBjson\fR reads one JSON object per line; top-level values become fields.
+The raw JSON line is preserved in \fB$0\fR so \fBjpath($0, ...)\fR works
+in JSON mode.
 \fBparquet\fR reads Apache Parquet files (columnar binary format).
 Requires building with \fB\-\-features parquet\fR.
 Column names become headers automatically.
