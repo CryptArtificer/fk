@@ -1926,6 +1926,23 @@ fn stats_plot_histogram() {
 }
 
 #[test]
+fn stats_plotbox_histogram() {
+    let rt = eval(
+        r##"BEGIN { h[1]=2; h[2]=1; h["_min"]=0; h["_max"]=2; h["_width"]=1; s = plotbox(h, 4, "#", 0, "Title", "X", "none") }"##,
+        &[],
+    );
+    let expected = concat!(
+        "     Title\n",
+        "       ┌      ┐\n",
+        "[0, 1) ┤#### 2\n",
+        "[1, 2) ┤##   1\n",
+        "       └      ┘\n",
+        "       X",
+    );
+    assert_eq!(rt.get_var("s"), expected);
+}
+
+#[test]
 fn stats_min_array() {
     let rt = eval(
         r#"{ a[NR] = $1 } END { result = min(a) }"#,

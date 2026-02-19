@@ -1016,6 +1016,191 @@ impl<'a> Executor<'a> {
         Value::from_string(lines.join("\n"))
     }
 
+    /// plotbox(arr [, width [, char [, precision [, title [, xlabel [, color]]]]]])
+    /// Render a boxed horizontal bar chart.
+    pub(crate) fn builtin_plotbox(&mut self, args: &[Expr]) -> Value {
+        if args.is_empty() {
+            eprintln!("fk: plotbox() requires an array argument");
+            return Value::from_string(String::new());
+        }
+        let array_name = match &args[0] {
+            Expr::Var(v) => v.clone(),
+            _ => {
+                eprintln!("fk: plotbox(): first argument must be an array name");
+                return Value::from_string(String::new());
+            }
+        };
+        if !self.rt.has_array(&array_name) {
+            return Value::from_string(String::new());
+        }
+
+        let width_raw = if let Some(expr) = args.get(1) {
+            builtins::to_number(&self.eval_string(expr)).round() as i64
+        } else {
+            40
+        };
+        let width = if width_raw <= 0 { 40 } else { width_raw as usize };
+        let ch = if let Some(expr) = args.get(2) {
+            self.eval_string(expr).chars().next().unwrap_or('▇')
+        } else {
+            '▇'
+        };
+        let precision_raw = if let Some(expr) = args.get(3) {
+            builtins::to_number(&self.eval_string(expr)).round() as i64
+        } else {
+            -1
+        };
+        let precision = if precision_raw < 0 { None } else { Some(precision_raw as usize) };
+        let title = args.get(4).map(|expr| self.eval_string(expr)).unwrap_or_default();
+        let xlabel = args.get(5).map(|expr| self.eval_string(expr)).unwrap_or_default();
+        let color_name = args.get(6).map(|expr| self.eval_string(expr)).unwrap_or_default();
+        let color_code = match color_name.as_str() {
+            "" | "none" => "",
+            "red" => "\x1b[31m",
+            "green" => "\x1b[32m",
+            "yellow" => "\x1b[33m",
+            "blue" => "\x1b[34m",
+            "magenta" => "\x1b[35m",
+            "cyan" => "\x1b[36m",
+            "gray" | "grey" => "\x1b[90m",
+            _ => "",
+        };
+        let color_reset = if color_code.is_empty() { "" } else { "\x1b[0m" };
+
+        let mut numeric_keys: Vec<(i64, String)> = Vec::new();
+        let mut other_keys: Vec<String> = Vec::new();
+        for k in self.rt.array_keys(&array_name) {
+            if k.starts_with('_') {
+                continue;
+            }
+            if let Ok(n) = k.parse::<i64>() {
+                numeric_keys.push((n, k));
+            } else {
+                other_keys.push(k);
+            }
+        }
+        if !numeric_keys.is_empty() {
+            numeric_keys.sort_by_key(|(n, _)| *n);
+        } else {
+            other_keys.sort();
+        }
+
+        let mut entries: Vec<(String, f64)> = Vec::new();
+        if !numeric_keys.is_empty() {
+            for (_n, k) in &numeric_keys {
+                let v = self.rt.get_array(&array_name, k);
+                entries.push((k.clone(), builtins::to_number(&v)));
+            }
+        } else {
+            for k in &other_keys {
+                let v = self.rt.get_array(&array_name, k);
+                entries.push((k.clone(), builtins::to_number(&v)));
+            }
+        }
+
+        let mut max_count = 0.0;
+        for (_k, v) in &entries {
+            if *v > max_count {
+                max_count = *v;
+            }
+        }
+
+        let min = builtins::to_number(&self.rt.get_array(&array_name, "_min"));
+        let max = builtins::to_number(&self.rt.get_array(&array_name, "_max"));
+        let bin_width = builtins::to_number(&self.rt.get_array(&array_name, "_width"));
+        let label_with_range = bin_width.is_finite() && bin_width > 0.0 && min.is_finite() && max.is_finite() && !numeric_keys.is_empty();
+        let range_decimals = if let Some(p) = precision {
+            p
+        } else if !bin_width.is_finite() || bin_width == 0.0 {
+            0
+        } else {
+            let w = bin_width.abs();
+            if w >= 1.0 { 0 }
+            else if w >= 0.1 { 1 }
+            else if w >= 0.01 { 2 }
+            else if w >= 0.001 { 3 }
+            else { 4 }
+        };
+
+        let mut labels: Vec<String> = Vec::new();
+        for (idx, (key, _count)) in entries.iter().enumerate() {
+            let label = if label_with_range {
+                let lo = min + (idx as f64) * bin_width;
+                let hi = if idx + 1 == entries.len() {
+                    max
+                } else {
+                    lo + bin_width
+                };
+                format!("[{:.*}, {:.*})", range_decimals, lo, range_decimals, hi)
+            } else {
+                key.clone()
+            };
+            labels.push(label);
+        }
+        let label_width = labels.iter().map(|l| l.len()).max().unwrap_or(0);
+        let count_width = entries.iter()
+            .map(|(_k, v)| builtins::format_number(*v).len())
+            .max()
+            .unwrap_or(0);
+
+        let box_width = width + count_width + 1; // bar + space + count
+        let mut lines: Vec<String> = Vec::new();
+        if !title.is_empty() {
+            let total = label_width + 3 + box_width + 1;
+            let title_pad = if total > title.len() { (total - title.len()) / 2 } else { 0 };
+            lines.push(format!("{:pad$}{}", "", title, pad = title_pad));
+        }
+        lines.push(format!(
+            "{:label_w$} ┌{}┐",
+            "",
+            " ".repeat(box_width),
+            label_w = label_width,
+        ));
+
+        for (idx, (_key, count)) in entries.iter().enumerate() {
+            let mut bar_len = if max_count > 0.0 {
+                ((count / max_count) * width as f64).round() as usize
+            } else {
+                0
+            };
+            if *count > 0.0 && bar_len == 0 {
+                bar_len = 1;
+            }
+            let mut bar = ch.to_string().repeat(bar_len);
+            if bar_len < width {
+                bar.push_str(&" ".repeat(width - bar_len));
+            }
+            let count_str = builtins::format_number(*count);
+            let colored_bar = if color_code.is_empty() {
+                bar
+            } else {
+                format!("{}{}{}", color_code, bar, color_reset)
+            };
+            lines.push(format!(
+                "{:label_w$} ┤{} {:count_w$}",
+                labels[idx],
+                colored_bar,
+                count_str,
+                label_w = label_width,
+                count_w = count_width,
+            ));
+        }
+
+        lines.push(format!(
+            "{:label_w$} └{}┘",
+            "",
+            " ".repeat(box_width),
+            label_w = label_width,
+        ));
+        if !xlabel.is_empty() {
+            let total = label_width + 3 + box_width + 1;
+            let pad = if total > xlabel.len() { (total - xlabel.len()) / 2 } else { 0 };
+            lines.push(format!("{:pad$}{}", "", xlabel, pad = pad));
+        }
+
+        Value::from_string(lines.join("\n"))
+    }
+
     pub(crate) fn exec_getline(&mut self, var: Option<&str>, source: Option<&Expr>) -> Value {
         if let Some(src_expr) = source {
             let path = self.eval_string(src_expr);
