@@ -853,6 +853,111 @@ impl<'a> Executor<'a> {
         Value::from_number(bins as f64)
     }
 
+    /// plot(arr [, width [, char]]) — render a simple horizontal bar chart.
+    /// Uses numeric keys in ascending order if present (ignores keys starting with '_').
+    /// If histogram metadata keys (_min/_max/_width) exist, labels bins by range.
+    pub(crate) fn builtin_plot(&mut self, args: &[Expr]) -> Value {
+        if args.is_empty() {
+            eprintln!("fk: plot() requires an array argument");
+            return Value::from_string(String::new());
+        }
+        let array_name = match &args[0] {
+            Expr::Var(v) => v.clone(),
+            _ => {
+                eprintln!("fk: plot(): first argument must be an array name");
+                return Value::from_string(String::new());
+            }
+        };
+        if !self.rt.has_array(&array_name) {
+            return Value::from_string(String::new());
+        }
+
+        let width_raw = if let Some(expr) = args.get(1) {
+            builtins::to_number(&self.eval_string(expr)).round() as i64
+        } else {
+            40
+        };
+        let width = if width_raw <= 0 { 40 } else { width_raw as usize };
+        let ch = if let Some(expr) = args.get(2) {
+            self.eval_string(expr).chars().next().unwrap_or('#')
+        } else {
+            '#'
+        };
+
+        let mut numeric_keys: Vec<(i64, String)> = Vec::new();
+        let mut other_keys: Vec<String> = Vec::new();
+        for k in self.rt.array_keys(&array_name) {
+            if k.starts_with('_') {
+                continue;
+            }
+            if let Ok(n) = k.parse::<i64>() {
+                numeric_keys.push((n, k));
+            } else {
+                other_keys.push(k);
+            }
+        }
+        if !numeric_keys.is_empty() {
+            numeric_keys.sort_by_key(|(n, _)| *n);
+        } else {
+            other_keys.sort();
+        }
+
+        let mut entries: Vec<(String, f64)> = Vec::new();
+        if !numeric_keys.is_empty() {
+            for (_n, k) in &numeric_keys {
+                let v = self.rt.get_array(&array_name, k);
+                entries.push((k.clone(), builtins::to_number(&v)));
+            }
+        } else {
+            for k in &other_keys {
+                let v = self.rt.get_array(&array_name, k);
+                entries.push((k.clone(), builtins::to_number(&v)));
+            }
+        }
+
+        let mut max_count = 0.0;
+        for (_k, v) in &entries {
+            if *v > max_count {
+                max_count = *v;
+            }
+        }
+
+        let mut label_with_range = false;
+        let min = builtins::to_number(&self.rt.get_array(&array_name, "_min"));
+        let max = builtins::to_number(&self.rt.get_array(&array_name, "_max"));
+        let bin_width = builtins::to_number(&self.rt.get_array(&array_name, "_width"));
+        if bin_width.is_finite() && bin_width > 0.0 && min.is_finite() && max.is_finite() {
+            label_with_range = !numeric_keys.is_empty();
+        }
+
+        let mut lines: Vec<String> = Vec::new();
+        for (idx, (key, count)) in entries.iter().enumerate() {
+            let label = if label_with_range {
+                let lo = min + (idx as f64) * bin_width;
+                let hi = if idx + 1 == entries.len() {
+                    max
+                } else {
+                    lo + bin_width
+                };
+                format!("{}..{}", builtins::format_number(lo), builtins::format_number(hi))
+            } else {
+                key.clone()
+            };
+            let mut bar_len = if max_count > 0.0 {
+                ((count / max_count) * width as f64).round() as usize
+            } else {
+                0
+            };
+            if *count > 0.0 && bar_len == 0 {
+                bar_len = 1;
+            }
+            let bar = ch.to_string().repeat(bar_len);
+            lines.push(format!("{} | {}", label, bar));
+        }
+
+        Value::from_string(lines.join("\n"))
+    }
+
     pub(crate) fn exec_getline(&mut self, var: Option<&str>, source: Option<&Expr>) -> Value {
         if let Some(src_expr) = source {
             let path = self.eval_string(src_expr);

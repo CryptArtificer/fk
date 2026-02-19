@@ -206,6 +206,7 @@ print ... > "/dev/stderr"   # write to stderr
 | Function | Description |
 |----------|-------------|
 | `typeof(x)` | `"number"`, `"string"`, `"array"`, or `"uninitialized"` |
+| `plot(arr [, width [, char]])` | Render simple horizontal bar chart |
 
 ### Bitwise (fk extensions)
 | Function | Description |

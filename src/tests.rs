@@ -1917,6 +1917,15 @@ fn stats_histogram_basic() {
 }
 
 #[test]
+fn stats_plot_histogram() {
+    let rt = eval(
+        r#"BEGIN { h[1]=2; h[2]=1; h["_min"]=0; h["_max"]=2; h["_width"]=1; s = plot(h, 4, "*") }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("s"), "0..1 | ****\n1..2 | **");
+}
+
+#[test]
 fn stats_min_array() {
     let rt = eval(
         r#"{ a[NR] = $1 } END { result = min(a) }"#,

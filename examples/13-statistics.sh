@@ -76,4 +76,14 @@ END {
     }
 }' "$TMPDIR/api.jsonl"
 
+echo ""
+echo "Quick plot:"
+show $FK '{
+    ms = jpath($0, ".ms") + 0; lat[NR] = ms
+}
+END {
+    hist(lat, 6, h)
+    print plot(h, 24, "#")
+}' "$TMPDIR/api.jsonl"
+
 printf "\n${C_BOLD}Done.${C_RESET} 15 stats builtins — no awk equivalent.\n"
