@@ -1903,6 +1903,20 @@ fn stats_iqm() {
 }
 
 #[test]
+fn stats_histogram_basic() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { n = hist(a, 2, h); c1 = h[1]; c2 = h[2]; mn = h["_min"]; mx = h["_max"]; w = h["_width"] }"#,
+        &["1", "2", "3", "4", "5"],
+    );
+    assert_eq!(rt.get_var("n"), "2");
+    assert_eq!(rt.get_var("c1"), "2");
+    assert_eq!(rt.get_var("c2"), "3");
+    assert_eq!(rt.get_var("mn"), "1");
+    assert_eq!(rt.get_var("mx"), "5");
+    assert_eq!(rt.get_var("w"), "2");
+}
+
+#[test]
 fn stats_min_array() {
     let rt = eval(
         r#"{ a[NR] = $1 } END { result = min(a) }"#,

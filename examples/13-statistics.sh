@@ -60,4 +60,20 @@ END {
     printf "  Latency: mean=%.0fms  median=%.0fms  p95=%.0fms  p99=%.0fms  max=%.0fms\n", mean(lat), median(lat), p(lat,95), p(lat,99), max(lat)
 }' "$TMPDIR/api.jsonl"
 
-printf "\n${C_BOLD}Done.${C_RESET} 14 stats builtins — no awk equivalent.\n"
+section "5. Histogram — distribution at a glance"
+
+echo "Bucket latency into 6 bins:"
+show $FK '{
+    ms = jpath($0, ".ms") + 0; lat[NR] = ms
+}
+END {
+    n = hist(lat, 6, h)
+    minv = h["_min"] + 0; w = h["_width"] + 0
+    for (i=1; i<=n; i++) {
+        lo = minv + (i-1) * w
+        hi = (i == n) ? (h["_max"] + 0) : (lo + w)
+        printf "  %4.0f–%4.0f ms  %3d  %s\n", lo, hi, h[i], repeat("#", h[i])
+    }
+}' "$TMPDIR/api.jsonl"
+
+printf "\n${C_BOLD}Done.${C_RESET} 15 stats builtins — no awk equivalent.\n"

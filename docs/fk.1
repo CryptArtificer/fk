@@ -559,6 +559,10 @@ Population standard deviation.
 \fBvariance(\fIarr\fB)\fR
 Population variance.
 .TP
+\fBhist(\fIarr\fB,\fR \fIbins\fB [\fB,\fR \fIout\fR [\fB,\fR \fImin\fR [\fB,\fR \fImax\fR]]]]\fR
+Histogram counts. Writes \fIbins\fR counts into \fIout\fR (or \fIarr\fR),
+keys 1..bins. Stores metadata keys \fB_min\fR, \fB_max\fR, \fB_width\fR.
+.TP
 \fBp(\fIarr\fB,\fR \fIn\fB)\fR / \fBpercentile(\fIarr\fB,\fR \fIn\fB)\fR
 \fIn\fRth percentile (0\(en100). Uses linear interpolation.
 .TP
@@ -815,7 +819,7 @@ Notably:
 \fBdiff()\fR, \fBinter()\fR, \fBunion()\fR, \fBseq()\fR,
 \fBasort()\fR, \fBasorti()\fR, \fBjoin()\fR, \fBtypeof()\fR
 .IP \(bu 2
-\fBsum()\fR, \fBmean()\fR, \fBmedian()\fR, \fBstddev()\fR, \fBvariance()\fR, \fBp()\fR, \fBiqm()\fR, \fBquantile()\fR
+\fBsum()\fR, \fBmean()\fR, \fBmedian()\fR, \fBstddev()\fR, \fBvariance()\fR, \fBhist()\fR, \fBp()\fR, \fBiqm()\fR, \fBquantile()\fR
 .IP \(bu 2
 \fBtrim()\fR, \fBltrim()\fR, \fBrtrim()\fR, \fBstartswith()\fR, \fBendswith()\fR, \fBrepeat()\fR, \fBreverse()\fR, \fBlpad()\fR, \fBrpad()\fR
 .IP \(bu 2

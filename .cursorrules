@@ -30,7 +30,7 @@ parser.rs             — recursive-descent → AST (Program, Rules, Exprs, Stmt
 action/mod.rs         — Executor struct, public API, pattern matching
 action/eval.rs        — expression evaluation, field access, assignment, binop
 action/stmt.rs        — statement execution, control flow, output
-action/builtins_rt.rs — builtins needing runtime: sub, gsub, match, split, stats, etc.
+action/builtins_rt.rs — builtins needing runtime: sub, gsub, match, split, stats (hist), etc.
 runtime.rs            — variables (private), fields, arrays (private, via methods)
 field.rs              — field splitting (FS semantics)
 error.rs              — Span + FkError (structured errors with Display + Error)
@@ -45,7 +45,7 @@ input/parquet_reader.rs — Apache Parquet reader (optional feature)
 builtins/mod.rs      — dispatch + coercion helpers (to_number, format_number)
 builtins/string.rs   — length, substr, index, trim, reverse, chr, ord, hex, ...
 builtins/math.rs     — int, sqrt, abs, ceil, floor, rand, min, max, ...
-                       (stats builtins in action.rs: sum, mean, median, stddev, p, iqm, ...)
+                       (stats builtins in action.rs: sum, mean, median, stddev, hist, p, iqm, ...)
 builtins/printf.rs   — format_printf
 builtins/time.rs     — systime, strftime, mktime, parsedate (pure UTC, no libc)
 builtins/json.rs     — jpath() with JSON parser, path evaluator, iteration
@@ -56,7 +56,7 @@ builtins/json.rs     — jpath() with JSON parser, path evaluator, iteration
 - `RecordReader` trait returns `Record { text, fields: Option<Vec<String>> }`
   so structured readers (CSV/JSON) can pre-split fields
 - Builtins that need runtime access (sub, gsub, split, close, gensub, jpath 3-arg, system,
-  stats, bitwise, asort, keys, vals, uniq, inv, tidy, shuf, diff, inter, union,
+  stats (hist), bitwise, asort, keys, vals, uniq, inv, tidy, shuf, diff, inter, union,
   seq, samp, slurp) live in action/builtins_rt.rs; pure builtins go through
   builtins::call_builtin
 - Lexer uses O(1) incremental line/col tracking; produces `Spanned` tokens (token + Span)
@@ -97,7 +97,7 @@ Phase 8: Header names as field accessors ($name, $"col-name", $var in -H mode),
   string (trim, ltrim, rtrim, startswith, endswith, repeat, reverse, chr, ord, hex),
   date (parsedate), richer strftime specifiers
 Phase 9: printf enhancement (0-pad, +sign, %x, %o), statistical builtins
-  (sum, mean, median, stddev, variance, p/percentile, quantile, iqm, min/max on arrays)
+  (sum, mean, median, stddev, variance, hist, p/percentile, quantile, iqm, min/max on arrays)
 Phase 10: Code quality — split action.rs into action/ directory (mod/eval/stmt/builtins_rt),
   structured FkError with Display+Error, O(1) lexer spans, multiple BEGIN/END blocks,
   encapsulated Runtime (private arrays/variables), #[must_use] on Value, eliminated AST

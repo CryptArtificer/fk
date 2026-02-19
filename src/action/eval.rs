@@ -167,6 +167,7 @@ impl<'a> Executor<'a> {
                     | "percentile" | "p" | "iqm" | "quantile" => {
                         return self.builtin_stats(name, args);
                     }
+                    "hist" => return self.builtin_hist(args),
                     "min" if args.len() == 1 => {
                         if let Expr::Var(v) = &args[0]
                             && self.rt.has_array(v) {

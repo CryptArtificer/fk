@@ -769,6 +769,90 @@ impl<'a> Executor<'a> {
         }
     }
 
+    /// hist(arr, bins [, out [, min [, max]]]) — histogram of numeric values.
+    /// Writes counts into `out` (or `arr` if omitted) with keys 1..bins.
+    /// Also stores metadata keys: _min, _max, _width. Returns bin count.
+    pub(crate) fn builtin_hist(&mut self, args: &[Expr]) -> Value {
+        if args.len() < 2 {
+            eprintln!("fk: hist() requires an array and bin count");
+            return Value::from_number(0.0);
+        }
+        let array_name = match &args[0] {
+            Expr::Var(v) => v.clone(),
+            _ => {
+                eprintln!("fk: hist(): first argument must be an array name");
+                return Value::from_number(0.0);
+            }
+        };
+        let bins_raw = builtins::to_number(&self.eval_string(&args[1])).round() as i64;
+        if bins_raw <= 0 {
+            eprintln!("fk: hist(): bins must be > 0");
+            return Value::from_number(0.0);
+        }
+        let bins = bins_raw as usize;
+
+        let out_name = if let Some(expr) = args.get(2) {
+            match expr {
+                Expr::Var(v) => v.clone(),
+                _ => {
+                    eprintln!("fk: hist(): output must be an array name");
+                    return Value::from_number(0.0);
+                }
+            }
+        } else {
+            array_name.clone()
+        };
+
+        let Some(values) = self.rt.array_values(&array_name) else {
+            return Value::from_number(0.0);
+        };
+        let mut vals: Vec<f64> = values.into_iter().map(|v| v.to_number()).collect();
+        if vals.is_empty() {
+            self.rt.delete_array_all(&out_name);
+            return Value::from_number(0.0);
+        }
+
+        let mut min = vals[0];
+        let mut max = vals[0];
+        for v in &vals[1..] {
+            if *v < min { min = *v; }
+            if *v > max { max = *v; }
+        }
+        if let Some(expr) = args.get(3) {
+            min = builtins::to_number(&self.eval_string(expr));
+        }
+        if let Some(expr) = args.get(4) {
+            max = builtins::to_number(&self.eval_string(expr));
+        }
+        if min > max {
+            std::mem::swap(&mut min, &mut max);
+        }
+
+        let mut width = (max - min) / bins as f64;
+        if width == 0.0 || !width.is_finite() {
+            width = 1.0;
+        }
+
+        let mut counts = vec![0usize; bins];
+        for v in vals.drain(..) {
+            let mut idx = ((v - min) / width).floor() as i64;
+            if idx < 0 { idx = 0; }
+            if idx >= bins as i64 { idx = bins as i64 - 1; }
+            counts[idx as usize] += 1;
+        }
+
+        self.rt.delete_array_all(&out_name);
+        for (i, count) in counts.into_iter().enumerate() {
+            let key = (i + 1).to_string();
+            self.rt.set_array(&out_name, &key, &count.to_string());
+        }
+        self.rt.set_array(&out_name, "_min", &builtins::format_number(min));
+        self.rt.set_array(&out_name, "_max", &builtins::format_number(max));
+        self.rt.set_array(&out_name, "_width", &builtins::format_number(width));
+
+        Value::from_number(bins as f64)
+    }
+
     pub(crate) fn exec_getline(&mut self, var: Option<&str>, source: Option<&Expr>) -> Value {
         if let Some(src_expr) = source {
             let path = self.eval_string(src_expr);

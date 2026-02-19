@@ -131,7 +131,7 @@
 
 #### Phase 9 — Printf & statistics
 - [x] Printf enhancements: `%05d` (zero-pad), `%+d` (force sign), `%x` (hex), `%o` (octal), `%c` with numeric arg
-- [x] Statistical builtins on arrays: `sum()`, `mean()`, `median()`, `stddev()`, `variance()`, `p()`/`percentile()`, `quantile()`, `iqm()`, `min()`, `max()`
+- [x] Statistical builtins on arrays: `sum()`, `mean()`, `median()`, `stddev()`, `variance()`, `hist()`, `p()`/`percentile()`, `quantile()`, `iqm()`, `min()`, `max()`
 
 #### Phase 10 — Code quality
 - [x] Split `action.rs` into `action/` directory (mod, eval, stmt, builtins_rt)

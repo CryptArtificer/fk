@@ -439,7 +439,7 @@ fk  '{ a[NR]=$1 } END { printf "n=%d avg=%.1f med=%.1f sd=%.1f min=%s max=%s\n",
 
 # 96. Build histogram of value distribution
 awk '{ a[int($1/10)*10]++ } END { for(k in a) { printf "%3d: ", k; for(i=0;i<a[k];i++) printf "#"; print "" } }' file
-fk  '{ a[int($1/10)*10]++ } END { for(k in a) printf "%3d: %s\n", k, repeat("#",a[k]) }' file
+fk  '{ a[NR]=$1 } END { n=hist(a,10,h); for(i=1;i<=n;i++) printf "%2d: %s\n", i, repeat("#",h[i]) }' file
 
 # 97. Formatted report with headers and totals
 awk 'BEGIN{printf "%-20s %10s\n","Name","Amount";printf "%-20s %10s\n","----","------"} {a[$1]+=$2} END{t=0;for(k in a){printf "%-20s %10.2f\n",k,a[k];t+=a[k]};printf "%-20s %10.2f\n","TOTAL",t}' f
