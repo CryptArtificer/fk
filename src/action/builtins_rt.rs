@@ -981,7 +981,13 @@ impl<'a> Executor<'a> {
             -1
         };
         let precision = if precision_raw < 0 { None } else { Some(precision_raw as usize) };
-        let title = args.get(4).map(|expr| self.eval_string(expr)).unwrap_or_default();
+        let title = args.get(4).map(|expr| self.eval_string(expr)).unwrap_or_else(|| {
+            if let Some(stripped) = array_name.strip_prefix("__hist_") {
+                stripped.to_string()
+            } else {
+                array_name.clone()
+            }
+        });
         let xlabel_arg = args.get(5).map(|expr| self.eval_string(expr));
         let color_name = args.get(6).map(|expr| self.eval_string(expr)).unwrap_or_default();
         let (color_code, color_reset) = ansi_color(&color_name);
