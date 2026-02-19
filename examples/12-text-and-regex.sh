@@ -22,12 +22,30 @@ show $FK '{
     if (c[2]+0 >= 500) printf "  %s → %s\n", c[1], c[2]
 }' "$TMPDIR/access.log"
 
-section "2. gensub — functional string replacement"
+section "2. Extended regex — Rust regex crate (POSIX ERE superset)"
+
+echo "fk supports \\d, \\w, \\s, \\b, non-greedy quantifiers, and Unicode properties."
+echo ""
+echo "Same log parsing with \\d and \\w (compare with section 1):"
+show $FK '{
+    match($0, "^(\\d+\\.\\d+\\.\\d+\\.\\d+) .* \"(\\w+) (\\S+) .*\" (\\d+) (\\d+)", c)
+    printf "  %-15s %-6s %-25s %s  %5sB\n", c[1], c[2], c[3], c[4], c[5]
+}' "$TMPDIR/access.log"
+
+echo ""
+echo "Word boundary matching (\\b) — match 'GET' as whole word only:"
+show $FK '/\bGET\b/ { print "  " $0 }' "$TMPDIR/access.log"
+
+echo ""
+echo "Non-greedy matching — extract first quoted string:"
+show_pipe "echo 'said \"hello\" then \"goodbye\"' | $FK '{ match(\$0, \"\\\"(.+?)\\\"\", c); print \"  first quoted:\", c[1] }'"
+
+section "3. gensub — functional string replacement"
 
 echo "Redact sensitive fields without touching the original:"
 show_pipe "echo 'user=alice email=alice@example.com token=abc123secret' | $FK '{
-    safe = gensub(\"token=[^ ]+\", \"token=***\", \"g\")
-    safe = gensub(\"[a-zA-Z0-9.]+@[a-zA-Z0-9.]+\", \"***@***\", \"g\", safe)
+    safe = gensub(\"token=\\S+\", \"token=***\", \"g\")
+    safe = gensub(\"[\\w.]+@[\\w.]+\", \"***@***\", \"g\", safe)
     print \"  original:\", \$0
     print \"  redacted:\", safe
 }'"
@@ -36,7 +54,7 @@ echo ""
 echo "Target a specific occurrence (replace only the 2nd dash):"
 show_pipe "echo 'one-two-three-four-five' | $FK '{ print gensub(\"-\", \" | \", 2) }'"
 
-section "3. String toolkit — trim, pad, reverse"
+section "4. String toolkit — trim, pad, reverse"
 
 echo "Clean up messy whitespace and display aligned:"
 show_pipe "printf '  hello world  \n  fk rocks  \n' | $FK '{
@@ -51,7 +69,7 @@ show_pipe "printf 'Alice 95\nBob 87\nCarol 100\nDan 42\n' | $FK '{
     printf \"  %s %3d %s\n\", rpad(\$1, 6), \$2, bar
 }'"
 
-section "4. Character-level operations — chr, ord, hex"
+section "5. Character-level operations — chr, ord, hex"
 
 echo "Build an ASCII table:"
 show $FK 'BEGIN {
@@ -66,7 +84,7 @@ echo ""
 echo "Encode a string to hex:"
 show_pipe "echo 'Hello' | $FK '{ for (i=1; i<=length(\$0); i++) { c=substr(\$0,i,1); printf \"  %s → %d → %s\n\", c, ord(c), hex(ord(c)) } }'"
 
-section "5. startswith / endswith — filter without regex"
+section "6. startswith / endswith — filter without regex"
 
 show $FK -H '{
     if (startswith($"host-name", "web"))
