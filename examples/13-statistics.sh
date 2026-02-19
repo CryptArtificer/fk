@@ -53,11 +53,11 @@ END {
 
 section "4. API latency percentiles from JSON"
 
-show $FK '{
-    ms = jpath($0, ".ms") + 0; lat[NR] = ms
+show_pipe "cat $TMPDIR/api.jsonl | $FK '{
+    ms = jpath(\$0, \".ms\") + 0; lat[NR] = ms
 }
 END {
-    printf "  Latency: mean=%.0fms  median=%.0fms  p95=%.0fms  p99=%.0fms  max=%.0fms\n", mean(lat), median(lat), p(lat,95), p(lat,99), max(lat)
-}' "$TMPDIR/api.jsonl"
+    printf \"  Latency: mean=%.0fms  median=%.0fms  p95=%.0fms  p99=%.0fms  max=%.0fms\\n\", mean(lat), median(lat), p(lat,95), p(lat,99), max(lat)
+}'"
 
 printf "\n${C_BOLD}Done.${C_RESET} 14 stats builtins — no awk equivalent.\n"
