@@ -150,10 +150,11 @@ Order: A1-A3 ✓ → B1-B4 ✓ → D1 ✓ → C1-C5 ✓ → E3 ✓ → D2 → E1
 - [ ] CI pipeline (build, test, lint, clippy) — on hold
 - [ ] Publish to crates.io
 
-### Performance (from user-time benchmarks on 1M lines, Apple M3 Pro):
+### Performance (from user-time benchmarks on 1M lines):
 Historical numbers favored fk heavily after lazy field storage, but current
 results depend on harness and data size. For truthful, current numbers use
 `make suite-perf-strict` (warmup + median/p90, reports under `bench_data/`).
+The strict report includes machine and tool versions.
 fk tends to be faster on multi-field arithmetic and pattern-heavy workloads,
 while `print $2` and single-purpose tools like `wc`/`head` can be closer or faster.
 
