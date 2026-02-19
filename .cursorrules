@@ -12,8 +12,8 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~13,600 lines of Rust** across 32 source files
-- **433 Rust + 152 shell tests**, zero warnings, clippy clean
+- **~13,000 lines of Rust** across 36 source files
+- **441 Rust + 152 shell tests**, zero warnings, clippy clean
 - **Phases 0–18 complete**
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
@@ -23,10 +23,13 @@ incrementally as a learning exercise. The user values:
 ```
 main.rs               — CLI dispatch, record loop
 cli.rs                — argument parsing (-F, -f, -v, -i, -H, -d, --repl, --explain)
-analyze.rs            — static AST analysis → ProgramInfo; explain() pipeline:
-                        scan_program → collect_fragments → reduce → render.
-                        FragTag enum carries sig() + subsumed_by() (data-driven).
-                        One scan, one emit function, table-driven subsumption.
+analyze.rs            — static AST analysis → ProgramInfo (field/NF/regex hints,
+                        array_sources, var_sources)
+explain/mod.rs        — public API: explain(), ExplainContext
+explain/lower.rs      — AST → flat Op sequence (lowering); Op enum; Desc struct
+explain/reduce.rs     — pattern matching & normalization (idioms, accumulation,
+                        chart/stats, transforms, select, filters, fallback)
+explain/render.rs     — Op → human-readable text with budget; Phrase/Tag system
 describe.rs           — format sniffer, schema inference, suggestions, decompression
 lexer.rs              — tokenizer (Spanned tokens with O(1) line:col tracking)
 parser.rs             — recursive-descent → AST (Program, Rules, Exprs, Stmts)
@@ -152,6 +155,15 @@ Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
   `count lines`, `deduplicate by $0`, `join on col 1`, `timed`.
   Field refs humanized ($N → col N), consecutive ranges collapsed (col 1–3).
   Integrated into showcase `show` helper as auto-subtitle for all examples.
+Phase 19: Explain module refactor — replaced monolithic scan/fragment/reduce
+  pipeline in analyze.rs with separate src/explain/ module using RPN design:
+  lower.rs: AST → flat Op sequence (semantic effects, not syntax)
+  reduce.rs: pattern-matching normalization passes (idioms, accumulation,
+    chart/stats, transforms, selection, filters, number-lines, timing)
+  render.rs: Phrase/Tag priority + subsumption → budget-limited text
+  Complete coverage of all AST node types. Deep output-field resolution
+  through var_sources, jpath paths, BinOp, Concat, Ternary, FuncCall args.
+  55 tests covering all detected patterns.
 
 ### Future ideas (explored, deferred)
 

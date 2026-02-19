@@ -3,7 +3,7 @@ use std::io::Write;
 use std::process;
 
 use fk::builtins::format_number;
-use fk::{action, analyze, cli, describe, format, input, lexer, parser, repl, runtime};
+use fk::{action, cli, describe, explain, format, input, lexer, parser, repl, runtime};
 
 #[cfg(feature = "parquet")]
 fn run_parquet(args: &cli::Args, exec: &mut action::Executor) {
@@ -107,13 +107,13 @@ fn main() {
             cli::InputMode::Json => "json",
             cli::InputMode::Parquet => "parquet",
         };
-        let ctx = analyze::ExplainContext::from_cli(
+        let ctx = explain::ExplainContext::from_cli(
             mode_str,
             args.header_mode,
             args.field_separator.as_deref(),
             &args.files,
         );
-        let desc = analyze::explain(&prog, Some(&ctx));
+        let desc = explain::explain(&prog, Some(&ctx));
         if !desc.is_empty() {
             println!("{desc}");
         }

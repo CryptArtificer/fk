@@ -4,6 +4,7 @@ pub mod builtins;
 pub mod cli;
 pub mod describe;
 pub mod error;
+pub mod explain;
 pub mod field;
 pub mod format;
 pub mod input;

@@ -133,7 +133,21 @@ automatically displays a dimmed `# description` subtitle above the command.
   - `collect_fragments()`: one function maps signals to fragments
   - `reduce()`: table-driven via `FragTag::subsumed_by()` (data, not code)
   - `render()`: sort by `FragTag::sig()`, budget-trim
-- 434 Rust + 152 shell tests, zero warnings, clippy clean
+
+### Explain module refactor (Phase 19)
+Replaced monolithic explain code in `analyze.rs` with separate `src/explain/`
+module using an RPN-inspired design:
+- **lower.rs**: AST → flat `Op` sequence capturing semantic effects (not syntax).
+  Complete coverage of all AST node types. Output field refs resolved through
+  var_sources, jpath paths, BinOp, Concat, Ternary, FuncCall args.
+- **reduce.rs**: pattern-matching normalization passes run in priority order.
+  Whole-program idioms first (dedup, join, count-match), then per-section:
+  chart/stats, accumulation/frequency, collect, transforms, extract, rewrite,
+  select, filters, iterate-fields, number-lines, reformat, timing, fallback.
+- **render.rs**: Phrase/Tag system with priority ordering and subsumption rules,
+  budget-limited text rendering.
+- **mod.rs**: Public `explain()` + `ExplainContext`, pipeline: lower → reduce → render.
+- 55 explain tests, 441 total Rust tests, zero warnings, clippy clean.
 
 ## Repo state
 - `main`, working tree dirty, all tests and clippy pass.
