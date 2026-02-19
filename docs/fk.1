@@ -563,6 +563,9 @@ Population variance.
 Histogram counts. Writes \fIbins\fR counts into \fIout\fR (or \fIarr\fR),
 keys 1..bins. Stores metadata keys \fB_min\fR, \fB_max\fR, \fB_width\fR.
 .TP
+\fBhistplot(\fIarr\fB [\fB,\fR \fIbins\fR [\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR [\fB,\fR \fIprecision\fR [\fB,\fR \fItitle\fR [\fB,\fR \fIxlabel\fR [\fB,\fR \fIcolor\fR]]]]]]]])\fR
+Build a histogram from \fIarr\fR and render a boxed plot (defaults bins using Sturges' rule).
+.TP
 \fBp(\fIarr\fB,\fR \fIn\fB)\fR / \fBpercentile(\fIarr\fB,\fR \fIn\fB)\fR
 \fIn\fRth percentile (0\(en100). Uses linear interpolation.
 .TP

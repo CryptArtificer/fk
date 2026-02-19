@@ -82,8 +82,7 @@ show $FK '{
     ms = jpath($0, ".ms") + 0; lat[NR] = ms
 }
 END {
-    hist(lat, 6, h)
-    print plotbox(h, 28, "▇", 0, "Latency (ms) — most fast, long tail", "Frequency", "yellow")
+    print histplot(lat, 6, 28, "▇", 0, "Latency (ms) — most fast, long tail", "Frequency", "yellow")
 }' "$TMPDIR/api.jsonl"
 
 printf "\n${C_BOLD}Done.${C_RESET} 15 stats builtins — no awk equivalent.\n"

@@ -25,7 +25,7 @@ The pattern-action model is the same. Everything below is new.
 - **Named columns** — in header mode (`-H`), access fields by name: `$name`, `$"user-name"`, `$col`. Works with CSV, TSV, JSON, and Parquet.
 - **JSON navigation** — `jpath()` gives you jq-like path access from within a pattern-action program.
 - **Statistical builtins** — `sum`, `mean`, `median`, `stddev`, `variance`, `hist`, `percentile`, `quantile`, `iqm` on arrays.
-- **Quick plots** — `plot()` renders simple horizontal bars; `plotbox()` adds titles, axes, and boxed layout.
+- **Quick plots** — `plot()` renders simple horizontal bars; `plotbox()` adds titles, axes, and boxed layout; `histplot()` renders a histogram directly.
 - **Array builtins** — `asort`, `asorti`, `join`, `keys`, `vals`, `uniq`, `inv`, `tidy`, `shuf`, `diff`, `inter`, `union`, `seq`, `samp`.
 - **Diagnostics** — `dump(x)` inspects any variable or array to stderr. `clk()`, `tic(id)`, `toc(id)` for timing.
 - **Unicode-aware** — `length`, `substr`, `index`, and all string builtins count characters, not bytes.

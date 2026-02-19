@@ -197,6 +197,7 @@ print ... > "/dev/stderr"   # write to stderr
 | `stddev(arr)` | Population standard deviation |
 | `variance(arr)` | Population variance |
 | `hist(arr, bins [, out [, min [, max]]])` | Histogram counts (writes to `out`, returns bin count) |
+| `histplot(arr [, bins [, width [, char [, precision [, title [, xlabel [, color]]]]]]])` | Histogram + boxed plot |
 | `p(arr, n)` / `percentile(arr, n)` | nth percentile (0–100) |
 | `quantile(arr, q)` | Quantile (0–1, e.g. 0.95 = p95) |
 | `iqm(arr)` | Interquartile mean (robust to outliers) |
@@ -353,7 +354,7 @@ fk -F, -H '{ ts = parsedate($created, "%Y-%m-%d"); if (ts > 1700000000) print $n
 fk '{ a[NR]=$1 } END { printf "n=%d mean=%.2f median=%.2f stddev=%.2f\n", length(a), mean(a), median(a), stddev(a) }' data.txt
 
 # Histogram plot
-fk '{ a[NR]=$1 } END { hist(a, 10, h); print plotbox(h, 30, "▇", 0, "Latency (ms)", "Frequency", "yellow") }' data.txt
+fk '{ a[NR]=$1 } END { print histplot(a, 10, 30, "▇", 0, "Latency (ms)", "Frequency", "yellow") }' data.txt
 
 # p95 latency
 fk '{ a[NR]=$3 } END { print "p95:", p(a, 95) }' latency.log

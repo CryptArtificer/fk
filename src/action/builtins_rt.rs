@@ -807,6 +807,7 @@ impl<'a> Executor<'a> {
             return Value::from_number(0.0);
         };
         let mut vals: Vec<f64> = values.into_iter().map(|v| v.to_number()).collect();
+        let vals_len = vals.len();
         if vals.is_empty() {
             self.rt.delete_array_all(&out_name);
             return Value::from_number(0.0);
@@ -849,6 +850,9 @@ impl<'a> Executor<'a> {
         self.rt.set_array(&out_name, "_min", &builtins::format_number(min));
         self.rt.set_array(&out_name, "_max", &builtins::format_number(max));
         self.rt.set_array(&out_name, "_width", &builtins::format_number(width));
+        self.rt.set_array(&out_name, "_bins", &bins.to_string());
+        self.rt.set_array(&out_name, "_count", &vals_len.to_string());
+        self.rt.set_array(&out_name, "_type", "hist");
 
         Value::from_number(bins as f64)
     }
@@ -1208,6 +1212,52 @@ impl<'a> Executor<'a> {
         }
 
         Value::from_string(lines.join("\n"))
+    }
+
+    /// histplot(arr [, bins [, width [, char [, precision [, title [, xlabel [, color]]]]]]])
+    /// Convenience: build a histogram and render a boxed plot.
+    pub(crate) fn builtin_histplot(&mut self, args: &[Expr]) -> Value {
+        if args.is_empty() {
+            eprintln!("fk: histplot() requires an array argument");
+            return Value::from_string(String::new());
+        }
+        let array_name = match &args[0] {
+            Expr::Var(v) => v.clone(),
+            _ => {
+                eprintln!("fk: histplot(): first argument must be an array name");
+                return Value::from_string(String::new());
+            }
+        };
+        if !self.rt.has_array(&array_name) {
+            return Value::from_string(String::new());
+        }
+
+        let bins = if let Some(expr) = args.get(1) {
+            let b = builtins::to_number(&self.eval_string(expr)).round() as i64;
+            if b <= 0 { 1 } else { b as usize }
+        } else {
+            let n = self.rt.array_len(&array_name) as f64;
+            let b = (n.log2() + 1.0).ceil() as i64;
+            if b <= 0 { 1 } else { b as usize }
+        };
+
+        // Build a temporary histogram array and render plotbox on it.
+        let tmp = "__fk_histplot_tmp";
+        self.rt.delete_array_all(tmp);
+        let _ = self.builtin_hist(&[
+            Expr::Var(array_name),
+            Expr::NumberLit(bins as f64),
+            Expr::Var(tmp.to_string()),
+        ]);
+
+        let mut plot_args: Vec<Expr> = Vec::new();
+        plot_args.push(Expr::Var(tmp.to_string()));
+        for expr in args.iter().skip(2) {
+            plot_args.push(expr.clone());
+        }
+        let out = self.builtin_plotbox(&plot_args);
+        self.rt.delete_array_all(tmp);
+        out
     }
 
     pub(crate) fn exec_getline(&mut self, var: Option<&str>, source: Option<&Expr>) -> Value {

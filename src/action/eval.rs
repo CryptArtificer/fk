@@ -170,6 +170,7 @@ impl<'a> Executor<'a> {
                     "hist" => return self.builtin_hist(args),
                     "plot" => return self.builtin_plot(args),
                     "plotbox" => return self.builtin_plotbox(args),
+                    "histplot" => return self.builtin_histplot(args),
                     "min" if args.len() == 1 => {
                         if let Expr::Var(v) = &args[0]
                             && self.rt.has_array(v) {

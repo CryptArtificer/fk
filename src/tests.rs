@@ -1917,6 +1917,17 @@ fn stats_histogram_basic() {
 }
 
 #[test]
+fn stats_hist_metadata() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { hist(a, 3, h); t = h["_type"]; b = h["_bins"]; n = h["_count"] }"#,
+        &["1", "2", "3", "4", "5"],
+    );
+    assert_eq!(rt.get_var("t"), "hist");
+    assert_eq!(rt.get_var("b"), "3");
+    assert_eq!(rt.get_var("n"), "5");
+}
+
+#[test]
 fn stats_plot_histogram() {
     let rt = eval(
         r#"BEGIN { h[1]=2; h[2]=1; h["_min"]=0; h["_max"]=2; h["_width"]=1; s = plot(h, 4, "*") }"#,
@@ -1940,6 +1951,15 @@ fn stats_plotbox_histogram() {
         "       X",
     );
     assert_eq!(rt.get_var("s"), expected);
+}
+
+#[test]
+fn stats_histplot_basic() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { s = histplot(a) }"#,
+        &["1", "2", "3", "4", "5"],
+    );
+    assert!(!rt.get_var("s").is_empty());
 }
 
 #[test]
