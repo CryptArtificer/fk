@@ -230,3 +230,6 @@
 - [x] `a[NR] = expr` correctly stays as `collect lines` (not aggregation)
 - [x] Range dedup: identical loop phrases within a block suppressed
 - [x] Boundless ranges use `iterate:` instead of empty `range:`
+
+#### Phase 20 — Array convenience & language constructs
+- [x] `collect(a, expr)` — per-record append with auto-key, skip NaN/empty, returns count

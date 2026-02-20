@@ -2552,3 +2552,35 @@ fn length_empty_parens() {
     let rt = eval(r#"{result=length()}"#, &["hello"]);
     assert_eq!(rt.get_var("result"), "5");
 }
+
+// --- collect ---
+
+#[test]
+fn collect_appends_values() {
+    let rt = eval(r#"{ collect(a, $1) } END { result = join(a, ",") }"#, &["10", "20", "30"]);
+    assert_eq!(rt.get_var("result"), "10,20,30");
+}
+
+#[test]
+fn collect_returns_count() {
+    let rt = eval(r#"{ n = collect(a, $1) } END { result = n }"#, &["1", "2", "3"]);
+    assert_eq!(rt.get_var("result"), "3");
+}
+
+#[test]
+fn collect_skips_empty() {
+    let rt = eval(
+        r#"{ collect(a, $2) } END { result = length(a) }"#,
+        &["x 10", "y", "z 30"],
+    );
+    assert_eq!(rt.get_var("result"), "2");
+}
+
+#[test]
+fn collect_works_with_stats() {
+    let rt = eval(
+        r#"{ collect(a, $1) } END { result = sum(a) }"#,
+        &["10", "20", "30"],
+    );
+    assert_eq!(rt.get_var("result"), "60");
+}

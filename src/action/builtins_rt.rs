@@ -561,6 +561,35 @@ impl<'a> Executor<'a> {
         Value::from_number(take as f64)
     }
 
+    /// collect(a, expr) — append expr to array a with auto-incrementing key.
+    /// Skips NaN and empty-string values. Returns the new count.
+    pub(crate) fn builtin_collect(&mut self, args: &[Expr]) -> Value {
+        if args.len() < 2 {
+            eprintln!("fk: collect requires 2 arguments (array, expr)");
+            return Value::from_number(0.0);
+        }
+        let array_name = match &args[0] {
+            Expr::Var(n) => n.clone(),
+            _ => {
+                eprintln!("fk: collect: first argument must be an array name");
+                return Value::from_number(0.0);
+            }
+        };
+        let val = self.eval_expr(&args[1]);
+        let s = val.to_string_val();
+        if s.is_empty() {
+            return Value::from_number(self.rt.array_len(&array_name) as f64);
+        }
+        let n = builtins::to_number(&s);
+        if n.is_nan() {
+            return Value::from_number(self.rt.array_len(&array_name) as f64);
+        }
+        let next_key = self.rt.array_len(&array_name) + 1;
+        self.rt
+            .set_array_value(&array_name, &next_key.to_string(), val);
+        Value::from_number(next_key as f64)
+    }
+
     /// slurp(file [, arr]) — read file into string, or into arr lines. Returns string or line count.
     pub(crate) fn builtin_slurp(&mut self, args: &[Expr]) -> Value {
         if args.is_empty() {

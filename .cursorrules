@@ -22,9 +22,9 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~16,000 lines of Rust** across 33 source files
-- **453 Rust + 152 shell tests**, zero warnings, clippy clean
-- **Phases 0–19 complete**
+- **~17,000 lines of Rust** across 33 source files
+- **457 Rust + 152 shell tests**, zero warnings, clippy clean
+- **Phases 0–20 in progress** (20 = array convenience & language constructs)
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
 
@@ -150,6 +150,8 @@ Phase 17: Histogram & plot overhaul — ArrayMeta enum (typed metadata on arrays
   uplot/fu), consistent ▇ glyph, auto "Frequency" xlabel on histogram plots,
   removed histplot() in favour of composable plotbox(hist(a)), slurp("-")
   reads from stdin.
+Phase 20: Array convenience & language constructs — collect(a, expr): per-record
+ append with auto-key, skips NaN/empty, returns count.
 Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
   (array_sources + var_sources in ProgramInfo, one level of variable
   indirection), combined with FILENAME at hist() time. Smart formatting:
