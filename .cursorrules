@@ -155,15 +155,16 @@ Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
   `count lines`, `deduplicate by $0`, `join on col 1`, `timed`.
   Field refs humanized ($N → col N), consecutive ranges collapsed (col 1–3).
   Integrated into showcase `show` helper as auto-subtitle for all examples.
-Phase 19: Explain module refactor — replaced monolithic scan/fragment/reduce
-  pipeline in analyze.rs with separate src/explain/ module using RPN design:
-  lower.rs: AST → flat Op sequence (semantic effects, not syntax)
-  reduce.rs: pattern-matching normalization passes (idioms, accumulation,
-    chart/stats, transforms, selection, filters, number-lines, timing)
-  render.rs: Phrase/Tag priority + subsumption → budget-limited text
-  Complete coverage of all AST node types. Deep output-field resolution
-  through var_sources, jpath paths, BinOp, Concat, Ternary, FuncCall args.
-  55 tests covering all detected patterns.
+Phase 19: Explain module — src/explain/ (lower → reduce → render). No special cases;
+  explanations emanate from recursive reductions.
+  lower.rs: AST → flat Op sequence. Output slots: (1) preceding string literal
+    (labels higher weighted than variable names), (2) function name when value
+    expr is a call (e.g. hex, chr, ord), (3) ref(s) from expr; Concat/multi-ref
+    yields multiple slots. Range(Option<bounds>, Option<over_key>): bounds from
+    for-loop head; over_key from jpath-driven loop (path with leading dot trimmed
+    → "for all path: select"). reduce.rs: pattern normalization, Emit→Select
+    with dedup preserving order. render.rs: Phrase/Tag, subsumption, budget.
+  66 tests. Plan doc: docs/explain-output-slot-analysis.md (stats+JSON to do).
 
 ### Future ideas (explored, deferred)
 

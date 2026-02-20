@@ -1,3 +1,30 @@
+//! # Explain pipeline: design
+//!
+//! **Model.** An explanation is a short summary of what a program does. We produce it in three
+//! stages; each stage has a single responsibility and no special-case branches for specific
+//! programs.
+//!
+//! 1. **Lower (AST → Desc).** For every AST node we either emit one or more ops or explicitly
+//!    ignore. No silent fallthrough: every `Statement` and every effectful `Expr` variant is
+//!    handled. Output refs (what gets printed) are collected from print/printf args by
+//!    recursing and resolving vars; we never hard-code variable names or idioms.
+//!
+//! 2. **Reduce (Desc → Desc).** Pattern rewrites only. Each pass matches low-level op patterns
+//!    and replaces them with high-level ops. All pattern data (builtin names, tag sets) lives
+//!    in const tables; pass order is fixed and documented. No pass emits a phrase that depends
+//!    on specific variable names or literal values (e.g. no "if fields == ['i'] then …").
+//!
+//! 3. **Render (Desc → String).** Collect ops → phrases, sort by significance (one table),
+//!    apply subsumption and a small set of merge rules, then truncate to budget. Phrase order
+//!    and wording come from the significance table and from op payloads (e.g. Transform(text));
+//!    no ad-hoc string overrides for particular programs.
+//!
+//! **Invariants.** (a) Changing a weight in the significance table is the only way to change
+//! phrase order. (b) Adding a new “idiom” means adding a reduce rule that matches op patterns
+//! and emits a high-level op with a generic description, not a branch on var names. (c) Tests
+//! may assert exact strings for specific programs; production code must not branch on those
+//! programs.
+
 mod lower;
 mod reduce;
 mod render;

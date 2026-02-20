@@ -32,6 +32,7 @@ The pattern-action model is the same. Everything below is new.
 - **Transparent decompression** — gzip, zstd, bzip2, xz, and lz4 files are decompressed on the fly. No need to pipe through `zcat` or `zstdcat` first.
 - **Auto-detection** — file extension determines both the decompression method and the input format. `fk '{ print $2 }' data.tsv.gz` just works: it decompresses with zlib and parses as TSV, no flags needed.
 - **Schema discovery** — `--describe` sniffs a file, detects its format and compression, infers column names and types, and suggests programs you can run on it.
+- **Program explanation** — `--explain` (used by describe and examples) produces a terse one-line description of what a program does, derived from the AST and reductions (no special-case idioms).
 - **Capture groups in match()** — `match($0, /(\d+)-(\d+)/, cap)` extracts groups into an array. Standard awk can't do this.
 - **Better errors** — source-location-aware diagnostics with line and column numbers.
 - **Negative field indexes** — `$-1` is the last field, `$-2` is second-to-last.

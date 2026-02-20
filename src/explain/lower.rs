@@ -41,14 +41,17 @@ pub enum Op {
     // Control
     Next,
     ForIn(String),
+    Range(Option<String>, Option<String>), // (bounds, over_key); over_key from jpath-driven loop
     IterNF,
 
     // Environment
     Reformat(String),
     Timed,
+    Slurp(String),
 
     // ── High-level (from reduction) ──
     Where(String),
+    CaptureFilter(String), // if (c[N] >= X) — filter on match() capture, show first
     Select(Vec<String>),
     Freq(String),
     Sum(String),
@@ -161,6 +164,7 @@ fn lower_block(
     ops
 }
 
+/// Lower one statement. Every Statement variant is handled explicitly (emit ops, recurse, or ignore).
 fn lower_stmt(
     stmt: &Statement,
     vs: &HashMap<String, Expr>,
@@ -169,6 +173,9 @@ fn lower_stmt(
 ) {
     match stmt {
         Statement::Print(exprs, redir) => {
+            for e in exprs {
+                lower_effect(e, vs, flags, ops);
+            }
             let fields = collect_output_refs(exprs, vs);
             for e in exprs {
                 scan_expr_fns(e, flags, ops);
@@ -184,6 +191,9 @@ fn lower_stmt(
             }
         }
         Statement::Printf(exprs, redir) => {
+            for e in exprs {
+                lower_effect(e, vs, flags, ops);
+            }
             let fields = if exprs.len() > 1 {
                 collect_output_refs(&exprs[1..], vs)
             } else {
@@ -203,7 +213,10 @@ fn lower_stmt(
             }
         }
         Statement::Expression(expr) => lower_effect(expr, vs, flags, ops),
-        Statement::If(_, then_b, else_b) => {
+        Statement::If(cond, then_b, else_b) => {
+            if let Some(desc) = describe_capture_filter(cond) {
+                ops.push(Op::CaptureFilter(desc));
+            }
             lower_block_into(then_b, vs, flags, ops);
             if let Some(eb) = else_b {
                 lower_block_into(eb, vs, flags, ops);
@@ -218,6 +231,8 @@ fn lower_stmt(
             if has_nf {
                 ops.push(Op::IterNF);
             }
+            let (bounds, over_key) = for_range_bounds(init, cond, vs);
+            ops.push(Op::Range(bounds, over_key));
             if let Some(s) = init {
                 lower_stmt(s, vs, flags, ops);
             }
@@ -232,9 +247,81 @@ fn lower_stmt(
         }
         Statement::Block(b) => lower_block_into(b, vs, flags, ops),
         Statement::Next | Statement::Nextfile => ops.push(Op::Next),
-        Statement::Delete(_, _) | Statement::DeleteAll(_) => {}
-        Statement::Exit(_) | Statement::Return(_) | Statement::Break | Statement::Continue => {}
+        _ => {}
     }
+}
+
+/// Extract range from for (i=lo; i<=hi; ...) or for (i=1; i<=n; ...) where n = jpath(..., ".key", ...).
+/// Returns (bounds, over_key): literal bounds e.g. Some("33–126"), or jpath path (leading dot trimmed) e.g. Some("data.rows").
+fn for_range_bounds(
+    init: &Option<Box<Statement>>,
+    cond: &Option<Expr>,
+    vs: &HashMap<String, Expr>,
+) -> (Option<String>, Option<String>) {
+    let init = match init.as_ref().map(|b| b.as_ref()) {
+        Some(Statement::Expression(Expr::Assign(l, r))) => (l, r),
+        _ => return (None, None),
+    };
+    let Expr::Var(index_var) = init.0.as_ref() else {
+        return (None, None);
+    };
+    let cond = match cond.as_ref() {
+        Some(Expr::BinOp(l, op, r)) => (l, op, r),
+        _ => return (None, None),
+    };
+    // Literal bounds: i<=hi or i>=hi with number
+    if let Expr::NumberLit(lo) = init.1.as_ref()
+        && let Some((lo_i, hi_i)) = match (cond.0.as_ref(), cond.1, cond.2.as_ref()) {
+            (Expr::Var(n), BinOp::Le | BinOp::Lt, Expr::NumberLit(hi)) if n == index_var => {
+                Some((*lo as i64, *hi as i64))
+            }
+            (Expr::Var(n), BinOp::Ge | BinOp::Gt, Expr::NumberLit(hi)) if n == index_var => {
+                Some((*hi as i64, *lo as i64))
+            }
+            (Expr::NumberLit(hi), BinOp::Ge | BinOp::Gt, Expr::Var(n)) if n == index_var => {
+                Some((*hi as i64, *lo as i64))
+            }
+            (Expr::NumberLit(hi), BinOp::Le | BinOp::Lt, Expr::Var(n)) if n == index_var => {
+                Some((*lo as i64, *hi as i64))
+            }
+            _ => None,
+        }
+    {
+        let bounds = if lo_i <= hi_i {
+            format!("{lo_i}–{hi_i}")
+        } else {
+            format!("{hi_i}–{lo_i}")
+        };
+        return (Some(bounds), None);
+    }
+    // Variable bound: i<=n or i<n; n from jpath(_, ".path", _?) → over_key = path with leading dot trimmed
+    let bound_var = match (cond.0.as_ref(), cond.1, cond.2.as_ref()) {
+        (Expr::Var(a), BinOp::Le | BinOp::Lt, Expr::Var(b)) if a == index_var => b.as_str(),
+        (Expr::Var(a), BinOp::Ge | BinOp::Gt, Expr::Var(b)) if b == index_var => a.as_str(),
+        _ => return (None, None),
+    };
+    if let Some(over_key) = jpath_path_key(vs.get(bound_var)) {
+        return (None, Some(over_key));
+    }
+    (None, None)
+}
+
+/// If expr is jpath(_, path_lit, _?), return the path with leading dot trimmed (e.g. "data.rows" from ".data.rows").
+fn jpath_path_key(expr: Option<&Expr>) -> Option<String> {
+    let Expr::FuncCall(name, args) = expr? else {
+        return None;
+    };
+    if name != "jpath" || args.len() < 2 {
+        return None;
+    }
+    let Expr::StringLit(s) = &args[1] else {
+        return None;
+    };
+    let trimmed = s.trim_start_matches('.');
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(trimmed.to_string())
 }
 
 fn lower_block_into(
@@ -300,10 +387,11 @@ fn lower_effect(
             }
         }
         // var = expr (non-array, non-field)
-        Expr::Assign(target, _) => {
+        Expr::Assign(target, val) => {
             if let Expr::Var(name) = target.as_ref() {
                 check_reformat(name, ops);
             }
+            lower_effect(val, vs, flags, ops);
         }
         // var += expr
         Expr::CompoundAssign(target, BinOp::Add, val) => {
@@ -362,6 +450,15 @@ fn lower_effect(
         Expr::FuncCall(name, _) if name == "dump" => {
             ops.push(Op::Emit(vec![]));
         }
+        // slurp(path) — record path for "slurped from <basename>"
+        Expr::FuncCall(name, args) if name == "slurp" && !args.is_empty() => {
+            if let Expr::StringLit(path) = &args[0] {
+                ops.push(Op::Slurp(path.clone()));
+            }
+            for a in args {
+                lower_effect(a, vs, flags, ops);
+            }
+        }
         // other function calls
         Expr::FuncCall(name, _) => {
             ops.push(Op::Fn(name.clone()));
@@ -382,11 +479,80 @@ fn lower_effect(
         Expr::LogicalNot(e) | Expr::UnaryMinus(e) => {
             lower_effect(e, vs, flags, ops);
         }
-        _ => {}
+        Expr::Getline(_, source) => {
+            if let Some(s) = source {
+                lower_effect(s, vs, flags, ops);
+            }
+        }
+        Expr::GetlinePipe(cmd, _) => {
+            lower_effect(cmd, vs, flags, ops);
+        }
+        Expr::Sprintf(args) => {
+            for a in args {
+                lower_effect(a, vs, flags, ops);
+            }
+        }
+        // No observable effect for explain: Field, NumberLit, StringLit, Var, ArrayRef, ArrayIn, Match, NotMatch
+        Expr::Field(_)
+        | Expr::NumberLit(_)
+        | Expr::StringLit(_)
+        | Expr::Var(_)
+        | Expr::ArrayRef(_, _)
+        | Expr::ArrayIn(_, _)
+        | Expr::Match(_, _)
+        | Expr::NotMatch(_, _) => {}
     }
 }
 
-/// Scan an expression tree for function calls and timing, emitting Fn ops.
+/// If the condition is a filter on match() capture group (e.g. c[2]+0 >= 500), return a short label.
+fn describe_capture_filter(cond: &Expr) -> Option<String> {
+    use crate::parser::BinOp;
+    let cond = unwrap_coercion(cond);
+    let (arr_name, index, threshold, op) = match cond {
+        Expr::BinOp(l, bin_op, r) => {
+            let l = unwrap_coercion(l);
+            let r = unwrap_coercion(r);
+            let (arr, idx, val, normalized_op) = match (l, r) {
+                (Expr::ArrayRef(name, key), Expr::NumberLit(v)) => {
+                    let idx = match key.as_ref() {
+                        Expr::NumberLit(n) => Some(*n as i64),
+                        _ => None,
+                    }?;
+                    (name.clone(), idx, v, bin_op.clone())
+                }
+                (Expr::NumberLit(v), Expr::ArrayRef(name, key)) => {
+                    let idx = match key.as_ref() {
+                        Expr::NumberLit(n) => Some(*n as i64),
+                        _ => None,
+                    }?;
+                    let flipped = match bin_op {
+                        BinOp::Le => BinOp::Ge,
+                        BinOp::Lt => BinOp::Gt,
+                        BinOp::Ge => BinOp::Le,
+                        BinOp::Gt => BinOp::Lt,
+                        o => o.clone(),
+                    };
+                    (name.clone(), idx, v, flipped)
+                }
+                _ => return None,
+            };
+            (arr, idx, val, normalized_op)
+        }
+        _ => return None,
+    };
+    if arr_name != "c" {
+        return None;
+    }
+    let val = *threshold as i64;
+    let op_str = match op {
+        BinOp::Ge => "≥",
+        BinOp::Gt => ">",
+        BinOp::Le => "≤",
+        BinOp::Lt => "<",
+        _ => return None,
+    };
+    Some(format!("where c[{}] {} {}", index, op_str, val))
+}
 fn scan_expr_fns(expr: &Expr, flags: &mut Flags, ops: &mut Vec<Op>) {
     match expr {
         Expr::FuncCall(name, args) => {
@@ -471,16 +637,96 @@ fn mentions_nf(expr: &Expr) -> bool {
 
 // ── Output field collection ─────────────────────────────────────
 //
-// Walk print/printf argument expressions and collect all field
-// references, resolving variables through var_sources.  This is
-// a depth-limited tree walk — not separate lineage tracking.
+// Walk print/printf argument expressions in order. For each value expr (Field, Var,
+// call, etc.), the slot name is: if the previous expr was a string literal, use a
+// simplified form of that literal (labels are higher weighted than variable names);
+// else use the ref(s) from the expr. So print "  original:", $0; print "  redacted:", safe
+// yields ["original", "redacted"].
+
+fn simplify_output_label(s: &str) -> String {
+    s.trim_end_matches(':')
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_string()
+}
 
 fn collect_output_refs(exprs: &[Expr], vs: &HashMap<String, Expr>) -> Vec<String> {
     let mut out = Vec::new();
+    let mut prev_label: Option<String> = None;
     for e in exprs {
-        collect_expr_refs(e, vs, &mut out, 5);
+        if let Expr::StringLit(s) = e {
+            prev_label = Some(simplify_output_label(s));
+            continue;
+        }
+        let slots = if let Some(lab) = prev_label.take() {
+            if !lab.is_empty() {
+                vec![lab]
+            } else {
+                slot_names_from_value_expr(e, vs)
+            }
+        } else {
+            slot_names_from_value_expr(e, vs)
+        };
+        if slots.is_empty() {
+            prev_label = None;
+        } else {
+            out.extend(slots);
+        }
     }
+    dedup_preserve_order(&mut out);
     out
+}
+
+/// Slot name(s) for this value expr: one for a call (function name) or single ref, many when expr yields multiple refs (e.g. Concat).
+fn slot_names_from_value_expr(e: &Expr, vs: &HashMap<String, Expr>) -> Vec<String> {
+    let e = unwrap_coercion(e);
+    match e {
+        Expr::FuncCall(name, args) if name == "jpath" && args.len() >= 2 => {
+            let path_name = args.get(1).and_then(|a| {
+                if let Expr::StringLit(path) = a {
+                    let clean = path.trim_start_matches('.').to_string();
+                    if clean.is_empty() { None } else { Some(clean) }
+                } else {
+                    None
+                }
+            });
+            return vec![path_name.unwrap_or_else(|| name.clone())];
+        }
+        Expr::FuncCall(name, _) => return vec![name.clone()],
+        Expr::Field(inner) => {
+            if let Some(name) = field_display(inner) {
+                return vec![name];
+            }
+        }
+        Expr::Var(name)
+            if !matches!(
+                name.as_str(),
+                "NR" | "NF" | "FNR" | "FILENAME" | "ORS" | "OFS" | "OFMT"
+            ) =>
+        {
+            if let Some(src) = vs.get(name.as_str()) {
+                if expr_contains_non_jpath_call(src, vs, 5) {
+                    return vec![name.clone()];
+                }
+                let mut sub = slot_names_from_value_expr(src, vs);
+                if sub.is_empty() {
+                    sub.push(name.clone());
+                }
+                return sub;
+            }
+            return vec![name.clone()];
+        }
+        _ => {}
+    }
+    let mut refs = Vec::new();
+    collect_expr_refs(e, vs, &mut refs, 5);
+    refs
+}
+
+fn dedup_preserve_order(v: &mut Vec<String>) {
+    let mut seen = std::collections::HashSet::new();
+    v.retain(|r| seen.insert(r.clone()));
 }
 
 fn collect_expr_refs(
@@ -495,9 +741,7 @@ fn collect_expr_refs(
     let e = unwrap_coercion(e);
     match e {
         Expr::Field(inner) => {
-            if let Some(name) = field_display(inner)
-                && !out.contains(&name)
-            {
+            if let Some(name) = field_display(inner) && !out.contains(&name) {
                 out.push(name);
             }
         }
@@ -508,10 +752,22 @@ fn collect_expr_refs(
             ) =>
         {
             if let Some(src) = vs.get(name.as_str()) {
+                if expr_contains_non_jpath_call(src, vs, 5) {
+                    if !out.contains(name) {
+                        out.push(name.clone());
+                    }
+                    return;
+                }
+                let before = out.len();
                 collect_expr_refs(src, vs, out, depth - 1);
+                if out.len() == before {
+                    out.push(name.clone());
+                }
+            } else if !out.contains(name) {
+                out.push(name.clone());
             }
         }
-        Expr::FuncCall(name, args) if name == "jpath" && args.len() >= 2 => {
+        Expr::FuncCall(fn_name, args) if fn_name == "jpath" && args.len() >= 2 => {
             if let Expr::StringLit(path) = &args[1] {
                 let clean = path.trim_start_matches('.').to_string();
                 if !clean.is_empty() && !out.contains(&clean) {
@@ -540,6 +796,44 @@ fn collect_expr_refs(
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
+
+/// True if the expression contains any function call other than jpath.
+/// Vars whose definition has no call (e.g. x = $3*2) are expanded to the underlying
+/// field; vars whose definition has a call (e.g. c = substr($0,i,1)) stay as the var name.
+fn expr_contains_non_jpath_call(e: &Expr, vs: &HashMap<String, Expr>, depth: u8) -> bool {
+    if depth == 0 {
+        return false;
+    }
+    let e = unwrap_coercion(e);
+    match e {
+        Expr::FuncCall(name, args) => {
+            if name != "jpath" {
+                return true;
+            }
+            args.iter()
+                .any(|a| expr_contains_non_jpath_call(a, vs, depth - 1))
+        }
+        Expr::Var(name) => vs
+            .get(name.as_str())
+            .is_some_and(|src| expr_contains_non_jpath_call(src, vs, depth - 1)),
+        Expr::BinOp(l, _, r) | Expr::Concat(l, r) | Expr::LogicalAnd(l, r) | Expr::LogicalOr(l, r) => {
+            expr_contains_non_jpath_call(l, vs, depth - 1)
+                || expr_contains_non_jpath_call(r, vs, depth - 1)
+        }
+        Expr::Ternary(_, t, f) => {
+            expr_contains_non_jpath_call(t, vs, depth - 1)
+                || expr_contains_non_jpath_call(f, vs, depth - 1)
+        }
+        Expr::UnaryMinus(inner) | Expr::LogicalNot(inner) | Expr::Field(inner) => {
+            expr_contains_non_jpath_call(inner, vs, depth - 1)
+        }
+        Expr::Assign(l, r) | Expr::CompoundAssign(l, _, r) => {
+            expr_contains_non_jpath_call(l, vs, depth - 1)
+                || expr_contains_non_jpath_call(r, vs, depth - 1)
+        }
+        _ => false,
+    }
+}
 
 fn unwrap_coercion(expr: &Expr) -> &Expr {
     if let Expr::BinOp(l, BinOp::Add, r) = expr {

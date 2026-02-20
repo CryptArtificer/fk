@@ -12,18 +12,25 @@ const TRANSFORM_BUILTINS: &[&str] = &[
     "reverse", "toupper", "tolower",
 ];
 
-/// Apply reduction passes until stable.
+/// Apply reduction passes in a fixed order.
 ///
-/// Each pass scans the op lists and replaces low-level patterns with
-/// high-level semantic ops.  Passes run in priority order so that
-/// the most specific patterns match first.
+/// **Pass order.** Whole-program patterns first (dedup, join, count_match); then
+/// section-level rewrites that depend on collected ops (chart/stats, accumulation,
+/// count, collect); then per-rule transforms and extract; then select (Emit→Select),
+/// filters, iter/rewrite/number/reformat/timing; finally fallback (Generate). No pass
+/// may assume specific variable names or literal values; all pattern data is in const
+/// tables (STAT_BUILTINS, CHART_BUILTINS, TRANSFORM_BUILTINS, etc.).
 pub(crate) fn reduce(desc: &mut Desc, info: &ProgramInfo) {
-    // Idiom detection (whole-program patterns)
-    if try_dedup(desc) { return; }
-    if try_join(desc) { return; }
-    if try_count_match(desc) { return; }
+    if try_dedup(desc) {
+        return;
+    }
+    if try_join(desc) {
+        return;
+    }
+    if try_count_match(desc) {
+        return;
+    }
 
-    // Per-section reductions
     reduce_chart_stats(desc);
     reduce_accumulation(desc);
     reduce_count(desc);
@@ -104,6 +111,16 @@ fn try_join(desc: &mut Desc) -> bool {
 
 fn try_count_match(desc: &mut Desc) -> bool {
     if desc.end.is_empty() {
+        return false;
+    }
+    // Only treat as "count" when the program is a simple counter (n++), not when
+    // there are array accumulations (a[k]++, rev[k]+=...) that make it aggregation/reporting.
+    let has_any_array_accum = desc.rules.iter().any(|r| {
+        r.body.iter().any(|op| {
+            matches!(op, Op::ArrayAccum { .. } | Op::ArrayInc { .. } | Op::ArrayPut { .. })
+        })
+    });
+    if has_any_array_accum {
         return false;
     }
     for rule in &desc.rules {
@@ -408,12 +425,6 @@ fn reduce_select(desc: &mut Desc, _info: &ProgramInfo) {
             continue;
         }
 
-        // Check for NR/FNR in output
-        // (These would be in the original exprs but we lose them in field collection.
-        //  Detect via the collected refs — counters are filtered out by field_display.)
-        // We handle this by checking if the Emit had zero useful fields but
-        // the original print had expressions.
-
         if !all_fields.is_empty() {
             rule.body
                 .retain(|op| !matches!(op, Op::Emit(_) | Op::EmitFmt(_)));
@@ -430,8 +441,13 @@ fn reduce_select(desc: &mut Desc, _info: &ProgramInfo) {
     reduce_emit_to_select(&mut desc.end);
 }
 
+fn dedup_preserve_order_strings(v: &mut Vec<String>) {
+    let mut seen = std::collections::HashSet::new();
+    v.retain(|s| seen.insert(s.clone()));
+}
+
 fn reduce_emit_to_select(ops: &mut Vec<Op>) {
-    let fields: Vec<String> = ops
+    let mut fields: Vec<String> = ops
         .iter()
         .filter_map(|op| match op {
             Op::Emit(f) | Op::EmitFmt(f) => Some(f.clone()),
@@ -439,6 +455,7 @@ fn reduce_emit_to_select(ops: &mut Vec<Op>) {
         })
         .flatten()
         .collect();
+    dedup_preserve_order_strings(&mut fields);
 
     if !fields.is_empty() {
         ops.retain(|op| !matches!(op, Op::Emit(_) | Op::EmitFmt(_)));
@@ -619,6 +636,7 @@ fn has_high_level_ops(desc: &Desc) -> bool {
             op,
             Op::Where(_)
                 | Op::Select(_)
+                | Op::CaptureFilter(_)
                 | Op::Freq(_)
                 | Op::Sum(_)
                 | Op::Agg(_, _)

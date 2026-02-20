@@ -198,3 +198,11 @@
 - [x] `get_field()` slices record_text on demand; `set_field()` materializes all before modifying
 - [x] `set_record()` and `set_record_capped()` now use offset path by default
 - [x] print $2 and sum column improvements from lazy field storage (see `docs/perf-baseline.md`)
+
+#### Explain pipeline (refinements)
+- [x] Output slots from preceding string literals (simplified label; labels override var names)
+- [x] Output slots from function names when value expr is a call (e.g. printf i, hex(i), chr(i) → i, hex, chr)
+- [x] Multiple slots per expr when Concat/multi-ref (e.g. print $1 $2 → columns 1–2)
+- [x] Range with optional over_key: jpath-driven loop bound → "for all &lt;path&gt;: select" (path = jpath path, leading dot trimmed)
+- [x] No special-case idiom detection; explanations from reductions only
+- [x] Plan doc for stats + JSON phrasing: `docs/explain-output-slot-analysis.md` (Part B to do)
