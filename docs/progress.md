@@ -206,3 +206,5 @@
 - [x] Range with optional over_key: jpath-driven loop bound → "for all &lt;path&gt;: select" (path = jpath path, leading dot trimmed)
 - [x] No special-case idiom detection; explanations from reductions only
 - [x] Plan doc for stats + JSON phrasing: `docs/explain-output-slot-analysis.md` (Part B to do)
+- [x] Omit redundant Select when it only repeats the transform verb (e.g. print gensub(...) → "gensub ..." not "gensub ..., gensub")
+- [x] JSON extract phrase includes path(s): "JSON extract (.ms)" or "JSON extract (.method, .path)"

@@ -133,6 +133,10 @@ fn collect_phrases(ops: &[Op], out: &mut Vec<Phrase>) {
         _ => None,
     }).unwrap_or((None, None));
     let has_range = ops.iter().any(|o| matches!(o, Op::Range(_, _)));
+    let transform_first_word = ops.iter().find_map(|o| match o {
+        Op::Transform(t) => t.split_whitespace().next().map(String::from),
+        _ => None,
+    });
     for op in ops {
         if matches!(op, Op::Range(_, _)) {
             continue;
@@ -144,6 +148,14 @@ fn collect_phrases(ops: &[Op], out: &mut Vec<Phrase>) {
                     (_, Some(b)) => format!("range {}: {}", b.replace('–', ".."), phrase.text),
                     _ => format!("range: {}", phrase.text),
                 };
+            }
+            // Don't repeat the transform verb as the only output (e.g. "gensub ..., gensub" → "gensub ...")
+            if phrase.tag == Tag::Select
+                && transform_first_word.as_deref() == Some(phrase.text.as_str())
+                && !phrase.text.contains(',')
+                && !phrase.text.contains("column")
+            {
+                continue;
             }
             out.push(phrase);
         }

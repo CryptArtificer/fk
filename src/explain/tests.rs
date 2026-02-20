@@ -252,10 +252,15 @@ fn transform_suppresses_filter_1() {
 
 #[test]
 fn gensub_in_print() {
-    // print gensub(...) must be described as gensub replace, not just "transform"
+    // print gensub(...) → gensub phrase only, not "gensub ..., gensub"
     let out = ex(r#"{ print gensub("-", " | ", 2) }"#);
     assert!(out.contains("gensub"), "expected gensub in {:?}", out);
     assert!(!out.eq("transform"), "must not be generic 'transform'");
+    assert!(
+        !out.ends_with(", gensub"),
+        "must not repeat transform verb as output; got {:?}",
+        out,
+    );
 }
 
 #[test]
@@ -323,6 +328,17 @@ fn jpath_format() {
     assert_eq!(
         ex("{ m = jpath($0, \".method\"); printf \"%s\\n\", m }"),
         "method",
+    );
+}
+
+#[test]
+fn json_extract_shows_path() {
+    // Rule extracts .ms into array; Extract phrase should say what is extracted
+    let out = ex(r#"{ ms = jpath($0, ".ms"); lat[NR] = ms } END { print mean(lat) }"#);
+    assert!(
+        out.contains("JSON extract (.ms)"),
+        "extract phrase should include path; got {:?}",
+        out,
     );
 }
 

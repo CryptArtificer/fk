@@ -359,7 +359,15 @@ fn reduce_transforms(desc: &mut Desc) {
 fn reduce_extract(desc: &mut Desc) {
     for rule in &mut desc.rules {
         let has_match = rule.body.iter().any(|op| matches!(op, Op::MatchCall));
-        let has_jpath = rule.body.iter().any(|op| matches!(op, Op::Jpath(_)));
+        let jpath_paths: Vec<String> = rule
+            .body
+            .iter()
+            .filter_map(|o| match o {
+                Op::Jpath(p) => Some(p.clone()),
+                _ => None,
+            })
+            .collect();
+        let has_jpath = !jpath_paths.is_empty();
         let has_fmt = rule
             .body
             .iter()
@@ -368,7 +376,6 @@ fn reduce_extract(desc: &mut Desc) {
         // If jpath resolved into select fields, don't add separate extract
         let jpath_in_select = rule.body.iter().any(|op| {
             if let Op::Emit(fields) | Op::EmitFmt(fields) = op {
-                // Fields from jpath are non-numeric names
                 fields.iter().any(|f| f.parse::<usize>().is_err() && !f.is_empty())
             } else {
                 false
@@ -376,19 +383,50 @@ fn reduce_extract(desc: &mut Desc) {
         });
 
         let extract = match (has_match, has_jpath && !jpath_in_select, has_fmt) {
-            (true, _, true) => Some("regex extract + format"),
-            (true, _, false) => Some("regex extract"),
-            (false, true, true) => Some("JSON extract + format"),
-            (false, true, false) => Some("JSON extract"),
+            (true, _, true) => Some("regex extract + format".into()),
+            (true, _, false) => Some("regex extract".into()),
+            (false, true, true) => {
+                let paths = format_jpath_paths(&jpath_paths);
+                Some(if paths.is_empty() {
+                    "JSON extract + format".into()
+                } else {
+                    format!("JSON extract {} + format", paths)
+                })
+            }
+            (false, true, false) => {
+                let paths = format_jpath_paths(&jpath_paths);
+                Some(if paths.is_empty() {
+                    "JSON extract".into()
+                } else {
+                    format!("JSON extract {}", paths)
+                })
+            }
             _ => None,
         };
 
         if let Some(text) = extract {
             rule.body
                 .retain(|op| !matches!(op, Op::MatchCall | Op::Jpath(_)));
-            rule.body.push(Op::Extract(text.into()));
+            rule.body.push(Op::Extract(text));
         }
     }
+}
+
+fn format_jpath_paths(paths: &[String]) -> String {
+    if paths.is_empty() {
+        return String::new();
+    }
+    let formatted: Vec<String> = paths
+        .iter()
+        .map(|p| {
+            if p.starts_with('.') {
+                p.clone()
+            } else {
+                format!(".{}", p)
+            }
+        })
+        .collect();
+    format!("({})", formatted.join(", "))
 }
 
 fn reduce_rewrite(desc: &mut Desc) {
