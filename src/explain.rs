@@ -1638,6 +1638,18 @@ fn field_ref_deep(expr: &Expr, vs: &HashMap<String, Expr>) -> String {
                 format!("${name}")
             }
         }
+        Expr::BinOp(l, _, r) => {
+            let lt = field_ref_deep(l, vs);
+            if is_data_ref(&lt) {
+                return lt;
+            }
+            let rt = field_ref_deep(r, vs);
+            if is_data_ref(&rt) {
+                rt
+            } else {
+                expr_literal_text(expr)
+            }
+        }
         _ => expr_literal_text(expr),
     }
 }
@@ -1803,9 +1815,31 @@ fn expr_pattern_text(expr: &Expr) -> String {
                 expr_literal_text(expr)
             }
         }
+        Expr::LogicalAnd(l, r) => {
+            let lt = expr_pattern_text(l);
+            let rt = expr_pattern_text(r);
+            if lt.contains('?') {
+                rt
+            } else if rt.contains('?') {
+                lt
+            } else {
+                format!("{lt} && {rt}")
+            }
+        }
+        Expr::LogicalOr(l, r) => {
+            let lt = expr_pattern_text(l);
+            let rt = expr_pattern_text(r);
+            if lt.contains('?') {
+                rt
+            } else if rt.contains('?') {
+                lt
+            } else {
+                format!("{lt} || {rt}")
+            }
+        }
         Expr::LogicalNot(e) => format!("!{}", expr_pattern_text(e)),
         Expr::ArrayIn(key, arr) => format!("{} in {arr}", expr_pattern_text(key)),
-        _ => expr_literal_text(expr),
+        _ => "?".into(),
     }
 }
 
@@ -1835,10 +1869,10 @@ fn expr_literal_text(expr: &Expr) -> String {
 
 fn fmt_regex_or_expr(e: &Expr) -> String {
     match e {
-        Expr::StringLit(s) => format!("/{s}/"),
+        Expr::StringLit(s) => format!("/{}/", escape_control(s)),
         Expr::Match(_, r) | Expr::NotMatch(_, r) => {
             if let Expr::StringLit(s) = r.as_ref() {
-                format!("/{s}/")
+                format!("/{}/", escape_control(s))
             } else {
                 expr_literal_text(e)
             }
@@ -1847,12 +1881,29 @@ fn fmt_regex_or_expr(e: &Expr) -> String {
     }
 }
 
+fn escape_control(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 fn simplify_label(s: &str) -> String {
-    s.trim_end_matches(':')
+    let word = s
+        .trim_end_matches(':')
         .split_whitespace()
         .next()
-        .unwrap_or("")
-        .to_string()
+        .unwrap_or("");
+    if word.is_empty() || word.contains('(') || word.contains('"') || word.contains('\\') {
+        return String::new();
+    }
+    word.trim_end_matches(':').to_string()
 }
 
 fn slot_display_name(name: &str) -> &str {
