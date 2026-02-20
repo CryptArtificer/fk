@@ -233,3 +233,4 @@
 
 #### Phase 20 — Array convenience & language constructs
 - [x] `collect(a, expr)` — per-record append with auto-key, skip NaN/empty, returns count
+- [x] `top(a, n)` / `bottom(a, n)` — keep largest/smallest n values, re-key 1..n

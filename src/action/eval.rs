@@ -158,6 +158,8 @@ impl<'a> Executor<'a> {
                     "samp" => return self.builtin_sample(args),
                     "slurp" => return self.builtin_slurp(args),
                     "collect" => return self.builtin_collect(args),
+                    "top" => return self.builtin_top_bottom(args, false),
+                    "bottom" => return self.builtin_top_bottom(args, true),
                     "dump" => return self.builtin_dump(args),
                     "clk" | "clock" => return self.builtin_clock(),
                     "tic" | "start" => return self.builtin_start(args),

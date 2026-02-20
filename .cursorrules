@@ -151,7 +151,8 @@ Phase 17: Histogram & plot overhaul — ArrayMeta enum (typed metadata on arrays
   removed histplot() in favour of composable plotbox(hist(a)), slurp("-")
   reads from stdin.
 Phase 20: Array convenience & language constructs — collect(a, expr): per-record
- append with auto-key, skips NaN/empty, returns count.
+ append with auto-key, skips NaN/empty, returns count. top(a,n)/bottom(a,n):
+ keep largest/smallest n values, re-keyed 1..n.
 Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
   (array_sources + var_sources in ProgramInfo, one level of variable
   indirection), combined with FILENAME at hist() time. Smart formatting:

@@ -590,6 +590,44 @@ impl<'a> Executor<'a> {
         Value::from_number(next_key as f64)
     }
 
+    /// top(a, n) / bottom(a, n) — keep the n largest (top) or smallest (bottom)
+    /// values from a numeric array, re-keyed 1..n. Returns count kept.
+    pub(crate) fn builtin_top_bottom(&mut self, args: &[Expr], smallest: bool) -> Value {
+        if args.len() < 2 {
+            let name = if smallest { "bottom" } else { "top" };
+            eprintln!("fk: {} requires 2 arguments (array, n)", name);
+            return Value::from_number(0.0);
+        }
+        let array_name = match &args[0] {
+            Expr::Var(n) => n.clone(),
+            _ => {
+                let name = if smallest { "bottom" } else { "top" };
+                eprintln!("fk: {}: first argument must be an array name", name);
+                return Value::from_number(0.0);
+            }
+        };
+        let n = self.eval_expr(&args[1]).to_number() as usize;
+        let mut keys = self.rt.array_keys(&array_name);
+        smart_sort_keys(&mut keys);
+        let mut vals: Vec<f64> = keys
+            .iter()
+            .map(|k| self.rt.get_array_value(&array_name, k).to_number())
+            .collect();
+        if smallest {
+            vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        } else {
+            vals.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+        }
+        let take = n.min(vals.len());
+        vals.truncate(take);
+        self.rt.delete_array_all(&array_name);
+        for (i, v) in vals.into_iter().enumerate() {
+            self.rt
+                .set_array_value(&array_name, &(i + 1).to_string(), Value::from_number(v));
+        }
+        Value::from_number(take as f64)
+    }
+
     /// slurp(file [, arr]) — read file into string, or into arr lines. Returns string or line count.
     pub(crate) fn builtin_slurp(&mut self, args: &[Expr]) -> Value {
         if args.is_empty() {

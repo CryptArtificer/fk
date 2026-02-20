@@ -2584,3 +2584,41 @@ fn collect_works_with_stats() {
     );
     assert_eq!(rt.get_var("result"), "60");
 }
+
+// --- top / bottom ---
+
+#[test]
+fn top_keeps_largest() {
+    let rt = eval(
+        r#"BEGIN { a[1]=3; a[2]=1; a[3]=5; a[4]=2; a[5]=4; top(a, 3); result=join(a,",") }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "5,4,3");
+}
+
+#[test]
+fn bottom_keeps_smallest() {
+    let rt = eval(
+        r#"BEGIN { a[1]=3; a[2]=1; a[3]=5; a[4]=2; a[5]=4; bottom(a, 3); result=join(a,",") }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "1,2,3");
+}
+
+#[test]
+fn top_returns_count() {
+    let rt = eval(
+        r#"BEGIN { a[1]=10; a[2]=20; result = top(a, 5) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "2");
+}
+
+#[test]
+fn top_with_collect() {
+    let rt = eval(
+        r#"{ collect(a, $1) } END { top(a, 2); result = join(a, ",") }"#,
+        &["5", "1", "9", "3"],
+    );
+    assert_eq!(rt.get_var("result"), "9,5");
+}
