@@ -4,7 +4,7 @@ use std::path::Path;
 use crate::analyze::{ProgramInfo, analyze, unwrap_coercion};
 use crate::parser::*;
 
-const BUDGET: usize = 72;
+const BUDGET: usize = 60;
 
 #[derive(Debug, Default)]
 pub struct ExplainContext {
@@ -82,10 +82,10 @@ pub fn explain(program: &Program, ctx: Option<&ExplainContext>) -> String {
 
     match env.as_deref() {
         None => base,
-        Some(e) if base.is_empty() && e.len() <= BUDGET => e.to_string(),
+        Some(e) if base.is_empty() && char_len(e) <= BUDGET => e.to_string(),
         Some(e) => {
             let combined = format!("{base} {e}");
-            if combined.len() <= BUDGET {
+            if char_len(&combined) <= BUDGET {
                 combined
             } else {
                 base
@@ -1830,6 +1830,10 @@ fn dedup_preserve_order(v: &mut Vec<String>) {
     v.retain(|r| seen.insert(r.clone()));
 }
 
+fn char_len(s: &str) -> usize {
+    s.chars().count()
+}
+
 fn budget_join(phrases: &[String], budget: usize) -> String {
     if phrases.is_empty() {
         return String::new();
@@ -1839,10 +1843,10 @@ fn budget_join(phrases: &[String], budget: usize) -> String {
         if phrases.len() - take > 0 {
             text.push_str(", …");
         }
-        if text.len() <= budget || take == 1 {
-            if text.len() > budget {
-                text.truncate(budget.saturating_sub(1));
-                text.push('…');
+        if char_len(&text) <= budget || take == 1 {
+            if char_len(&text) > budget {
+                let trunc: String = text.chars().take(budget.saturating_sub(1)).collect();
+                text = format!("{trunc}…");
             }
             return text;
         }
@@ -2129,13 +2133,14 @@ mod tests {
             "#);
         assert!(out.contains("replace"), "expected replace in {:?}", out);
         assert!(
-            out.contains("original"),
-            "expected 'original' (from literal) in {:?}",
+            !out.contains("safe"),
+            "must not expose bare variable name 'safe' in {:?}",
             out
         );
         assert!(
-            out.contains("redacted"),
-            "expected 'redacted' (from literal) in {:?}",
+            out.chars().count() <= 60,
+            "budget exceeded: len {} in {:?}",
+            out.chars().count(),
             out
         );
     }
@@ -2379,7 +2384,17 @@ mod tests {
             "expected 'from JSON:' in {:?}",
             out
         );
-        assert!(out.contains("slurped"), "expected 'slurped' in {:?}", out);
+        assert!(
+            out.contains("service"),
+            "expected 'service' path in {:?}",
+            out
+        );
+        assert!(
+            out.chars().count() <= 60,
+            "budget exceeded: len {} in {:?}",
+            out.chars().count(),
+            out
+        );
     }
 
     #[test]
@@ -2503,7 +2518,11 @@ mod tests {
         let out = ex(r#"
             { print "histogram of some very long expression name", "where col 7 ~ /^extremely-long-pattern-that-keeps-going$/" }
         "#);
-        assert!(out.len() <= 72, "len {} > 72: {out}", out.len());
+        assert!(
+            out.chars().count() <= 60,
+            "len {} > 60: {out}",
+            out.chars().count()
+        );
     }
 
     #[test]
