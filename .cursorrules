@@ -177,6 +177,24 @@ Phase 19: Explain simplification — collapsed src/explain/ (5 files, 3,013 line
   filter-first flow (`where /pat/: select columns 1–2`), clean named columns
   (`$cpu-usage` → `cpu-usage`), integrated jpath sources (`histogram of ms`
   instead of `histogram, JSON extract (.ms)`).
+Phase 19b: Explain quality pass — systematic evaluation and fix of all
+  showcase explain outputs (60+ programs). Fixes:
+  - Verb-first extract: `extract pattern`, `extract JSON` (was `pattern extract`).
+  - Unified select: jpath paths treated as field names, no `from JSON:` prefix.
+  - Capture filter integration: `where capture 2 ≥ 500: extract pattern`
+    (recursive detection into nested if-blocks, filter-first flow).
+  - Variable resolution: variables resolving to string literals (e.g. "2xx OK")
+    fall back to variable name (`frequency of class`).
+  - Concat cleanup: separator literals ($SUBSEP, OFS, " ", etc.) stripped from
+    field lists (`frequency of column 2, column 7`).
+  - -F tab display: escape tabs/newlines in suffix (`-F '\t'` not blank).
+  - Deep output ref detection: programs with printf inside if/else produce
+    meaningful descriptions (`select host-name, cpu-usage`).
+  - Plain array assignment `a[$key] = $val` detected as aggregation when
+    both key and val are data refs; `a[NR] = expr` stays as `collect lines`.
+  - Range dedup: identical loop phrases suppressed.
+  - Boundless ranges: `iterate: fields` for loops without numeric bounds.
+  - Removed dead `looks_like_json_paths` function.
 
 ### Future ideas (explored, deferred)
 

@@ -216,3 +216,17 @@
 - [x] Filter-first flow: `where /pattern/: select columns 1–2` (filter → action)
 - [x] Clean named columns: `$cpu-usage` → `cpu-usage` (strip `$` from non-numeric refs)
 - [x] Integrated jpath sources: `histogram of ms` instead of `histogram, JSON extract (.ms)`
+
+#### Explain quality pass
+- [x] Verb-first extract: `extract pattern`, `extract JSON` (was `pattern extract`)
+- [x] Unified select for jpath: paths treated as field names, no `from JSON:` prefix
+- [x] Capture filter integration: recursive detection into nested if-blocks,
+  `where capture 2 ≥ 500: extract pattern` (filter-first flow)
+- [x] Variable resolution: string literals fall back to variable name (`frequency of class`)
+- [x] Concat cleanup: separator literals (SUBSEP, OFS, spaces) stripped from field lists
+- [x] `-F` tab display: escape tabs/newlines in suffix (`-F '\t'` not blank)
+- [x] Deep output ref detection: printf inside if/else yields meaningful descriptions
+- [x] Plain array assignment `a[$key] = $val` detected as aggregation
+- [x] `a[NR] = expr` correctly stays as `collect lines` (not aggregation)
+- [x] Range dedup: identical loop phrases within a block suppressed
+- [x] Boundless ranges use `iterate:` instead of empty `range:`

@@ -76,7 +76,8 @@ impl ExplainContext {
             parts.push("headers".into());
         }
         if let Some(ref f) = self.field_sep {
-            parts.push(format!("-F '{f}'"));
+            let display = f.replace('\t', "\\t").replace('\n', "\\n");
+            parts.push(format!("-F '{display}'"));
         }
         match self.files.len() {
             0 => {}
@@ -321,7 +322,7 @@ fn try_aggregation(program: &Program, vs: &HashMap<String, Expr>) -> Option<Stri
     let has_for_in = end.iter().any(|s| matches!(s, Statement::ForIn(..)))
         || block_calls_any(end, &["asort", "asorti"]);
 
-    let mut accum: Option<(String, String)> = None; // (key, val)
+    let mut accum: Option<(String, String, bool)> = None; // (key, val, is_additive)
     let mut freq: Option<String> = None; // key
     let mut simple_accum: Option<String> = None; // source field
 
@@ -329,7 +330,7 @@ fn try_aggregation(program: &Program, vs: &HashMap<String, Expr>) -> Option<Stri
         scan_block_accum(&rule.action, vs, &mut accum, &mut freq, &mut simple_accum);
     }
 
-    if let (Some((ak, av)), Some(fk)) = (&accum, &freq)
+    if let (Some((ak, av, _)), Some(fk)) = (&accum, &freq)
         && ak == fk
         && has_for_in
     {
@@ -346,13 +347,18 @@ fn try_aggregation(program: &Program, vs: &HashMap<String, Expr>) -> Option<Stri
         return Some(format!("frequency of {}", to_title_columns(&humanize(key))));
     }
 
-    if let Some((key, val)) = &accum
+    if let Some((key, val, additive)) = &accum
         && has_for_in
     {
+        let key_text = humanize(key);
+        if key_text == "NR" || key_text == "FNR" {
+            return None;
+        }
+        let verb = if *additive { "sum" } else { "aggregation" };
         return Some(format!(
-            "sum of {} by {}",
+            "{verb} of {} by {}",
             to_title_columns(&humanize(val)),
-            to_title_columns(&humanize(key))
+            to_title_columns(&key_text)
         ));
     }
 
@@ -368,7 +374,7 @@ fn try_aggregation(program: &Program, vs: &HashMap<String, Expr>) -> Option<Stri
 fn detect_rule_phrases(rule: &Rule, vs: &HashMap<String, Expr>, phrases: &mut Vec<String>) {
     let mut local: Vec<String> = Vec::new();
 
-    detect_capture_filter(&rule.action, &mut local);
+    let capture_filters = detect_capture_filter(&rule.action);
     detect_extract(&rule.action, vs, &mut local);
     detect_transform(&rule.action, &mut local);
     detect_rule_accum(&rule.action, vs, &mut local);
@@ -388,7 +394,7 @@ fn detect_rule_phrases(rule: &Rule, vs: &HashMap<String, Expr>, phrases: &mut Ve
         local.push("collect lines".into());
     }
 
-    let filter = if let Some(pat) = &rule.pattern {
+    let mut filter = if let Some(pat) = &rule.pattern {
         let skip = matches!(pat, Pattern::Expression(Expr::NumberLit(n)) if *n == 1.0);
         if !skip {
             let text = humanize(&describe_pattern(pat));
@@ -403,6 +409,10 @@ fn detect_rule_phrases(rule: &Rule, vs: &HashMap<String, Expr>, phrases: &mut Ve
     } else {
         None
     };
+
+    if filter.is_none() && !capture_filters.is_empty() {
+        filter = Some(capture_filters.join(", "));
+    }
 
     if let Some(f) = filter {
         if local.is_empty() {
@@ -456,10 +466,12 @@ fn detect_block_phrases(block: &Block, vs: &HashMap<String, Expr>, phrases: &mut
                     format!("range {}: {select_text}", b.replace('–', ".."))
                 }
                 (_, Some(b)) => format!("range {}", b.replace('–', "..")),
-                _ if !select_text.is_empty() => format!("range: {select_text}"),
+                _ if !select_text.is_empty() => format!("iterate: {select_text}"),
                 _ => continue,
             };
-            phrases.push(phrase);
+            if !phrases.contains(&phrase) {
+                phrases.push(phrase);
+            }
             found_range = true;
         } else if !found_range
             && let Statement::Print(exprs, _) | Statement::Printf(exprs, _) = stmt
@@ -471,12 +483,7 @@ fn detect_block_phrases(block: &Block, vs: &HashMap<String, Expr>, phrases: &mut
             };
             let fields = collect_output_refs(refs, vs);
             if !fields.is_empty() {
-                let json = looks_like_json_paths(&fields);
-                let text = if json {
-                    format!("from JSON: {}", fields.join(", "))
-                } else {
-                    format!("select {}", format_field_list(&fields))
-                };
+                let text = format!("select {}", format_field_list(&fields));
                 if !phrases.contains(&text) {
                     phrases.push(text);
                 }
@@ -517,7 +524,7 @@ fn detect_block_phrases(block: &Block, vs: &HashMap<String, Expr>, phrases: &mut
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or(&p);
-            if let Some(sel) = phrases.iter_mut().find(|p| p.starts_with("from JSON:")) {
+            if let Some(sel) = phrases.iter_mut().find(|p| p.starts_with("select ")) {
                 sel.push_str(&format!(", slurped from {base}"));
             } else {
                 phrases.push(format!("slurped from {base}"));
@@ -548,32 +555,55 @@ fn detect_fallback(program: &Program, vs: &HashMap<String, Expr>, phrases: &mut 
             .any(|s| matches!(s, Statement::Print(..) | Statement::Printf(..)))
     });
 
-    if has_output && phrases.is_empty() {
+    if phrases.is_empty() {
         let rule = program.rules.first();
         if let Some(r) = rule {
             let fields = collect_rule_output_refs(r, vs);
-            if !fields.is_empty() {
-                let json = looks_like_json_paths(&fields);
-                if json {
-                    phrases.push(format!("from JSON: {}", fields.join(", ")));
-                } else {
-                    phrases.push(format!("select {}", format_field_list(&fields)));
+            if fields.is_empty() {
+                let deep = collect_deep_output_refs(&r.action, vs);
+                if !deep.is_empty() {
+                    phrases.push(format!("select {}", format_field_list(&deep)));
+                    return;
                 }
+            } else {
+                phrases.push(format!("select {}", format_field_list(&fields)));
                 return;
             }
         }
-        phrases.push("pass through".into());
+        if has_output {
+            phrases.push("pass through".into());
+        }
     }
 }
 
 // ── Sub-detectors ───────────────────────────────────────────────
 
-fn detect_capture_filter(block: &Block, phrases: &mut Vec<String>) {
+fn detect_capture_filter(block: &Block) -> Vec<String> {
+    let mut filters = Vec::new();
+    detect_capture_filter_recursive(block, &mut filters);
+    filters
+}
+
+fn detect_capture_filter_recursive(block: &Block, filters: &mut Vec<String>) {
     for stmt in block {
-        if let Statement::If(cond, _, _) = stmt
-            && let Some(text) = describe_capture_filter_cond(cond)
-        {
-            phrases.push(text);
+        match stmt {
+            Statement::If(cond, then_block, else_block) => {
+                if let Some(text) = describe_capture_filter_cond(cond) {
+                    filters.push(text);
+                }
+                detect_capture_filter_recursive(then_block, filters);
+                if let Some(eb) = else_block {
+                    detect_capture_filter_recursive(eb, filters);
+                }
+            }
+            Statement::For(_, _, _, body)
+            | Statement::ForIn(_, _, body)
+            | Statement::While(_, body)
+            | Statement::DoWhile(body, _) => {
+                detect_capture_filter_recursive(body, filters);
+            }
+            Statement::Block(b) => detect_capture_filter_recursive(b, filters),
+            _ => {}
         }
     }
 }
@@ -596,22 +626,22 @@ fn detect_extract(block: &Block, vs: &HashMap<String, Expr>, phrases: &mut Vec<S
     });
 
     let extract = match (has_match, has_jpath && !jpath_in_select, has_fmt) {
-        (true, _, true) => Some("pattern extract + format".into()),
-        (true, _, false) => Some("pattern extract".into()),
+        (true, _, true) => Some("extract pattern + format".into()),
+        (true, _, false) => Some("extract pattern".into()),
         (false, true, true) => {
             let paths = format_jpath_paths(&jpath_paths);
             Some(if paths.is_empty() {
-                "JSON extract + format".into()
+                "extract JSON + format".into()
             } else {
-                format!("JSON extract {paths} + format")
+                format!("extract JSON {paths} + format")
             })
         }
         (false, true, false) => {
             let paths = format_jpath_paths(&jpath_paths);
             Some(if paths.is_empty() {
-                "JSON extract".into()
+                "extract JSON".into()
             } else {
-                format!("JSON extract {paths}")
+                format!("extract JSON {paths}")
             })
         }
         _ => None,
@@ -680,12 +710,7 @@ fn detect_select(rule: &Rule, vs: &HashMap<String, Expr>, phrases: &mut Vec<Stri
         }
     }
 
-    let json = looks_like_json_paths(&fields);
-    let text = if json {
-        format!("from JSON: {}", fields.join(", "))
-    } else {
-        format!("select {}", format_field_list(&fields))
-    };
+    let text = format!("select {}", format_field_list(&fields));
     if !phrases.contains(&text) {
         phrases.push(text);
     }
@@ -727,7 +752,7 @@ fn detect_rewrite(block: &Block, phrases: &mut Vec<String>) {
 }
 
 fn detect_rule_accum(block: &Block, vs: &HashMap<String, Expr>, phrases: &mut Vec<String>) {
-    let mut accum: Option<(String, String)> = None;
+    let mut accum: Option<(String, String, bool)> = None;
     let mut freq: Option<String> = None;
     let mut simple: Option<String> = None;
     scan_block_accum(block, vs, &mut accum, &mut freq, &mut simple);
@@ -783,7 +808,7 @@ fn detect_for_range(block: &Block, vs: &HashMap<String, Expr>, phrases: &mut Vec
                     format!("range {}: {select_text}", b.replace('–', ".."))
                 }
                 (_, Some(b)) => format!("range {}", b.replace('–', "..")),
-                _ if !select_text.is_empty() => format!("range: {select_text}"),
+                _ if !select_text.is_empty() => format!("iterate: {select_text}"),
                 _ => continue,
             };
             phrases.push(phrase);
@@ -792,11 +817,12 @@ fn detect_for_range(block: &Block, vs: &HashMap<String, Expr>, phrases: &mut Vec
 }
 
 fn detect_collect(rule: &Rule) -> bool {
-    rule.action.iter().any(|s| match s {
-        Statement::Expression(Expr::Assign(target, val)) =>
+    rule.action.iter().any(|s| {
+        if let Statement::Expression(Expr::Assign(target, _)) = s {
             matches!(target.as_ref(), Expr::ArrayRef(_, key) if matches!(key.as_ref(), Expr::Var(n) if n == "NR"))
-                && matches!(val.as_ref(), Expr::Field(inner) if matches!(inner.as_ref(), Expr::NumberLit(n) if *n == 0.0)),
-        _ => false,
+        } else {
+            false
+        }
     })
 }
 
@@ -950,6 +976,60 @@ fn collect_expr_refs(e: &Expr, vs: &HashMap<String, Expr>, out: &mut Vec<String>
     }
 }
 
+fn collect_deep_output_refs(block: &Block, vs: &HashMap<String, Expr>) -> Vec<String> {
+    let mut out = Vec::new();
+    for stmt in block {
+        collect_deep_stmt_refs(stmt, vs, &mut out);
+    }
+    dedup_preserve_order(&mut out);
+    out
+}
+
+fn collect_deep_stmt_refs(stmt: &Statement, vs: &HashMap<String, Expr>, out: &mut Vec<String>) {
+    match stmt {
+        Statement::Print(exprs, _) => {
+            let refs = collect_output_refs(exprs, vs);
+            for r in refs {
+                if !out.contains(&r) {
+                    out.push(r);
+                }
+            }
+        }
+        Statement::Printf(exprs, _) if exprs.len() > 1 => {
+            let refs = collect_output_refs(&exprs[1..], vs);
+            for r in refs {
+                if !out.contains(&r) {
+                    out.push(r);
+                }
+            }
+        }
+        Statement::If(_, then_block, else_block) => {
+            for s in then_block {
+                collect_deep_stmt_refs(s, vs, out);
+            }
+            if let Some(eb) = else_block {
+                for s in eb {
+                    collect_deep_stmt_refs(s, vs, out);
+                }
+            }
+        }
+        Statement::For(_, _, _, body)
+        | Statement::ForIn(_, _, body)
+        | Statement::While(_, body)
+        | Statement::DoWhile(body, _) => {
+            for s in body {
+                collect_deep_stmt_refs(s, vs, out);
+            }
+        }
+        Statement::Block(b) => {
+            for s in b {
+                collect_deep_stmt_refs(s, vs, out);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn collect_block_output_refs(block: &Block, vs: &HashMap<String, Expr>, out: &mut Vec<String>) {
     for stmt in block {
         collect_stmt_output_refs(stmt, vs, out);
@@ -996,7 +1076,7 @@ fn collect_stmt_output_refs(stmt: &Statement, vs: &HashMap<String, Expr>, out: &
 fn scan_block_accum(
     block: &Block,
     vs: &HashMap<String, Expr>,
-    accum: &mut Option<(String, String)>,
+    accum: &mut Option<(String, String, bool)>,
     freq: &mut Option<String>,
     simple: &mut Option<String>,
 ) {
@@ -1022,7 +1102,7 @@ fn scan_block_accum(
 fn scan_accum(
     e: &Expr,
     vs: &HashMap<String, Expr>,
-    accum: &mut Option<(String, String)>,
+    accum: &mut Option<(String, String, bool)>,
     freq: &mut Option<String>,
     simple: &mut Option<String>,
 ) {
@@ -1034,7 +1114,7 @@ fn scan_accum(
                 let k = field_ref(key, vs);
                 let v = field_ref_deep(val, vs);
                 if accum.is_none() {
-                    *accum = Some((k, v));
+                    *accum = Some((k, v, true));
                 }
             }
         }
@@ -1061,6 +1141,15 @@ fn scan_accum(
                 let src = field_ref_deep(delta, vs);
                 if is_data_ref(&src) && simple.is_none() {
                     *simple = Some(src);
+                }
+            }
+        }
+        Expr::Assign(target, val) if matches!(target.as_ref(), Expr::ArrayRef(_, _)) => {
+            if let Expr::ArrayRef(_, key) = target.as_ref() {
+                let k = field_ref(key, vs);
+                let v = field_ref_deep(val, vs);
+                if is_data_ref(&k) && is_data_ref(&v) && accum.is_none() {
+                    *accum = Some((k, v, false));
                 }
             }
         }
@@ -1451,7 +1540,7 @@ fn describe_capture_filter_cond(cond: &Expr) -> Option<String> {
         BinOp::Lt => "<",
         _ => return None,
     };
-    Some(format!("where c[{index}] {op_str} {val}"))
+    Some(format!("where capture {index} {op_str} {val}"))
 }
 
 const BUILTIN_VARS: &[&str] = &[
@@ -1475,6 +1564,10 @@ fn field_display(inner: &Expr) -> Option<String> {
 }
 
 fn field_ref(expr: &Expr, vs: &HashMap<String, Expr>) -> String {
+    field_ref_inner(expr, vs, false)
+}
+
+fn field_ref_inner(expr: &Expr, vs: &HashMap<String, Expr>, inside_var: bool) -> String {
     match expr {
         Expr::Field(inner) if matches!(inner.as_ref(), Expr::NumberLit(n) if *n == 0.0) => {
             "$0".into()
@@ -1486,15 +1579,29 @@ fn field_ref(expr: &Expr, vs: &HashMap<String, Expr>) -> String {
         Expr::Var(name) if is_builtin_var(name) => name.clone(),
         Expr::Var(name) => {
             if let Some(src) = vs.get(name.as_str()) {
-                field_ref(src, vs)
+                let resolved = field_ref_inner(src, vs, true);
+                if is_data_ref(&resolved) {
+                    resolved
+                } else {
+                    name.clone()
+                }
             } else {
                 format!("${name}")
             }
         }
+        Expr::StringLit(s) if inside_var => s.clone(),
         Expr::Concat(l, r) => {
-            let a = field_ref(l, vs);
-            let b = field_ref(r, vs);
-            format!("{a} {b}")
+            let a = field_ref_inner(l, vs, inside_var);
+            let b = field_ref_inner(r, vs, inside_var);
+            match (
+                a.is_empty() || is_separator_literal(l),
+                b.is_empty() || is_separator_literal(r),
+            ) {
+                (true, true) => String::new(),
+                (true, false) => b,
+                (false, true) => a,
+                (false, false) => format!("{a}, {b}"),
+            }
         }
         Expr::NumberLit(n) if *n == 0.0 => "$0".into(),
         _ => expr_literal_text(expr),
@@ -1520,6 +1627,14 @@ fn field_ref_deep(expr: &Expr, vs: &HashMap<String, Expr>) -> String {
             }
         }
         _ => expr_literal_text(expr),
+    }
+}
+
+fn is_separator_literal(e: &Expr) -> bool {
+    match e {
+        Expr::StringLit(s) => !s.chars().any(|c| c.is_alphanumeric()),
+        Expr::Var(name) => name == "SUBSEP" || name == "OFS" || name == "ORS",
+        _ => false,
     }
 }
 
@@ -1657,6 +1772,7 @@ fn expr_pattern_text(expr: &Expr) -> String {
         Expr::Field(inner) => match inner.as_ref() {
             Expr::NumberLit(n) => format!("${}", *n as i64),
             Expr::StringLit(s) => format!("$\"{s}\""),
+            Expr::Var(name) => format!("${name}"),
             _ => format!("$({})", expr_pattern_text(inner)),
         },
         Expr::NumberLit(n) => {
@@ -1795,13 +1911,6 @@ fn to_title_columns(s: &str) -> String {
     } else {
         s
     }
-}
-
-fn looks_like_json_paths(fields: &[String]) -> bool {
-    if fields.is_empty() {
-        return false;
-    }
-    fields.iter().any(|f| f.contains('.')) && fields.iter().all(|f| f.parse::<usize>().is_err())
 }
 
 fn format_field_list(fields: &[String]) -> String {
@@ -2203,7 +2312,7 @@ mod tests {
         let out = ex(r#"
             { for (i=1; i<=length($0); i++) { c=substr($0,i,1); printf "  %s → %d → %s\n", c, ord(c), hex(ord(c)) } }
         "#);
-        assert_eq!(out, "range: c, code point, hex value");
+        assert_eq!(out, "iterate: c, code point, hex value");
     }
 
     #[test]
@@ -2215,7 +2324,7 @@ mod tests {
         let perchar = ex(r#"
             { for (pos=1; pos<=length($0); pos++) { ch=substr($0,pos,1); printf "%s %d %s\n", ch, ord(ch), hex(ord(ch)) } }
         "#);
-        assert_eq!(perchar, "range: ch, code point, hex value");
+        assert_eq!(perchar, "iterate: ch, code point, hex value");
     }
 
     // ── Extract ─────────────────────────────────────────────────
@@ -2224,7 +2333,7 @@ mod tests {
     fn regex_extract_format() {
         assert_eq!(
             ex("{ match($0, \"pattern\", c); printf \"%s\\n\", c[1] }"),
-            "pattern extract + format",
+            "extract pattern + format",
         );
     }
 
@@ -2234,12 +2343,12 @@ mod tests {
             { match($0, /^(\S+)\s+(\d+)/, c); if (c[2]+0 >= 500) printf "%s %s\n", c[1], c[2] }
         "#);
         assert!(
-            out.starts_with("where c[2] ≥ 500"),
-            "filter must be first and use generic label; got {:?}",
+            out.starts_with("where capture 2 ≥ 500"),
+            "filter must be first and use readable label; got {:?}",
             out,
         );
         assert!(
-            out.contains("pattern extract"),
+            out.contains("extract pattern"),
             "expected extract in {:?}",
             out
         );
@@ -2401,11 +2510,7 @@ mod tests {
                     jpath(json, ".limits.retries")
             }
             "#);
-        assert!(
-            out.contains("from JSON:"),
-            "expected 'from JSON:' in {:?}",
-            out
-        );
+        assert!(out.contains("select"), "expected 'select' in {:?}", out);
         assert!(
             out.contains("service"),
             "expected 'service' path in {:?}",
