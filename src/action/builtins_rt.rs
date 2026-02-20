@@ -1116,18 +1116,10 @@ impl<'a> Executor<'a> {
 
         let hist_meta = self.rt.get_meta(&array_name).cloned();
         let is_histogram = hist_meta.is_some();
-        let has_custom_title = title_arg.is_some();
         let title = if let Some(t) = title_arg {
             t
-        } else if is_histogram {
-            "Histogram".to_string()
         } else {
-            String::new()
-        };
-        let subtitle = if has_custom_title {
-            String::new()
-        } else {
-            match &hist_meta {
+            let source = match &hist_meta {
                 Some(ArrayMeta::Histogram {
                     description,
                     source_name,
@@ -1143,6 +1135,13 @@ impl<'a> Executor<'a> {
                 }
                 _ if !array_name.starts_with("__") => array_name.clone(),
                 _ => String::new(),
+            };
+            if is_histogram && !source.is_empty() {
+                format!("Histogram — {source}")
+            } else if is_histogram {
+                "Histogram".to_string()
+            } else {
+                source
             }
         };
         let xlabel = xlabel_arg.unwrap_or_else(|| {
@@ -1163,7 +1162,7 @@ impl<'a> Executor<'a> {
         let box_width = width + count_width + 1;
         let mut lines: Vec<String> = Vec::new();
         let total_width = label_width + 3 + box_width + 1;
-        for text in [&title, &subtitle] {
+        for text in [&title] {
             if !text.is_empty() {
                 let clen = text.chars().count();
                 let display = if clen > total_width {
