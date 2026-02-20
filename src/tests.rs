@@ -2709,3 +2709,23 @@ fn window_with_mean() {
     );
     assert_eq!(rt.get_var("result"), "30");
 }
+
+// --- every ---
+
+#[test]
+fn every_fires_at_multiples() {
+    let rt = eval(
+        r#"every 3 { count++ }"#,
+        &["a", "b", "c", "d", "e", "f", "g"],
+    );
+    assert_eq!(rt.get_var("count"), "2");
+}
+
+#[test]
+fn every_with_action() {
+    let rt = eval(
+        r#"every 2 { result = result $1 }"#,
+        &["a", "b", "c", "d", "e"],
+    );
+    assert_eq!(rt.get_var("result"), "bd");
+}

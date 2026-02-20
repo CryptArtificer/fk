@@ -265,6 +265,24 @@ impl Parser {
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern, FkError> {
+        // `every N` desugars to `NR % N == 0`
+        if let Token::Ident(s) = self.current()
+            && s == "every"
+        {
+            self.advance();
+            let n_expr = self.parse_primary()?;
+            let expr = Expr::BinOp(
+                Box::new(Expr::BinOp(
+                    Box::new(Expr::Var("NR".to_string())),
+                    BinOp::Mod,
+                    Box::new(n_expr),
+                )),
+                BinOp::Eq,
+                Box::new(Expr::NumberLit(0.0)),
+            );
+            return Ok(Pattern::Expression(expr));
+        }
+
         let first = match self.current() {
             Token::Regex(s) => {
                 let pat = Pattern::Regex(s.clone());
