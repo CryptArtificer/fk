@@ -238,7 +238,7 @@ fn walk_redirect(redir: &Redirect, info: &mut ProgramInfo) {
 // ── Expression formatter & smart title builder ──────────────────────
 
 /// Strip `+ 0` / `0 +` numeric coercion wrappers.
-fn unwrap_coercion(expr: &Expr) -> &Expr {
+pub(crate) fn unwrap_coercion(expr: &Expr) -> &Expr {
     if let Expr::BinOp(l, BinOp::Add, r) = expr {
         if matches!(r.as_ref(), Expr::NumberLit(n) if *n == 0.0) {
             return unwrap_coercion(l);
@@ -669,5 +669,4 @@ mod tests {
         let desc = build_array_description(expr, "data.csv", &info.var_sources);
         assert_eq!(desc, "data.csv — $1 + $2");
     }
-
 }

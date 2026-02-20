@@ -22,9 +22,9 @@ incrementally as a learning exercise. The user values:
 
 ## Current state
 
-- **~13,000 lines of Rust** across 36 source files
-- **441 Rust + 152 shell tests**, zero warnings, clippy clean
-- **Phases 0–18 complete**
+- **~16,000 lines of Rust** across 33 source files
+- **453 Rust + 152 shell tests**, zero warnings, clippy clean
+- **Phases 0–19 complete**
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
 
@@ -35,11 +35,8 @@ main.rs               — CLI dispatch, record loop
 cli.rs                — argument parsing (-F, -f, -v, -i, -H, -d, --repl, --explain)
 analyze.rs            — static AST analysis → ProgramInfo (field/NF/regex hints,
                         array_sources, var_sources)
-explain/mod.rs        — public API: explain(), ExplainContext
-explain/lower.rs      — AST → flat Op sequence (lowering); Op enum; Desc struct
-explain/reduce.rs     — pattern matching & normalization (idioms, accumulation,
-                        chart/stats, transforms, select, filters, fallback)
-explain/render.rs     — Op → human-readable text with budget; Phrase/Tag system
+explain.rs            — single-pass AST → terse one-line description; ExplainContext,
+                        detect_format/compression helpers, budget-limited join
 describe.rs           — format sniffer, schema inference, suggestions, decompression
 lexer.rs              — tokenizer (Spanned tokens with O(1) line:col tracking)
 parser.rs             — recursive-descent → AST (Program, Rules, Exprs, Stmts)
@@ -160,23 +157,26 @@ Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
   expr_to_source() general AST→source formatter (separate from format/ module).
   Subtitle renders below user title on its own centered line.
   --explain mode: terse one-line program description from AST analysis.
-  Human-readable vocabulary: `use col 1–2`, `where col 2 > 50`,
-  `freq of col 1`, `sum col 2`, `stats of col 2`, `histogram of col 1`,
-  `count lines`, `deduplicate by $0`, `join on col 1`, `timed`.
-  Field refs humanized ($N → col N), consecutive ranges collapsed (col 1–3).
+  Human-readable vocabulary: `select columns 1–2`, `where column 2 > 50: select column 1`,
+  `frequency of column 1`, `sum of column 2`, `statistics of column 2`,
+  `histogram of ms`, `count lines`, `deduplicate by line`, `join on column 1`.
+  Field refs humanized ($N → column N), named cols stripped ($cpu → cpu),
+  consecutive ranges collapsed (columns 1–3).
   Integrated into showcase `show` helper as auto-subtitle for all examples.
-Phase 19: Explain module — src/explain/ (lower → reduce → render). No special cases;
-  explanations emanate from recursive reductions.
-  lower.rs: AST → flat Op sequence. Output slots: (1) preceding string literal
-    (labels higher weighted than variable names), (2) function name when value
-    expr is a call (e.g. hex, chr, ord), (3) ref(s) from expr; Concat/multi-ref
-    yields multiple slots. Range(Option<bounds>, Option<over_key>): bounds from
-    for-loop head; over_key from jpath-driven loop (path with leading dot trimmed
-    → "for all path: select"). reduce.rs: pattern normalization, Emit→Select
-    with dedup preserving order. render.rs: Phrase/Tag, subsumption, budget.
-  67 tests. SubGsub → Transform("replace /pat/ → repl"). Render omits Select when it only repeats the transform verb. Extract
-    includes jpath path(s) (e.g. "JSON extract (.ms)"); "regex" → "pattern" (pattern extract). Join: semi/anti → "matching rows"
-    / "rows without a match". Slot names: ord/chr/hex → code point/character/hex value (end-user wording). Plan: docs/explain-end-user-plan.md.
+Phase 19: Explain simplification — collapsed src/explain/ (5 files, 3,013 lines:
+  lower → reduce → render pipeline with Op enum, 12 reduction passes,
+  significance tags) into single flat src/explain.rs (~1,400 lines of code).
+  Single-pass direct AST pattern detection: no intermediate Op representation,
+  no multi-stage pipeline. All 67 test assertions preserved. Deduplicated
+  unwrap_coercion (now pub(crate) in analyze.rs), eliminated expr_text
+  (duplicate of analyze::expr_to_source). Deleted old plan docs
+  (explain-end-user-plan.md, explain-output-slot-analysis.md).
+  Plan: docs/explain-simplify-plan.md.
+  Wording overhaul: verb-first phrasing (`select columns 1–2`, `count lines`,
+  `deduplicate by`, `number lines`, `collect lines`, `pass through`),
+  filter-first flow (`where /pat/: select columns 1–2`), clean named columns
+  (`$cpu-usage` → `cpu-usage`), integrated jpath sources (`histogram of ms`
+  instead of `histogram, JSON extract (.ms)`).
 
 ### Future ideas (explored, deferred)
 

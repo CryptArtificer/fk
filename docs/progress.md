@@ -199,13 +199,20 @@
 - [x] `set_record()` and `set_record_capped()` now use offset path by default
 - [x] print $2 and sum column improvements from lazy field storage (see `docs/perf-baseline.md`)
 
-#### Explain pipeline (refinements)
-- [x] Output slots from preceding string literals (simplified label; labels override var names)
-- [x] Output slots from function names when value expr is a call (e.g. printf i, hex(i), chr(i) → i, hex, chr)
-- [x] Multiple slots per expr when Concat/multi-ref (e.g. print $1 $2 → columns 1–2)
-- [x] Range with optional over_key: jpath-driven loop bound → "for all &lt;path&gt;: select" (path = jpath path, leading dot trimmed)
-- [x] No special-case idiom detection; explanations from reductions only
-- [x] Plan doc for stats + JSON phrasing: `docs/explain-output-slot-analysis.md` (Part B to do)
-- [x] Omit redundant Select when it only repeats the transform verb (e.g. print gensub(...) → "gensub ..." not "gensub ..., gensub")
-- [x] JSON extract phrase includes path(s): "JSON extract (.ms)" or "JSON extract (.method, .path)"
-- [x] End-user wording throughout: pattern extract (not regex), matching rows / rows without a match (not semi/anti-join), slot display names (ord→code point, chr→character, hex→hex value). Plan: docs/explain-end-user-plan.md
+#### Explain module
+- [x] `--explain` flag: terse one-line program description from AST analysis
+- [x] Simplified from 3-stage pipeline (lower → reduce → render, 3,013 lines in
+  `src/explain/`) to single-pass AST pattern detection (`src/explain.rs`, ~1,400
+  lines of code + 550 lines of tests). All 67 test assertions preserved.
+- [x] Eliminated Op enum (27 variants), 12 reduction passes, and significance tags
+- [x] Deduplicated `unwrap_coercion` (now `pub(crate)` in `analyze.rs`)
+- [x] Deleted `expr_text` (90-line AST→text formatter duplicating `analyze::expr_to_source`)
+- [x] Direct AST pattern detection: dedup, join/semi/anti, count, histogram/stats,
+  frequency, aggregation, sum, transform, select, filter, range, iterate fields,
+  rewrite, collect, reformat, numbered lines, extract, timing
+- [x] Plan: `docs/explain-simplify-plan.md`
+- [x] Verb-first phrasing: `select columns 1–2`, `count lines`, `deduplicate by`,
+  `number lines`, `collect lines`, `rewrite fields`, `pass through`
+- [x] Filter-first flow: `where /pattern/: select columns 1–2` (filter → action)
+- [x] Clean named columns: `$cpu-usage` → `cpu-usage` (strip `$` from non-numeric refs)
+- [x] Integrated jpath sources: `histogram of ms` instead of `histogram, JSON extract (.ms)`
