@@ -1137,7 +1137,7 @@ impl<'a> Executor<'a> {
                 _ => String::new(),
             };
             if is_histogram && !source.is_empty() {
-                format!("Histogram — {source}")
+                format!("Histogram of {source}")
             } else if is_histogram {
                 "Histogram".to_string()
             } else {
