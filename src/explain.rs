@@ -77,7 +77,7 @@ impl ExplainContext {
         }
         if let Some(ref f) = self.field_sep {
             let display = f.replace('\t', "\\t").replace('\n', "\\n");
-            parts.push(format!("-F '{display}'"));
+            parts.push(format!("delim: {display}"));
         }
         match self.files.len() {
             0 => {}
@@ -2658,7 +2658,7 @@ mod tests {
     #[test]
     fn env_field_sep() {
         let ctx = ExplainContext::from_cli("line", false, Some(":"), &[]);
-        assert_eq!(ex_ctx("{ print $1 }", &ctx), "select column 1 (-F ':')");
+        assert_eq!(ex_ctx("{ print $1 }", &ctx), "select column 1 (delim: :)");
     }
 
     #[test]
