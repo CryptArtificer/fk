@@ -97,8 +97,8 @@ show $FK -F, -H '{ collect(a, $units) }
 END { norm(a); print "  normalized:", join(a, ", ") }' "$TMPDIR/sales.csv"
 echo ""
 
-echo "collect → runtotal → plotbox (cumulative revenue chart):"
-show $FK -F, -H '{ collect(a, $revenue) }
-END { runtotal(a); print plotbox(hist(a), 30) }' "$TMPDIR/sales.csv"
+echo "collect → bottom (trim outliers) → histogram:"
+show $FK '{ collect(a, $1) }
+END { bottom(a, 12); print plotbox(hist(a), 30) }' "$TMPDIR/latencies.txt"
 
 printf "\n${C_BOLD}Done.${C_RESET} 6 new builtins + 2 patterns + sorted for-in.\n"
