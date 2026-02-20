@@ -208,3 +208,4 @@
 - [x] Plan doc for stats + JSON phrasing: `docs/explain-output-slot-analysis.md` (Part B to do)
 - [x] Omit redundant Select when it only repeats the transform verb (e.g. print gensub(...) → "gensub ..." not "gensub ..., gensub")
 - [x] JSON extract phrase includes path(s): "JSON extract (.ms)" or "JSON extract (.method, .path)"
+- [x] End-user wording throughout: pattern extract (not regex), matching rows / rows without a match (not semi/anti-join), slot display names (ord→code point, chr→character, hex→hex value). Plan: docs/explain-end-user-plan.md

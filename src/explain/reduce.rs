@@ -89,15 +89,15 @@ fn try_join(desc: &mut Desc) -> bool {
         Op::Filter(t) => t.as_str(),
         _ => "",
     });
-    let kind = match second_pat {
-        Some(p) if p.contains('!') && p.contains("in") => "anti-join",
-        Some(p) if p.contains("in") => "semi-join",
-        _ => "join",
+    let (kind, display_phrase) = match second_pat {
+        Some(p) if p.contains('!') && p.contains("in") => ("anti-join", "rows without a match"),
+        Some(p) if p.contains("in") => ("semi-join", "matching rows"),
+        _ => ("join", "join"),
     };
 
     let text = match key {
-        Some(k) => format!("{kind} on {k}"),
-        None => kind.to_string(),
+        Some(k) => format!("{} on {}", display_phrase, k),
+        None => display_phrase.to_string(),
     };
     desc.begin.clear();
     desc.rules.clear();
@@ -383,8 +383,8 @@ fn reduce_extract(desc: &mut Desc) {
         });
 
         let extract = match (has_match, has_jpath && !jpath_in_select, has_fmt) {
-            (true, _, true) => Some("regex extract + format".into()),
-            (true, _, false) => Some("regex extract".into()),
+            (true, _, true) => Some("pattern extract + format".into()),
+            (true, _, false) => Some("pattern extract".into()),
             (false, true, true) => {
                 let paths = format_jpath_paths(&jpath_paths);
                 Some(if paths.is_empty() {

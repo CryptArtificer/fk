@@ -175,7 +175,8 @@ Phase 19: Explain module — src/explain/ (lower → reduce → render). No spec
     → "for all path: select"). reduce.rs: pattern normalization, Emit→Select
     with dedup preserving order. render.rs: Phrase/Tag, subsumption, budget.
   67 tests. SubGsub → Transform("replace /pat/ → repl"). Render omits Select when it only repeats the transform verb. Extract
-    includes jpath path(s) (e.g. "JSON extract (.ms)"). Plan doc: docs/explain-output-slot-analysis.md (stats+JSON to do).
+    includes jpath path(s) (e.g. "JSON extract (.ms)"); "regex" → "pattern" (pattern extract). Join: semi/anti → "matching rows"
+    / "rows without a match". Slot names: ord/chr/hex → code point/character/hex value (end-user wording). Plan: docs/explain-end-user-plan.md.
 
 ### Future ideas (explored, deferred)
 

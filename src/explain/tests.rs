@@ -207,7 +207,7 @@ fn join() {
 fn anti_join() {
     assert_eq!(
         ex("NR==FNR{skip[$1]=1; next} !($1 in skip)"),
-        "anti-join on column 1",
+        "rows without a match on column 1",
     );
 }
 
@@ -215,7 +215,7 @@ fn anti_join() {
 fn semi_join() {
     assert_eq!(
         ex("NR==FNR{keep[$1]=1; next} $1 in keep"),
-        "semi-join on column 1",
+        "matching rows on column 1",
     );
 }
 
@@ -275,7 +275,7 @@ fn idiom_ascii_table() {
             print ""
         }
     "#);
-    assert_eq!(out, "range 33..126: i, hex, chr");
+    assert_eq!(out, "range 33..126: i, hex value, character");
 }
 
 #[test]
@@ -284,7 +284,7 @@ fn idiom_per_char_ord_hex() {
     let out = ex(r#"
         { for (i=1; i<=length($0); i++) { c=substr($0,i,1); printf "  %s → %d → %s\n", c, ord(c), hex(ord(c)) } }
     "#);
-    assert_eq!(out, "range: c, ord, hex");
+    assert_eq!(out, "range: c, code point, hex value");
 }
 
 #[test]
@@ -292,11 +292,11 @@ fn idiom_generic_var_names() {
     let ascii = ex(r#"
         BEGIN { for (k=33; k<=126; k++) printf "%s %s\n", chr(k), hex(k) }
     "#);
-    assert_eq!(ascii, "range 33..126: chr, hex");
+    assert_eq!(ascii, "range 33..126: character, hex value");
     let perchar = ex(r#"
         { for (pos=1; pos<=length($0); pos++) { ch=substr($0,pos,1); printf "%s %d %s\n", ch, ord(ch), hex(ord(ch)) } }
     "#);
-    assert_eq!(perchar, "range: ch, ord, hex");
+    assert_eq!(perchar, "range: ch, code point, hex value");
 }
 
 // ── Extract ─────────────────────────────────────────────────────
@@ -305,7 +305,7 @@ fn idiom_generic_var_names() {
 fn regex_extract_format() {
     assert_eq!(
         ex("{ match($0, \"pattern\", c); printf \"%s\\n\", c[1] }"),
-        "regex extract + format",
+        "pattern extract + format",
     );
 }
 
@@ -320,7 +320,7 @@ fn capture_filter_most_significant() {
         "filter must be first and use generic label; got {:?}",
         out,
     );
-    assert!(out.contains("regex extract"), "expected extract in {:?}", out);
+    assert!(out.contains("pattern extract"), "expected extract in {:?}", out);
 }
 
 #[test]

@@ -290,11 +290,22 @@ fn looks_like_json_paths(fields: &[String]) -> bool {
     any_dotted && none_numeric
 }
 
+/// Builtin names that appear as output slots get a short end-user label (explain is for the reader, not the programmer).
+fn slot_display_name(name: &str) -> &str {
+    match name {
+        "ord" => "code point",
+        "chr" => "character",
+        "hex" => "hex value",
+        _ => name,
+    }
+}
+
 /// Format a field list as title-style: "column N" / "columns N–M".
 ///   ["1"]         → "column 1"
 ///   ["1","2","3"] → "columns 1–3"
 ///   ["1","3"]     → "columns 1, 3"
 ///   ["host","cpu"]→ "host, cpu"
+/// Non-numeric slot names (e.g. from function calls) are passed through slot_display_name for end-user wording.
 fn format_field_list(fields: &[String]) -> String {
     let nums: Option<Vec<usize>> = fields.iter().map(|f| f.parse::<usize>().ok()).collect();
     if let Some(ref idx) = nums {
@@ -314,7 +325,11 @@ fn format_field_list(fields: &[String]) -> String {
         };
         format!("{prefix}{body}")
     } else {
-        fields.join(", ")
+        fields
+            .iter()
+            .map(|f| slot_display_name(f).to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 }
 
