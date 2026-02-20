@@ -2671,3 +2671,41 @@ fn norm_returns_name_for_chaining() {
     );
     assert_eq!(rt.get_var("result"), "a");
 }
+
+// --- window ---
+
+#[test]
+fn window_fills_up() {
+    let rt = eval(
+        r#"{ window(w, 3, $1) } END { result = join(w, ",") }"#,
+        &["10", "20", "30"],
+    );
+    assert_eq!(rt.get_var("result"), "10,20,30");
+}
+
+#[test]
+fn window_evicts_oldest() {
+    let rt = eval(
+        r#"{ window(w, 3, $1) } END { result = join(w, ",") }"#,
+        &["10", "20", "30", "40", "50"],
+    );
+    assert_eq!(rt.get_var("result"), "30,40,50");
+}
+
+#[test]
+fn window_returns_size() {
+    let rt = eval(
+        r#"{ sz = window(w, 3, $1) } END { result = sz }"#,
+        &["1", "2", "3", "4"],
+    );
+    assert_eq!(rt.get_var("result"), "3");
+}
+
+#[test]
+fn window_with_mean() {
+    let rt = eval(
+        r#"{ window(w, 3, $1) } END { result = mean(w) }"#,
+        &["10", "20", "30", "40"],
+    );
+    assert_eq!(rt.get_var("result"), "30");
+}

@@ -162,6 +162,7 @@ impl<'a> Executor<'a> {
                     "bottom" => return self.builtin_top_bottom(args, true),
                     "runtotal" => return self.builtin_runtotal(args),
                     "norm" => return self.builtin_norm(args),
+                    "window" => return self.builtin_window(args),
                     "dump" => return self.builtin_dump(args),
                     "clk" | "clock" => return self.builtin_clock(),
                     "tic" | "start" => return self.builtin_start(args),

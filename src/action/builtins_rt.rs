@@ -677,6 +677,61 @@ impl<'a> Executor<'a> {
         Value::from_string(array_name)
     }
 
+    /// window(a, n, expr) — sliding window of the last n values. Each call appends
+    /// expr, evicts the oldest value if the window is full, and re-keys 1..size.
+    /// Returns the current window size.
+    pub(crate) fn builtin_window(&mut self, args: &[Expr]) -> Value {
+        if args.len() < 3 {
+            eprintln!("fk: window requires 3 arguments (array, n, expr)");
+            return Value::from_number(0.0);
+        }
+        let array_name = match &args[0] {
+            Expr::Var(n) => n.clone(),
+            _ => {
+                eprintln!("fk: window: first argument must be an array name");
+                return Value::from_number(0.0);
+            }
+        };
+        let capacity = self.eval_expr(&args[1]).to_number() as usize;
+        if capacity == 0 {
+            return Value::from_number(0.0);
+        }
+        let val = self.eval_expr(&args[2]);
+        let s = val.to_string_val();
+        if s.is_empty() {
+            return Value::from_number(self.rt.array_len(&array_name) as f64);
+        }
+        let n = builtins::to_number(&s);
+        if n.is_nan() {
+            return Value::from_number(self.rt.array_len(&array_name) as f64);
+        }
+
+        let current_len = self.rt.array_len(&array_name);
+        if current_len < capacity {
+            let key = (current_len + 1).to_string();
+            self.rt.set_array_value(&array_name, &key, val);
+            return Value::from_number((current_len + 1) as f64);
+        }
+
+        // Window is full: shift values left, put new value at end
+        let mut keys = self.rt.array_keys(&array_name);
+        smart_sort_keys(&mut keys);
+        let mut vals: Vec<Value> = keys
+            .iter()
+            .map(|k| self.rt.get_array_value(&array_name, k))
+            .collect();
+        if vals.len() >= capacity {
+            vals.drain(..vals.len() - capacity + 1);
+        }
+        vals.push(val);
+        self.rt.delete_array_all(&array_name);
+        for (i, v) in vals.into_iter().enumerate() {
+            self.rt
+                .set_array_value(&array_name, &(i + 1).to_string(), v);
+        }
+        Value::from_number(capacity as f64)
+    }
+
     /// slurp(file [, arr]) — read file into string, or into arr lines. Returns string or line count.
     pub(crate) fn builtin_slurp(&mut self, args: &[Expr]) -> Value {
         if args.is_empty() {
