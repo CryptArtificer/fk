@@ -4,15 +4,29 @@ use std::path::Path;
 use crate::analyze::{ProgramInfo, analyze, unwrap_coercion};
 use crate::parser::*;
 
-const BUDGET: usize = 60;
+const DEFAULT_BUDGET: usize = 60;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ExplainContext {
     pub input_mode: Option<String>,
     pub headers: bool,
     pub compressed: Option<String>,
     pub field_sep: Option<String>,
     pub files: Vec<String>,
+    pub budget: usize,
+}
+
+impl Default for ExplainContext {
+    fn default() -> Self {
+        Self {
+            input_mode: None,
+            headers: false,
+            compressed: None,
+            field_sep: None,
+            files: Vec::new(),
+            budget: DEFAULT_BUDGET,
+        }
+    }
 }
 
 impl ExplainContext {
@@ -46,6 +60,7 @@ impl ExplainContext {
             compressed,
             field_sep: field_sep.map(|s| s.to_string()),
             files: filenames,
+            budget: DEFAULT_BUDGET,
         }
     }
 
@@ -76,16 +91,17 @@ impl ExplainContext {
 }
 
 pub fn explain(program: &Program, ctx: Option<&ExplainContext>) -> String {
+    let budget = ctx.map_or(DEFAULT_BUDGET, |c| c.budget);
     let info = analyze(program);
     let env = ctx.and_then(|c| c.suffix());
-    let base = describe(program, &info);
+    let base = describe(program, &info, budget);
 
     match env.as_deref() {
         None => base,
-        Some(e) if base.is_empty() && char_len(e) <= BUDGET => e.to_string(),
+        Some(e) if base.is_empty() && char_len(e) <= budget => e.to_string(),
         Some(e) => {
             let combined = format!("{base} {e}");
-            if char_len(&combined) <= BUDGET {
+            if char_len(&combined) <= budget {
                 combined
             } else {
                 base
@@ -96,7 +112,7 @@ pub fn explain(program: &Program, ctx: Option<&ExplainContext>) -> String {
 
 // ── Single-pass pattern detection ───────────────────────────────
 
-fn describe(program: &Program, info: &ProgramInfo) -> String {
+fn describe(program: &Program, info: &ProgramInfo, budget: usize) -> String {
     let vs = &info.var_sources;
 
     if let Some(s) = try_dedup(program) {
@@ -145,7 +161,7 @@ fn describe(program: &Program, info: &ProgramInfo) -> String {
         detect_fallback(program, vs, &mut phrases);
     }
 
-    budget_join(&phrases, BUDGET)
+    budget_join(&phrases, budget)
 }
 
 // ── Whole-program idioms ────────────────────────────────────────
