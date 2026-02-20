@@ -149,12 +149,14 @@ fn collect_phrases(ops: &[Op], out: &mut Vec<Phrase>) {
                     _ => format!("range: {}", phrase.text),
                 };
             }
-            // Don't repeat the transform verb as the only output (e.g. "gensub ..., gensub" → "gensub ...")
-            if phrase.tag == Tag::Select
-                && transform_first_word.as_deref() == Some(phrase.text.as_str())
+            // Don't repeat the transform verb as the only output (e.g. "replace ..., gensub" → "replace ...")
+            let redundant = phrase.tag == Tag::Select
                 && !phrase.text.contains(',')
                 && !phrase.text.contains("column")
-            {
+                && (transform_first_word.as_deref() == Some(phrase.text.as_str())
+                    || (transform_first_word.as_deref() == Some("replace")
+                        && matches!(phrase.text.as_str(), "sub" | "gsub" | "gensub")));
+            if redundant {
                 continue;
             }
             out.push(phrase);

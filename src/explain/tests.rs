@@ -225,7 +225,7 @@ fn semi_join() {
 fn gsub_transform() {
     assert_eq!(
         ex("{ gsub(/foo/, \"bar\"); print }"),
-        "gsub /foo/ → \"bar\"",
+        "replace /foo/ → \"bar\"",
     );
 }
 
@@ -240,24 +240,24 @@ fn redacted_output_not_bare_var_name() {
             print "  redacted:", safe
         }
         "#);
-    assert!(out.contains("gensub"), "expected gensub in {:?}", out);
+    assert!(out.contains("replace"), "expected replace in {:?}", out);
     assert!(out.contains("original"), "expected 'original' (from literal) in {:?}", out);
     assert!(out.contains("redacted"), "expected 'redacted' (from literal) in {:?}", out);
 }
 
 #[test]
 fn transform_suppresses_filter_1() {
-    assert_eq!(ex("{sub(/\\r$/,\"\")};1"), "sub /\\r$/ → \"\"");
+    assert_eq!(ex("{sub(/\\r$/,\"\")};1"), "replace /\\r$/ → \"\"");
 }
 
 #[test]
 fn gensub_in_print() {
-    // print gensub(...) → gensub phrase only, not "gensub ..., gensub"
+    // print gensub(...) → "replace ..." only, not "replace ..., gensub"
     let out = ex(r#"{ print gensub("-", " | ", 2) }"#);
-    assert!(out.contains("gensub"), "expected gensub in {:?}", out);
+    assert!(out.contains("replace"), "expected replace in {:?}", out);
     assert!(!out.eq("transform"), "must not be generic 'transform'");
     assert!(
-        !out.ends_with(", gensub"),
+        !out.ends_with(", gensub") && !out.ends_with(", replace"),
         "must not repeat transform verb as output; got {:?}",
         out,
     );
@@ -516,7 +516,7 @@ fn compute_shows_fields() {
 fn multi_fragment() {
     assert_eq!(
         ex("/baz/ { gsub(/foo/, \"bar\"); print }"),
-        "gsub /foo/ → \"bar\", where /baz/",
+        "replace /foo/ → \"bar\", where /baz/",
     );
 }
 

@@ -337,8 +337,8 @@ fn reduce_transforms(desc: &mut Desc) {
         let mut transform_desc = None;
         for op in &rule.body {
             match op {
-                Op::SubGsub { kind, pat, repl } => {
-                    transform_desc = Some(format!("{kind} {pat} → {repl}"));
+                Op::SubGsub { pat, repl, .. } => {
+                    transform_desc = Some(format!("replace {pat} → {repl}"));
                 }
                 Op::Fn(name) if TRANSFORM_BUILTINS.contains(&name.as_str()) => {
                     if transform_desc.is_none() {
