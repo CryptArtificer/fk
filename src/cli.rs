@@ -64,9 +64,9 @@ pub fn parse_args() -> Args {
                 eprintln!("fk: -F requires an argument");
                 process::exit(1);
             }
-            field_separator = Some(args[i].clone());
+            field_separator = Some(interpret_escapes(&args[i]));
         } else if let Some(fs) = arg.strip_prefix("-F") {
-            field_separator = Some(fs.to_string());
+            field_separator = Some(interpret_escapes(fs));
         } else if arg == "-v" {
             i += 1;
             if i >= args.len() {
