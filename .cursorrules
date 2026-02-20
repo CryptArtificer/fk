@@ -4,9 +4,9 @@
 
 ## Bar for quality
 
-This is a flagship project. The standard is excellence: no shortcuts, no
-"fix-it" mentality. If a change doesn't meet that bar, don't ship it. Prefer
-explanation and a plan before implementation; get alignment, then build.
+The standard is excellence: no shortcuts, no "fix-it" mentality. If a change
+doesn't meet that bar, don't ship it. Prefer explanation and a plan before
+implementation; get alignment, then build.
 
 When you change code, update the non-code docs that describe the project
 (README.md, docs/progress.md, .cursorrules, and any relevant plan or design
