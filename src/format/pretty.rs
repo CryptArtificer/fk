@@ -3,7 +3,9 @@
 use crate::error::FkError;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
-use crate::parser::{BinOp, Block, Expr, FuncDef, Pattern, Program, Redirect, Rule, Statement};
+use crate::parser::{
+    BinOp, Block, Expr, FuncDef, Pattern, Program, Redirect, Rule, SortMode, Statement,
+};
 use std::fmt::Write;
 
 const INDENT: &str = "  ";
@@ -252,7 +254,7 @@ impl Pretty {
                     self.block(body);
                 }
             }
-            Statement::ForIn(var, arr, body) => {
+            Statement::ForIn(var, arr, sort_mode, body) => {
                 self.keyword("for");
                 self.space();
                 self.out.push('(');
@@ -262,6 +264,18 @@ impl Pretty {
                 self.space();
                 self.out.push_str(arr);
                 self.out.push(')');
+                if let Some(mode) = sort_mode {
+                    self.out.push(' ');
+                    self.out.push('@');
+                    self.out.push_str(match mode {
+                        SortMode::Asc => "sort",
+                        SortMode::Desc => "rsort",
+                        SortMode::NumAsc => "nsort",
+                        SortMode::NumDesc => "rnsort",
+                        SortMode::ValAsc => "val",
+                        SortMode::ValDesc => "rval",
+                    });
+                }
                 self.space();
                 if body.len() == 1 && !matches!(body[0], Statement::Block(_)) {
                     self.stmt(&body[0]);

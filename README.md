@@ -26,7 +26,9 @@ The pattern-action model is the same. Everything below is new.
 - **JSON navigation** — `jpath()` gives you jq-like path access from within a pattern-action program.
 - **Statistical builtins** — `sum`, `mean`, `median`, `stddev`, `variance`, `hist`, `percentile`, `quantile`, `iqm` on arrays.
 - **Quick plots** — `plot()` renders simple horizontal bars; `plotbox()` adds titles, axes, and boxed layout. Composable: `plotbox(hist(a))` chains naturally.
-- **Array builtins** — `asort`, `asorti`, `join`, `keys`, `vals`, `uniq`, `inv`, `tidy`, `shuf`, `diff`, `inter`, `union`, `seq`, `samp`.
+- **Array builtins** — `asort`, `asorti`, `join`, `keys`, `vals`, `uniq`, `inv`, `tidy`, `shuf`, `diff`, `inter`, `union`, `seq`, `samp`, `collect`, `top`, `bottom`, `runtotal`, `norm`, `window`.
+- **Sorted for-in** — `for (k in arr) @sort { ... }` with modifiers: `@sort`, `@rsort`, `@nsort`, `@rnsort`, `@val`, `@rval`.
+- **Pattern sugar** — `every N { ... }` fires every Nth record; `last N { ... }` replays the last N records after end-of-input.
 - **Diagnostics** — `dump(x)` inspects any variable or array to stderr. `clk()`, `tic(id)`, `toc(id)` for timing.
 - **Unicode-aware** — `length`, `substr`, `index`, and all string builtins count characters, not bytes.
 - **Transparent decompression** — gzip, zstd, bzip2, xz, and lz4 files are decompressed on the fly. No need to pipe through `zcat` or `zstdcat` first.
@@ -83,7 +85,7 @@ src/
 
 ## Progress
 
-Phases 0–16 complete. See [docs/progress.md](docs/progress.md) for the full
+Phases 0–20 complete. See [docs/progress.md](docs/progress.md) for the full
 checklist and [docs/roadmap.md](docs/roadmap.md) for the performance and completeness plan.
 
 ## Usage
@@ -202,6 +204,32 @@ echo "2025-01-15" | fk '{ match($0, "([0-9]+)-([0-9]+)-([0-9]+)", cap); print ca
 
 # Sort array values and join
 echo -e 'c\na\nb' | fk '{ a[NR]=$0 } END { asort(a); print join(a, ",") }'
+
+# ── Phase 20: Array convenience & language constructs ──
+
+# collect: per-record append into array (skips empty/NaN)
+seq 1 100 | fk '{ collect(a, $1) } END { print mean(a) }'
+
+# top/bottom: keep n largest/smallest values
+seq 1 100 | fk '{ collect(a, $1) } END { top(a, 5); print join(a, ",") }'
+
+# runtotal: running total (returns name for chaining)
+seq 1 5 | fk '{ collect(a, $1) } END { runtotal(a); print join(a, ",") }'
+
+# norm: normalize to 0..1
+echo -e "10\n50\n100" | fk '{ collect(a, $1) } END { norm(a); print join(a, ",") }'
+
+# window: sliding window + moving average
+seq 1 10 | fk '{ window(w, 3, $1); print mean(w) }'
+
+# every N: fire every Nth record
+seq 1 20 | fk 'every 5 { print NR, $0 }'
+
+# last N: process only the last N records
+seq 1 100 | fk 'last 3 { print }'
+
+# sorted for-in: deterministic iteration
+echo -e "c 3\na 1\nb 2" | fk '{ freq[$1]=$2 } END { for (k in freq) @val { print k, freq[k] } }'
 
 # typeof() introspection
 echo "" | fk 'BEGIN { x=42; y="hi"; z[1]=1; print typeof(x), typeof(y), typeof(z), typeof(w) }'

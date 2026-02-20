@@ -2,7 +2,8 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-use crate::builtins::format_printf;
+use crate::builtins::{self, format_printf};
+use crate::parser::SortMode;
 use crate::parser::{Block, Expr, FuncDef, Redirect, Statement};
 use crate::runtime::Value;
 
@@ -127,8 +128,44 @@ impl<'a> Executor<'a> {
                     }
                 }
             }
-            Statement::ForIn(var, array, body) => {
-                let keys = self.rt.array_keys(array);
+            Statement::ForIn(var, array, sort_mode, body) => {
+                let mut keys = self.rt.array_keys(array);
+                match sort_mode {
+                    None => {}
+                    Some(SortMode::Asc) => keys.sort(),
+                    Some(SortMode::Desc) => {
+                        keys.sort();
+                        keys.reverse();
+                    }
+                    Some(SortMode::NumAsc) => {
+                        keys.sort_by(|a, b| {
+                            let na = builtins::to_number(a);
+                            let nb = builtins::to_number(b);
+                            na.partial_cmp(&nb).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                    }
+                    Some(SortMode::NumDesc) => {
+                        keys.sort_by(|a, b| {
+                            let na = builtins::to_number(a);
+                            let nb = builtins::to_number(b);
+                            nb.partial_cmp(&na).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                    }
+                    Some(SortMode::ValAsc) => {
+                        keys.sort_by(|a, b| {
+                            let va = self.rt.get_array_value(array, a).to_number();
+                            let vb = self.rt.get_array_value(array, b).to_number();
+                            va.partial_cmp(&vb).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                    }
+                    Some(SortMode::ValDesc) => {
+                        keys.sort_by(|a, b| {
+                            let va = self.rt.get_array_value(array, a).to_number();
+                            let vb = self.rt.get_array_value(array, b).to_number();
+                            vb.partial_cmp(&va).unwrap_or(std::cmp::Ordering::Equal)
+                        });
+                    }
+                }
                 for key in keys {
                     self.rt.set_var(var, &key);
                     match self.exec_block(body) {

@@ -80,6 +80,7 @@ pub enum Token {
     Newline,
 
     // Special
+    At, // @ (sort modifier prefix)
     Eof,
 }
 
@@ -332,6 +333,10 @@ impl Lexer {
                 '$' => self.read_field()?,
                 _ if ch.is_ascii_digit() || ch == '.' => self.read_number()?,
                 _ if ch.is_ascii_alphabetic() || ch == '_' => self.read_ident(),
+                '@' => {
+                    self.advance_char();
+                    Token::At
+                }
                 _ => {
                     return Err(FkError::new(span, format!("unexpected character '{}'", ch)));
                 }

@@ -2760,3 +2760,50 @@ fn last_with_end() {
     );
     assert_eq!(rt.get_var("result"), "70");
 }
+
+// --- sorted for-in ---
+
+#[test]
+fn forin_sort_ascending() {
+    let rt = eval(
+        r#"BEGIN { a["c"]=3; a["a"]=1; a["b"]=2; for (k in a) @sort { result = result k } }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "abc");
+}
+
+#[test]
+fn forin_rsort_descending() {
+    let rt = eval(
+        r#"BEGIN { a["c"]=3; a["a"]=1; a["b"]=2; for (k in a) @rsort { result = result k } }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "cba");
+}
+
+#[test]
+fn forin_nsort_numeric() {
+    let rt = eval(
+        r#"BEGIN { a[10]=1; a[2]=2; a[1]=3; for (k in a) @nsort { result = result k "," } }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "1,2,10,");
+}
+
+#[test]
+fn forin_val_ascending() {
+    let rt = eval(
+        r#"BEGIN { a["x"]=30; a["y"]=10; a["z"]=20; for (k in a) @val { result = result k } }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "yzx");
+}
+
+#[test]
+fn forin_rval_descending() {
+    let rt = eval(
+        r#"BEGIN { a["x"]=30; a["y"]=10; a["z"]=20; for (k in a) @rval { result = result k } }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "xzy");
+}

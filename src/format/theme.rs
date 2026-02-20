@@ -204,6 +204,7 @@ pub fn token_style(t: &Token) -> Style {
         | Token::Comma
         | Token::Newline => Style::Delimiter,
 
+        Token::At => Style::Operator,
         Token::Eof => Style::Delimiter, // not emitted as segment
     }
 }

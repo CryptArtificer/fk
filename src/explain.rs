@@ -597,7 +597,7 @@ fn detect_capture_filter_recursive(block: &Block, filters: &mut Vec<String>) {
                 }
             }
             Statement::For(_, _, _, body)
-            | Statement::ForIn(_, _, body)
+            | Statement::ForIn(_, _, _, body)
             | Statement::While(_, body)
             | Statement::DoWhile(body, _) => {
                 detect_capture_filter_recursive(body, filters);
@@ -1014,7 +1014,7 @@ fn collect_deep_stmt_refs(stmt: &Statement, vs: &HashMap<String, Expr>, out: &mu
             }
         }
         Statement::For(_, _, _, body)
-        | Statement::ForIn(_, _, body)
+        | Statement::ForIn(_, _, _, body)
         | Statement::While(_, body)
         | Statement::DoWhile(body, _) => {
             for s in body {
@@ -1061,7 +1061,7 @@ fn collect_stmt_output_refs(stmt: &Statement, vs: &HashMap<String, Expr>, out: &
             }
         }
         Statement::For(_, _, _, body)
-        | Statement::ForIn(_, _, body)
+        | Statement::ForIn(_, _, _, body)
         | Statement::While(_, body)
         | Statement::DoWhile(body, _) => {
             collect_block_output_refs(body, vs, out);
@@ -1084,7 +1084,7 @@ fn scan_block_accum(
         match stmt {
             Statement::Expression(e) => scan_accum(e, vs, accum, freq, simple),
             Statement::For(_, _, _, body)
-            | Statement::ForIn(_, _, body)
+            | Statement::ForIn(_, _, _, body)
             | Statement::While(_, body)
             | Statement::DoWhile(body, _) => scan_block_accum(body, vs, accum, freq, simple),
             Statement::If(_, t, e) => {
@@ -1214,7 +1214,7 @@ fn stmt_calls_fn(stmt: &Statement, fname: &str) -> bool {
                     .is_some_and(|b| b.iter().any(|s| stmt_calls_fn(s, fname)))
         }
         Statement::For(_, _, _, body)
-        | Statement::ForIn(_, _, body)
+        | Statement::ForIn(_, _, _, body)
         | Statement::While(_, body)
         | Statement::DoWhile(body, _) => body.iter().any(|s| stmt_calls_fn(s, fname)),
         Statement::Block(b) => b.iter().any(|s| stmt_calls_fn(s, fname)),
@@ -1330,7 +1330,7 @@ fn collect_fn_names_stmt(stmt: &Statement, fns: &mut Vec<String>) {
                 }
             }
         }
-        Statement::For(_, _, _, body) | Statement::ForIn(_, _, body) => {
+        Statement::For(_, _, _, body) | Statement::ForIn(_, _, _, body) => {
             for s in body {
                 collect_fn_names_stmt(s, fns);
             }

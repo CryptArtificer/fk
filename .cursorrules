@@ -23,8 +23,8 @@ incrementally as a learning exercise. The user values:
 ## Current state
 
 - **~17,000 lines of Rust** across 33 source files
-- **457 Rust + 152 shell tests**, zero warnings, clippy clean
-- **Phases 0–20 in progress** (20 = array convenience & language constructs)
+- **480 Rust + 152 shell tests**, zero warnings, clippy clean
+- **Phases 0–20 complete** (20 = array convenience & language constructs)
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
 
@@ -69,9 +69,9 @@ builtins/json.rs     — jpath() with JSON parser, path evaluator, iteration
 - `RecordReader` trait returns `Record { text, fields: Option<Vec<String>> }`
   so structured readers (CSV/JSON) can pre-split fields
 - Builtins that need runtime access (sub, gsub, split, close, gensub, jpath 3-arg, system,
-  stats (hist), bitwise, asort, keys, vals, uniq, inv, tidy, shuf, diff, inter, union,
-  seq, samp, slurp) live in action/builtins_rt.rs; pure builtins go through
-  builtins::call_builtin
+ stats (hist), bitwise, asort, keys, vals, uniq, inv, tidy, shuf, diff, inter, union,
+ seq, samp, slurp, collect, top, bottom, runtotal, norm, window) live in
+ action/builtins_rt.rs; pure builtins go through builtins::call_builtin
 - Lexer uses O(1) incremental line/col tracking; produces `Spanned` tokens (token + Span)
 - Parser/lexer errors are structured `FkError` (span + message, implements Display + Error)
 - Runtime stores everything as strings; to_number() coerces on demand (awk semantics)
@@ -157,6 +157,7 @@ Phase 20: Array convenience & language constructs — collect(a, expr): per-reco
  window(a, n, expr): sliding window of last n values.
  every N { block }: pattern sugar for NR % N == 0.
  last N { block }: buffer last N records, replay after end-of-input.
+ Sorted for-in: for (k in arr) @sort/@rsort/@nsort/@rnsort/@val/@rval.
 Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
   (array_sources + var_sources in ProgramInfo, one level of variable
   indirection), combined with FILENAME at hist() time. Smart formatting:

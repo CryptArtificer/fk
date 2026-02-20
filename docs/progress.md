@@ -239,3 +239,4 @@
 - [x] `window(a, n, expr)` — sliding window of last n values, re-keyed 1..n
 - [x] `every N { block }` — pattern sugar for `NR % N == 0` (fires every Nth record)
 - [x] `last N { block }` — buffer last N records, replay after end-of-input
+- [x] Sorted `for (k in arr) @sort` — deterministic iteration with `@sort`, `@rsort`, `@nsort`, `@rnsort`, `@val`, `@rval`

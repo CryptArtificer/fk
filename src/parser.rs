@@ -30,6 +30,16 @@ pub struct Rule {
 /// A block is a list of statements.
 pub type Block = Vec<Statement>;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SortMode {
+    Asc,
+    Desc,
+    NumAsc,
+    NumDesc,
+    ValAsc,
+    ValDesc,
+}
+
 #[derive(Debug, Clone)]
 pub enum Pattern {
     Regex(String),
@@ -58,7 +68,7 @@ pub enum Statement {
         Option<Box<Statement>>,
         Block,
     ),
-    ForIn(String, String, Block),
+    ForIn(String, String, Option<SortMode>, Block),
     Delete(String, Expr),
     DeleteAll(String),
     Next,
@@ -539,6 +549,40 @@ impl Parser {
         }
     }
 
+    fn parse_sort_modifier(&mut self) -> Result<Option<SortMode>, FkError> {
+        if !self.check(&Token::At) {
+            return Ok(None);
+        }
+        self.advance(); // consume @
+        match self.current() {
+            Token::Ident(s) => {
+                let mode = match s.as_str() {
+                    "sort" | "asc" => SortMode::Asc,
+                    "rsort" | "desc" => SortMode::Desc,
+                    "nsort" | "numasc" => SortMode::NumAsc,
+                    "rnsort" | "numdesc" => SortMode::NumDesc,
+                    "val" | "valasc" => SortMode::ValAsc,
+                    "rval" | "valdesc" => SortMode::ValDesc,
+                    other => {
+                        return Err(FkError::new(
+                            self.current_span(),
+                            format!(
+                                "unknown sort modifier '@{}'. Use @sort, @rsort, @nsort, @rnsort, @val, or @rval",
+                                other
+                            ),
+                        ));
+                    }
+                };
+                self.advance();
+                Ok(Some(mode))
+            }
+            _ => Err(FkError::new(
+                self.current_span(),
+                "expected sort modifier name after '@'",
+            )),
+        }
+    }
+
     fn parse_for(&mut self) -> Result<Statement, FkError> {
         self.advance(); // consume 'for'
         self.expect(&Token::LParen)?;
@@ -552,13 +596,14 @@ impl Parser {
                 if let Token::Ident(arr) = self.current().clone() {
                     self.advance();
                     self.expect(&Token::RParen)?;
+                    let sort_mode = self.parse_sort_modifier()?;
                     self.skip_terminators();
                     let body = if self.check(&Token::LBrace) {
                         self.parse_brace_block()?
                     } else {
                         vec![self.parse_statement()?]
                     };
-                    return Ok(Statement::ForIn(name, arr, body));
+                    return Ok(Statement::ForIn(name, arr, sort_mode, body));
                 }
             }
             // Backtrack — not a for-in

@@ -103,7 +103,7 @@ fn walk_stmt(stmt: &Statement, info: &mut ProgramInfo) {
             }
             walk_block(body, info);
         }
-        Statement::ForIn(_, _, body) => walk_block(body, info),
+        Statement::ForIn(_, _, _, body) => walk_block(body, info),
         Statement::Delete(_, e) => walk_expr(e, info),
         Statement::Exit(Some(e)) => walk_expr(e, info),
         Statement::Return(Some(e)) => walk_expr(e, info),
