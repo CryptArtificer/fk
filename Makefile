@@ -137,7 +137,8 @@ suite-perf-strict: release
 
 .PHONY: examples showcase \
         show-formats show-text show-stats show-sorting show-pipelines \
-        show-etl show-describe show-dashboards show-introspection
+        show-etl show-describe show-dashboards show-introspection \
+        show-io show-phase20
 
 examples: release
 	@for f in examples/0*.sh; do \
@@ -145,7 +146,7 @@ examples: release
 	done
 
 showcase: release
-	@for f in examples/1*.sh; do \
+	@for f in examples/1*.sh examples/2*.sh; do \
 		echo "" && echo "═══ Running $$f ═══" && echo "" && bash "$$f"; \
 	done
 
@@ -175,6 +176,12 @@ show-dashboards: release
 
 show-introspection: release
 	@bash examples/19-introspection.sh
+
+show-io: release
+	@bash examples/20-io-and-program-tools.sh
+
+show-phase20: release
+	@bash examples/21-phase20.sh
 
 # ── Run shortcuts ────────────────────────────────────────────────
 
@@ -283,7 +290,7 @@ help:
 	@echo "  make repl         Start interactive REPL"
 	@echo "  make run ARGS=..  Run fk with arguments"
 	@echo "  make examples     Run tutorial scripts (examples/01-07)"
-	@echo "  make showcase     Run all showcases (examples/11-19)"
+	@echo "  make showcase     Run all showcases (examples/11-21)"
 	@echo ""
 	@echo "Showcases (individual):"
 	@echo "  make show-formats       Data formats (CSV, TSV, JSON, Parquet)"
@@ -295,6 +302,8 @@ help:
 	@echo "  make show-describe      Schema detection and suggestions"
 	@echo "  make show-dashboards    Dashboard / reporting"
 	@echo "  make show-introspection Introspection: typeof, dump, tic/toc"
+	@echo "  make show-io            I/O and program tools"
+	@echo "  make show-phase20       collect, top/bottom, norm, window, every/last, sorted for-in"
 	@echo ""
 	@echo "Other:"
 	@echo "  make ci           Full CI check (fmt, clippy, test)"

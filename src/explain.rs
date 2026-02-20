@@ -76,7 +76,14 @@ impl ExplainContext {
             parts.push("headers".into());
         }
         if let Some(ref f) = self.field_sep {
-            let display = f.replace('\t', "\\t").replace('\n', "\\n");
+            let display = match f.as_str() {
+                "," => "comma".into(),
+                "\t" => "tab".into(),
+                " " => "space".into(),
+                "|" => "pipe".into(),
+                ";" => "semicolon".into(),
+                other => format!("\"{}\"", other.replace('\n', "\\n")),
+            };
             parts.push(format!("delim: {display}"));
         }
         match self.files.len() {
@@ -2659,7 +2666,7 @@ mod tests {
     #[test]
     fn env_field_sep() {
         let ctx = ExplainContext::from_cli("line", false, Some(":"), &[]);
-        assert_eq!(ex_ctx("{ print $1 }", &ctx), "select column 1 (delim: :)");
+        assert_eq!(ex_ctx("{ print $1 }", &ctx), "select column 1 (delim: \":\")");
     }
 
     #[test]

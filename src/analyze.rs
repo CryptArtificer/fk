@@ -204,6 +204,15 @@ fn walk_expr(expr: &Expr, info: &mut ProgramInfo) {
             walk_expr(f, info);
         }
         Expr::Sprintf(args) | Expr::FuncCall(_, args) => {
+            if let Expr::FuncCall(name, fargs) = expr
+                && name == "collect"
+                && fargs.len() >= 2
+                && let Expr::Var(arr) = &fargs[0]
+            {
+                info.array_sources
+                    .entry(arr.clone())
+                    .or_insert_with(|| fargs[1].clone());
+            }
             for a in args {
                 walk_expr(a, info);
             }
