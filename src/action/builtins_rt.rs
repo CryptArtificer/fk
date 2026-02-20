@@ -939,7 +939,7 @@ impl<'a> Executor<'a> {
             .info
             .array_sources
             .get(&array_name)
-            .map(|expr| build_array_description(expr, &filename, &self.info.var_sources))
+            .map(|expr| build_array_description(expr, &filename, &self.info.var_sources, 60))
             .unwrap_or_default();
         self.rt.set_meta(
             &out_name,
@@ -1144,12 +1144,20 @@ impl<'a> Executor<'a> {
         let total_width = label_width + 3 + box_width + 1;
         for text in [&title, &subtitle] {
             if !text.is_empty() {
-                let pad = if total_width > text.len() {
-                    (total_width - text.len()) / 2
+                let clen = text.chars().count();
+                let display = if clen > total_width {
+                    let trunc: String = text.chars().take(total_width.saturating_sub(1)).collect();
+                    format!("{trunc}…")
+                } else {
+                    text.clone()
+                };
+                let dlen = display.chars().count();
+                let pad = if total_width > dlen {
+                    (total_width - dlen) / 2
                 } else {
                     0
                 };
-                lines.push(format!("{:pad$}{text}", ""));
+                lines.push(format!("{:pad$}{display}", ""));
             }
         }
         lines.push(format!(

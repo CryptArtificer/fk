@@ -253,16 +253,19 @@ pub(crate) fn unwrap_coercion(expr: &Expr) -> &Expr {
 /// Build a human-readable data-source description from an array's RHS
 /// expression and the current FILENAME.  Used as a chart subtitle.
 ///
+/// The `budget` parameter caps the result length (in characters).
+///
 /// Smart cases:
-///   jpath($0, ".ms") + 0  from api.jsonl  →  "api.jsonl — [].ms"
-///   $3                     from data.csv   →  "data.csv — $3"
-///   $"latency"             from data.csv   →  "data.csv — latency"
-///   $1 + $2                from data.csv   →  "data.csv — $1 + $2"
-///   $1                     from stdin      →  "$1"
+///   jpath($0, ".ms") + 0  from api.jsonl  →  "ms — api.jsonl"
+///   $3                     from data.csv   →  "column 3 — data.csv"
+///   $"latency"             from data.csv   →  "latency — data.csv"
+///   $1 + $2                from data.csv   →  "columns 1–2 — data.csv"
+///   $1                     from stdin      →  "column 1"
 pub fn build_array_description(
     expr: &Expr,
     filename: &str,
     var_sources: &HashMap<String, Expr>,
+    budget: usize,
 ) -> String {
     let expr = unwrap_coercion(expr);
     let expr = if let Expr::Var(name) = expr {
@@ -272,15 +275,19 @@ pub fn build_array_description(
     };
     let base = friendly_filename(filename);
 
-    let source_part = describe_expr(expr);
+    let source_part = humanize_expr(expr);
     if base.is_empty() {
-        source_part
+        return source_part;
+    }
+    let full = format!("{source_part} — {base}");
+    if full.chars().count() <= budget {
+        full
     } else {
-        format!("{base} — {source_part}")
+        source_part
     }
 }
 
-fn describe_expr(expr: &Expr) -> String {
+fn humanize_expr(expr: &Expr) -> String {
     if let Expr::FuncCall(name, args) = expr
         && name == "jpath"
         && args.len() >= 2
@@ -288,18 +295,71 @@ fn describe_expr(expr: &Expr) -> String {
             if matches!(inner.as_ref(), Expr::NumberLit(n) if *n == 0.0))
         && let Expr::StringLit(path) = &args[1]
     {
-        return format!("[]{path}");
+        return path.trim_start_matches('.').to_string();
     }
 
     if let Expr::Field(inner) = expr {
         match inner.as_ref() {
-            Expr::NumberLit(n) => return format!("${}", *n as i64),
+            Expr::NumberLit(n) => {
+                let n = *n as i64;
+                return if n > 0 {
+                    format!("column {n}")
+                } else {
+                    format!("${n}")
+                };
+            }
             Expr::StringLit(col) => return col.clone(),
             _ => {}
         }
     }
 
-    expr_to_source(expr)
+    humanize_fields(&expr_to_source(expr))
+}
+
+fn humanize_fields(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'$' {
+            let start = i + 1;
+            if start < bytes.len() && bytes[start] == b'"' {
+                let name_start = start + 1;
+                if let Some(end) = s[name_start..].find('"') {
+                    out.push_str(&s[name_start..name_start + end]);
+                    i = name_start + end + 1;
+                    continue;
+                }
+            }
+            let mut end = start;
+            while end < bytes.len() && bytes[end].is_ascii_digit() {
+                end += 1;
+            }
+            if end > start {
+                let n: i64 = s[start..end].parse().unwrap_or(0);
+                if n > 0 {
+                    out.push_str("column ");
+                }
+                out.push_str(&s[start..end]);
+                i = end;
+                continue;
+            }
+            let mut end = start;
+            while end < bytes.len()
+                && (bytes[end].is_ascii_alphanumeric() || bytes[end] == b'_' || bytes[end] == b'-')
+            {
+                end += 1;
+            }
+            if end > start {
+                out.push_str(&s[start..end]);
+                i = end;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
 }
 
 fn friendly_filename(filename: &str) -> &str {
@@ -634,39 +694,39 @@ mod tests {
     fn description_jpath_with_file() {
         let info = analyze_program("{ ms = jpath($0, \".ms\") + 0; lat[NR] = ms }");
         let expr = info.array_sources.get("lat").unwrap();
-        let desc = build_array_description(expr, "api.jsonl", &info.var_sources);
-        assert_eq!(desc, "api.jsonl — [].ms");
+        let desc = build_array_description(expr, "api.jsonl", &info.var_sources, 60);
+        assert_eq!(desc, "ms — api.jsonl");
     }
 
     #[test]
     fn description_field_with_file() {
         let info = analyze_program("{ a[NR] = $3 }");
         let expr = info.array_sources.get("a").unwrap();
-        let desc = build_array_description(expr, "data.csv", &info.var_sources);
-        assert_eq!(desc, "data.csv — $3");
+        let desc = build_array_description(expr, "data.csv", &info.var_sources, 60);
+        assert_eq!(desc, "column 3 — data.csv");
     }
 
     #[test]
     fn description_field_stdin() {
         let info = analyze_program("{ a[NR] = $1 }");
         let expr = info.array_sources.get("a").unwrap();
-        let desc = build_array_description(expr, "", &info.var_sources);
-        assert_eq!(desc, "$1");
+        let desc = build_array_description(expr, "", &info.var_sources, 60);
+        assert_eq!(desc, "column 1");
     }
 
     #[test]
     fn description_named_column_with_file() {
         let info = analyze_program("{ a[NR] = $\"latency\" }");
         let expr = info.array_sources.get("a").unwrap();
-        let desc = build_array_description(expr, "metrics.csv", &info.var_sources);
-        assert_eq!(desc, "metrics.csv — latency");
+        let desc = build_array_description(expr, "metrics.csv", &info.var_sources, 60);
+        assert_eq!(desc, "latency — metrics.csv");
     }
 
     #[test]
     fn description_expr_with_file() {
         let info = analyze_program("{ a[NR] = $1 + $2 }");
         let expr = info.array_sources.get("a").unwrap();
-        let desc = build_array_description(expr, "data.csv", &info.var_sources);
-        assert_eq!(desc, "data.csv — $1 + $2");
+        let desc = build_array_description(expr, "data.csv", &info.var_sources, 60);
+        assert_eq!(desc, "column 1 + column 2 — data.csv");
     }
 }
