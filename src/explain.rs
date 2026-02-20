@@ -1444,17 +1444,29 @@ fn for_range_bounds(
     };
     if let Expr::NumberLit(lo) = init_stmt.1.as_ref()
         && let Some((lo_i, hi_i)) = match (cond.0.as_ref(), cond.1, cond.2.as_ref()) {
-            (Expr::Var(n), BinOp::Le | BinOp::Lt, Expr::NumberLit(hi)) if n == index_var => {
+            (Expr::Var(n), BinOp::Le, Expr::NumberLit(hi)) if n == index_var => {
                 Some((*lo as i64, *hi as i64))
             }
-            (Expr::Var(n), BinOp::Ge | BinOp::Gt, Expr::NumberLit(hi)) if n == index_var => {
+            (Expr::Var(n), BinOp::Lt, Expr::NumberLit(hi)) if n == index_var => {
+                Some((*lo as i64, *hi as i64 - 1))
+            }
+            (Expr::Var(n), BinOp::Ge, Expr::NumberLit(hi)) if n == index_var => {
                 Some((*hi as i64, *lo as i64))
             }
-            (Expr::NumberLit(hi), BinOp::Ge | BinOp::Gt, Expr::Var(n)) if n == index_var => {
-                Some((*hi as i64, *lo as i64))
+            (Expr::Var(n), BinOp::Gt, Expr::NumberLit(hi)) if n == index_var => {
+                Some((*hi as i64 + 1, *lo as i64))
             }
-            (Expr::NumberLit(hi), BinOp::Le | BinOp::Lt, Expr::Var(n)) if n == index_var => {
+            (Expr::NumberLit(hi), BinOp::Ge, Expr::Var(n)) if n == index_var => {
                 Some((*lo as i64, *hi as i64))
+            }
+            (Expr::NumberLit(hi), BinOp::Gt, Expr::Var(n)) if n == index_var => {
+                Some((*lo as i64, *hi as i64 - 1))
+            }
+            (Expr::NumberLit(hi), BinOp::Le, Expr::Var(n)) if n == index_var => {
+                Some((*hi as i64, *lo as i64))
+            }
+            (Expr::NumberLit(hi), BinOp::Lt, Expr::Var(n)) if n == index_var => {
+                Some((*hi as i64 + 1, *lo as i64))
             }
             _ => None,
         }
@@ -2567,7 +2579,7 @@ mod tests {
     fn timing() {
         assert_eq!(
             ex("BEGIN { tic(); for(i=0;i<100000;i++) x+=i; printf \"%.4f\\n\",toc() }"),
-            "range 0..100000: toc",
+            "range 0..99999: toc",
         );
     }
 
