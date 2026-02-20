@@ -1116,29 +1116,34 @@ impl<'a> Executor<'a> {
 
         let hist_meta = self.rt.get_meta(&array_name).cloned();
         let is_histogram = hist_meta.is_some();
-        let title = title_arg.unwrap_or_else(|| {
-            if is_histogram {
-                "Histogram".to_string()
-            } else {
-                String::new()
-            }
-        });
-        let subtitle = match &hist_meta {
-            Some(ArrayMeta::Histogram {
-                description,
-                source_name,
-                ..
-            }) => {
-                if !description.is_empty() {
-                    description.clone()
-                } else if !source_name.is_empty() {
-                    source_name.clone()
-                } else {
-                    String::new()
+        let has_custom_title = title_arg.is_some();
+        let title = if let Some(t) = title_arg {
+            t
+        } else if is_histogram {
+            "Histogram".to_string()
+        } else {
+            String::new()
+        };
+        let subtitle = if has_custom_title {
+            String::new()
+        } else {
+            match &hist_meta {
+                Some(ArrayMeta::Histogram {
+                    description,
+                    source_name,
+                    ..
+                }) => {
+                    if !description.is_empty() {
+                        description.clone()
+                    } else if !source_name.is_empty() {
+                        source_name.clone()
+                    } else {
+                        String::new()
+                    }
                 }
+                _ if !array_name.starts_with("__") => array_name.clone(),
+                _ => String::new(),
             }
-            _ if !array_name.starts_with("__") => array_name.clone(),
-            _ => String::new(),
         };
         let xlabel = xlabel_arg.unwrap_or_else(|| {
             if hist_meta.is_some() {
