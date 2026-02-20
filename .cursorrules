@@ -208,8 +208,7 @@ Phase 19b: Explain quality pass — systematic evaluation and fix of all
 
 F1. Data collection convenience:
   - slurp("-", a, col) — slurp a specific column from stdin into array
-  - collect(a, expr) — per-record append with auto-key, skip NaN/empty,
-    attach ArrayMeta marking it as numeric sequence
+  - collect(a, expr) ✓ (Phase 20)
   - Implicit column accumulation (COL[1] etc.) — probably too magical
 
 F2. Auto-print / smart output:
@@ -221,10 +220,10 @@ F2. Auto-print / smart output:
   - table(arr [, fmt]) — auto-aligned columnar output
 
 F3. Array math (for chaining):
-  - cumsum(a), norm(a), rank(a) — return array name for chaining
+  - runtotal(a) ✓, norm(a) ✓ (Phase 20), rank(a) — deferred
   - map(a, "expr"), filter(a, "expr") — expression-string transforms
   - scan(a, "expr") — running accumulator
-  All should follow the hist() pattern: mutate-and-return-name.
+  Remaining should follow the hist() pattern: mutate-and-return-name.
 
 ### Roadmap — performance & completeness
 

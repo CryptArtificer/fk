@@ -235,6 +235,8 @@ Patterns can be combined:
 .nf
 \fB$1 == "x" && $2 ~ /foo/    { ... }\fR      compound
 \fB/start/,/stop/              { ... }\fR      range (inclusive)
+\fBevery 5                     { ... }\fR      every Nth record \fI[fk]\fR
+\fBlast 10                     { ... }\fR      last N records \fI[fk]\fR
 .fi
 .
 .\" ─────────────────────────────────────────────────────────────
@@ -351,6 +353,7 @@ l l.
 \fBdo\fR { ... } \fBwhile\fR (cond)
 \fBfor\fR (init; cond; step) { ... }
 \fBfor\fR (key \fBin\fR array) { ... }
+\fBfor\fR (key \fBin\fR array) \fB@sort\fR { ... }   sorted iteration \fI[fk]\fR
 \fBbreak\fR   \fBcontinue\fR
 \fBnext\fR                              skip to next record
 \fBexit\fR [\fIcode\fR]                      run END block, then exit
@@ -576,6 +579,31 @@ Direction is automatic. Returns count.
 \fBsamp(\fIarr\fB,\fR \fIn\fB)\fR
 Keep \fIn\fR random elements, re-key as 1..\fIn\fR.
 Uses Fisher\-Yates partial shuffle. Returns \fIn\fR.
+.TP
+\fBcollect(\fIarr\fB,\fR \fIexpr\fB)\fR
+Append \fIexpr\fR to \fIarr\fR with auto-incrementing keys (1, 2, 3, ...).
+Skips NaN and empty-string values. Returns the new count.
+Replaces the common \fBa[++n] = $3\fR idiom. \fI[fk]\fR
+.TP
+\fBtop(\fIarr\fB,\fR \fIn\fB)\fR
+Keep the \fIn\fR largest values, re-key as 1..\fIn\fR. Returns count kept. \fI[fk]\fR
+.TP
+\fBbottom(\fIarr\fB,\fR \fIn\fB)\fR
+Keep the \fIn\fR smallest values, re-key as 1..\fIn\fR. Returns count kept. \fI[fk]\fR
+.TP
+\fBruntotal(\fIarr\fB)\fR
+Replace each value with the running total up to that point.
+Returns the array name for chaining (e.g. \fBplotbox(runtotal(a))\fR). \fI[fk]\fR
+.TP
+\fBnorm(\fIarr\fB)\fR
+Normalize values to 0..1 range (min\(->0, max\(->1).
+Returns the array name for chaining. \fI[fk]\fR
+.TP
+\fBwindow(\fIarr\fB,\fR \fIn\fB,\fR \fIexpr\fB)\fR
+Sliding window: maintain the last \fIn\fR values in \fIarr\fR.
+Each call appends \fIexpr\fR (skipping NaN/empty), evicts the oldest
+when full, and re-keys 1..\fIn\fR. Returns the current window size.
+Use with stats for moving averages: \fB{ window(w, 5, $3); print mean(w) }\fR. \fI[fk]\fR
 .
 .SS Statistics \fI[fk extensions]\fR
 .PP
@@ -684,6 +712,7 @@ x = arr["key"]
 \fBdelete\fR arr                  remove the entire array \fI[fk]\fR
 \fBlength\fR(arr)                 element count \fI[fk]\fR
 \fBfor\fR (k \fBin\fR arr) { ... }      iterate over keys
+\fBfor\fR (k \fBin\fR arr) \fB@sort\fR { ... }  sorted iteration \fI[fk]\fR
 \fBif\fR ("key" \fBin\fR arr) { ... }   membership test
 arr[i,j] = value              multi-dimensional (SUBSEP-joined key)
 .fi
@@ -886,6 +915,12 @@ Bitwise: \fBand()\fR, \fBor()\fR, \fBxor()\fR, \fBlshift()\fR, \fBrshift()\fR, \
 \fB\-\-describe\fR auto-detect format, infer schema, suggest programs
 .IP \(bu 2
 \fBslurp()\fR for reading files into strings or arrays
+.IP \(bu 2
+\fBcollect()\fR, \fBtop()\fR, \fBbottom()\fR, \fBruntotal()\fR, \fBnorm()\fR, \fBwindow()\fR for data collection and transforms
+.IP \(bu 2
+\fBevery N { ... }\fR and \fBlast N { ... }\fR pattern sugar
+.IP \(bu 2
+\fBfor (k in arr) @sort { ... }\fR with 6 sort modifiers
 .IP \(bu 2
 Transparent decompression of .gz, .zst, .bz2, .xz, .lz4 files
 .IP \(bu 2

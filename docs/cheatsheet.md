@@ -71,6 +71,8 @@ END { ... }            # runs once after input
 $2 == "x"              # expression
 $1 > 0 && $2 ~ /pat/  # compound
 /start/,/stop/         # range (inclusive)
+every N                # every Nth record (fk)
+last N                 # last N records of input (fk)
 ```
 
 ## Regular expressions
@@ -113,11 +115,22 @@ while (cond) { ... }
 do { ... } while (cond)
 for (init; cond; step) { ... }
 for (key in array) { ... }
+for (key in array) @sort { ... }   # sorted iteration (fk)
 break / continue
 next                           # skip to next record
 exit / exit(code)              # run END block, then exit
 nextfile                       # skip to next input file (fk)
 ```
+
+### Sort modifiers for `for-in` (fk extensions)
+| Modifier | Order |
+|----------|-------|
+| `@sort` | Keys ascending (alpha) |
+| `@rsort` | Keys descending (alpha) |
+| `@nsort` | Keys ascending (numeric) |
+| `@rnsort` | Keys descending (numeric) |
+| `@val` | Keys by ascending value |
+| `@rval` | Keys by descending value |
 
 ## Output
 
@@ -207,6 +220,12 @@ print ... > "/dev/stderr"   # write to stderr
 | `union(a, b)` | Set union: merge keys from `b` into `a` |
 | `seq(arr, from, to)` | Fill with integer range, re-key 1..N |
 | `samp(arr, n)` | Random n elements, re-key 1..n |
+| `collect(arr, expr)` | Append expr (skip NaN/empty), auto-key; returns count |
+| `top(arr, n)` | Keep n largest values, re-key 1..n |
+| `bottom(arr, n)` | Keep n smallest values, re-key 1..n |
+| `runtotal(arr)` | Running total in place; returns array name |
+| `norm(arr)` | Normalize to 0..1 in place; returns array name |
+| `window(arr, n, expr)` | Sliding window of last n values; returns size |
 
 ### Statistics (fk extensions)
 | Function | Description |
@@ -422,6 +441,32 @@ fk '{ print lpad($1, 12), rpad($2, 20), $3 }' report.txt
 
 # Invert a mapping
 fk 'BEGIN { a["US"]="United States"; a["UK"]="United Kingdom"; inv(a); print a }'
+
+# ── Phase 20: Array convenience & language constructs ──
+
+# Collect column values, then summarize
+fk '{ collect(a, $1) } END { print mean(a), median(a) }' data.txt
+
+# Top 5 largest values
+fk '{ collect(a, $3) } END { top(a, 5); print join(a, ", ") }' data.txt
+
+# Running total
+fk '{ collect(a, $1) } END { runtotal(a); print join(a, ",") }' nums.txt
+
+# Normalize values to 0..1
+fk '{ collect(a, $1) } END { norm(a); print join(a, " ") }' nums.txt
+
+# 5-record moving average
+fk '{ window(w, 5, $1); print mean(w) }' data.txt
+
+# Print every 10th line
+fk 'every 10 { print NR, $0 }' big.log
+
+# Process only the last 5 lines
+fk 'last 5 { print }' file
+
+# Frequency table sorted by count (descending)
+fk '{ a[$1]++ } END { for (k in a) @rval print k, a[k] }' file
 ```
 
 ## REPL commands
