@@ -1115,7 +1115,14 @@ impl<'a> Executor<'a> {
         let max_val = entries.iter().map(|(_, v)| *v).fold(0.0f64, f64::max);
 
         let hist_meta = self.rt.get_meta(&array_name).cloned();
-        let title = title_arg.unwrap_or_default();
+        let is_histogram = hist_meta.is_some();
+        let title = title_arg.unwrap_or_else(|| {
+            if is_histogram {
+                "Histogram".to_string()
+            } else {
+                String::new()
+            }
+        });
         let subtitle = match &hist_meta {
             Some(ArrayMeta::Histogram {
                 description,
