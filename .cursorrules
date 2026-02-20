@@ -156,6 +156,7 @@ Phase 20: Array convenience & language constructs — collect(a, expr): per-reco
  (returns name for chaining). norm(a): normalize to 0..1 (returns name).
  window(a, n, expr): sliding window of last n values.
  every N { block }: pattern sugar for NR % N == 0.
+ last N { block }: buffer last N records, replay after end-of-input.
 Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
   (array_sources + var_sources in ProgramInfo, one level of variable
   indirection), combined with FILENAME at hist() time. Smart formatting:

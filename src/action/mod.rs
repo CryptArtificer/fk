@@ -66,6 +66,7 @@ pub struct Executor<'a> {
     pub(crate) epoch: Instant,
     pub(crate) timers: HashMap<String, Instant>,
     pub(crate) input: Option<input::Input>,
+    pub(crate) last_buffers: Vec<Option<(usize, std::collections::VecDeque<String>)>>,
 }
 
 impl<'a> Executor<'a> {
@@ -82,6 +83,7 @@ impl<'a> Executor<'a> {
                 regex_cache.insert(pat.clone(), re);
             }
         }
+        let last_buffers = vec![None; program.rules.len()];
         Executor {
             program,
             rt,
@@ -102,6 +104,7 @@ impl<'a> Executor<'a> {
             epoch: Instant::now(),
             timers: HashMap::new(),
             input: None,
+            last_buffers,
         }
     }
 
@@ -315,6 +318,39 @@ impl<'a> Executor<'a> {
                     false
                 }
             }
+            Some(Pattern::Last(n_expr)) => {
+                let capacity = self.eval_expr(n_expr).to_number() as usize;
+                let buf = self.last_buffers[rule_idx]
+                    .get_or_insert_with(|| (capacity, std::collections::VecDeque::with_capacity(capacity)));
+                buf.0 = capacity;
+                if buf.1.len() >= capacity {
+                    buf.1.pop_front();
+                }
+                buf.1.push_back(line.to_string());
+                false
+            }
+        }
+    }
+
+    /// Replay buffered records for `last N` rules after end-of-input.
+    pub fn run_last_rules(&mut self) {
+        let rule_count = self.program.rules.len();
+        for i in 0..rule_count {
+            let records = match self.last_buffers[i].take() {
+                Some((_, buf)) => buf,
+                None => continue,
+            };
+            for text in records {
+                if self.exit_code.is_some() {
+                    return;
+                }
+                self.rt.set_record(&text);
+                let program = self.program;
+                if let Some(Signal::Exit(code)) = self.exec_block(&program.rules[i].action) {
+                    self.exit_code = Some(code);
+                    return;
+                }
+            }
         }
     }
 
@@ -322,7 +358,7 @@ impl<'a> Executor<'a> {
         match pattern {
             Pattern::Regex(pat) => self.regex_is_match(pat, line),
             Pattern::Expression(expr) => self.eval_expr(expr).is_truthy(),
-            Pattern::Range(_, _) => false,
+            Pattern::Range(_, _) | Pattern::Last(_) => false,
         }
     }
 }

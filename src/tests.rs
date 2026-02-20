@@ -19,6 +19,7 @@ fn eval(program_text: &str, input_lines: &[&str]) -> runtime::Runtime {
         };
         exec.run_record(&rec);
     }
+    exec.run_last_rules();
     exec.run_end();
 
     rt
@@ -47,6 +48,7 @@ fn eval_with_header(program_text: &str, fs: &str, input_lines: &[&str]) -> runti
         };
         exec.run_record(&rec);
     }
+    exec.run_last_rules();
     exec.run_end();
 
     rt
@@ -2728,4 +2730,33 @@ fn every_with_action() {
         &["a", "b", "c", "d", "e"],
     );
     assert_eq!(rt.get_var("result"), "bd");
+}
+
+// --- last ---
+
+#[test]
+fn last_keeps_tail() {
+    let rt = eval(
+        r#"last 3 { result = result $0 }"#,
+        &["a", "b", "c", "d", "e"],
+    );
+    assert_eq!(rt.get_var("result"), "cde");
+}
+
+#[test]
+fn last_fewer_than_n() {
+    let rt = eval(
+        r#"last 10 { result = result $0 }"#,
+        &["x", "y"],
+    );
+    assert_eq!(rt.get_var("result"), "xy");
+}
+
+#[test]
+fn last_with_end() {
+    let rt = eval(
+        r#"last 2 { sum += $1 } END { result = sum }"#,
+        &["10", "20", "30", "40"],
+    );
+    assert_eq!(rt.get_var("result"), "70");
 }

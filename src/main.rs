@@ -477,6 +477,7 @@ fn main() {
         }
     }
 
+    exec.run_last_rules();
     exec.run_end();
     if let Some(code) = exec.should_exit() {
         process::exit(code);

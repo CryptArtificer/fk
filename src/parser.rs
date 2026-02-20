@@ -35,6 +35,7 @@ pub enum Pattern {
     Regex(String),
     Expression(Expr),
     Range(Box<Pattern>, Box<Pattern>),
+    Last(Expr),
 }
 
 #[derive(Debug, Clone)]
@@ -281,6 +282,15 @@ impl Parser {
                 Box::new(Expr::NumberLit(0.0)),
             );
             return Ok(Pattern::Expression(expr));
+        }
+
+        // `last N` — buffer the last N records, replay after input ends
+        if let Token::Ident(s) = self.current()
+            && s == "last"
+        {
+            self.advance();
+            let n_expr = self.parse_primary()?;
+            return Ok(Pattern::Last(n_expr));
         }
 
         let first = match self.current() {

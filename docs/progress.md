@@ -238,3 +238,4 @@
 - [x] `norm(a)` — normalize values to 0..1, returns array name for chaining
 - [x] `window(a, n, expr)` — sliding window of last n values, re-keyed 1..n
 - [x] `every N { block }` — pattern sugar for `NR % N == 0` (fires every Nth record)
+- [x] `last N { block }` — buffer last N records, replay after end-of-input

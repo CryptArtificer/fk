@@ -120,6 +120,10 @@ impl Pretty {
                 self.space();
                 self.pattern(b);
             }
+            Pattern::Last(e) => {
+                self.out.push_str("last ");
+                self.expr(e, 0);
+            }
         }
     }
 

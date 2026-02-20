@@ -1771,6 +1771,7 @@ fn describe_pattern(pat: &Pattern) -> String {
         Pattern::Regex(s) => format!("/{s}/"),
         Pattern::Expression(e) => expr_pattern_text(e),
         Pattern::Range(a, b) => format!("{},{}", describe_pattern(a), describe_pattern(b)),
+        Pattern::Last(e) => format!("last {}", expr_pattern_text(e)),
     }
 }
 

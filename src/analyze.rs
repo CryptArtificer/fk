@@ -224,6 +224,7 @@ fn walk_pattern(pattern: &Pattern, info: &mut ProgramInfo) {
             walk_pattern(a, info);
             walk_pattern(b, info);
         }
+        Pattern::Last(e) => walk_expr(e, info),
     }
 }
 
