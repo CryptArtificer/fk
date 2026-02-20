@@ -1911,6 +1911,7 @@ fn slot_display_name(name: &str) -> &str {
         "ord" => "code point",
         "chr" => "character",
         "hex" => "hex value",
+        "toc" => "timed",
         _ => name,
     }
 }
@@ -2630,7 +2631,7 @@ mod tests {
     fn timing() {
         assert_eq!(
             ex("BEGIN { tic(); for(i=0;i<100000;i++) x+=i; printf \"%.4f\\n\",toc() }"),
-            "range 0..99999: toc",
+            "range 0..99999: timed",
         );
     }
 
