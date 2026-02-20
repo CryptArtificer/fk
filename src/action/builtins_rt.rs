@@ -628,6 +628,55 @@ impl<'a> Executor<'a> {
         Value::from_number(take as f64)
     }
 
+    /// runtotal(a) — replace each value with the running total up to that point.
+    /// Returns the array name for chaining (like hist()).
+    pub(crate) fn builtin_runtotal(&mut self, args: &[Expr]) -> Value {
+        let array_name = match extract_array_name(args) {
+            Some(n) => n,
+            None => {
+                eprintln!("fk: runtotal: argument must be an array name");
+                return Value::default();
+            }
+        };
+        let mut keys = self.rt.array_keys(&array_name);
+        smart_sort_keys(&mut keys);
+        let mut running = 0.0;
+        for k in &keys {
+            running += self.rt.get_array_value(&array_name, k).to_number();
+            self.rt
+                .set_array_value(&array_name, k, Value::from_number(running));
+        }
+        Value::from_string(array_name)
+    }
+
+    /// norm(a) — normalize values to 0..1 (min→0, max→1). Returns array name for chaining.
+    pub(crate) fn builtin_norm(&mut self, args: &[Expr]) -> Value {
+        let array_name = match extract_array_name(args) {
+            Some(n) => n,
+            None => {
+                eprintln!("fk: norm: argument must be an array name");
+                return Value::default();
+            }
+        };
+        let keys = self.rt.array_keys(&array_name);
+        if keys.is_empty() {
+            return Value::from_string(array_name);
+        }
+        let vals: Vec<f64> = keys
+            .iter()
+            .map(|k| self.rt.get_array_value(&array_name, k).to_number())
+            .collect();
+        let min = vals.iter().cloned().fold(f64::INFINITY, f64::min);
+        let max = vals.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let range = max - min;
+        for (k, v) in keys.iter().zip(vals.iter()) {
+            let normalized = if range == 0.0 { 0.0 } else { (v - min) / range };
+            self.rt
+                .set_array_value(&array_name, k, Value::from_number(normalized));
+        }
+        Value::from_string(array_name)
+    }
+
     /// slurp(file [, arr]) — read file into string, or into arr lines. Returns string or line count.
     pub(crate) fn builtin_slurp(&mut self, args: &[Expr]) -> Value {
         if args.is_empty() {

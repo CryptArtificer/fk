@@ -160,6 +160,8 @@ impl<'a> Executor<'a> {
                     "collect" => return self.builtin_collect(args),
                     "top" => return self.builtin_top_bottom(args, false),
                     "bottom" => return self.builtin_top_bottom(args, true),
+                    "runtotal" => return self.builtin_runtotal(args),
+                    "norm" => return self.builtin_norm(args),
                     "dump" => return self.builtin_dump(args),
                     "clk" | "clock" => return self.builtin_clock(),
                     "tic" | "start" => return self.builtin_start(args),

@@ -2622,3 +2622,52 @@ fn top_with_collect() {
     );
     assert_eq!(rt.get_var("result"), "9,5");
 }
+
+// --- runtotal ---
+
+#[test]
+fn runtotal_cumulative() {
+    let rt = eval(
+        r#"BEGIN { a[1]=1; a[2]=2; a[3]=3; a[4]=4; runtotal(a); result=join(a,",") }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "1,3,6,10");
+}
+
+#[test]
+fn runtotal_returns_name_for_chaining() {
+    let rt = eval(
+        r#"BEGIN { a[1]=10; a[2]=20; result = runtotal(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "a");
+}
+
+// --- norm ---
+
+#[test]
+fn norm_scales_to_zero_one() {
+    let rt = eval(
+        r#"BEGIN { a[1]=0; a[2]=50; a[3]=100; norm(a); result=join(a,",") }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "0,0.5,1");
+}
+
+#[test]
+fn norm_constant_values_become_zero() {
+    let rt = eval(
+        r#"BEGIN { a[1]=5; a[2]=5; a[3]=5; norm(a); result=join(a,",") }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "0,0,0");
+}
+
+#[test]
+fn norm_returns_name_for_chaining() {
+    let rt = eval(
+        r#"BEGIN { a[1]=1; a[2]=2; result = norm(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "a");
+}

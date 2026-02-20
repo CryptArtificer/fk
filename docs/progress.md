@@ -234,3 +234,5 @@
 #### Phase 20 — Array convenience & language constructs
 - [x] `collect(a, expr)` — per-record append with auto-key, skip NaN/empty, returns count
 - [x] `top(a, n)` / `bottom(a, n)` — keep largest/smallest n values, re-key 1..n
+- [x] `runtotal(a)` — running total (cumulative sum), returns array name for chaining
+- [x] `norm(a)` — normalize values to 0..1, returns array name for chaining
