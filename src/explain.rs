@@ -318,7 +318,8 @@ fn try_chart_stats(program: &Program, vs: &HashMap<String, Expr>) -> Option<Stri
 
 fn try_aggregation(program: &Program, vs: &HashMap<String, Expr>) -> Option<String> {
     let end = program.end.as_ref()?;
-    let has_for_in = end.iter().any(|s| matches!(s, Statement::ForIn(..)));
+    let has_for_in = end.iter().any(|s| matches!(s, Statement::ForIn(..)))
+        || block_calls_any(end, &["asort", "asorti"]);
 
     let mut accum: Option<(String, String)> = None; // (key, val)
     let mut freq: Option<String> = None; // key
@@ -1206,6 +1207,11 @@ fn collect_jpath_paths_expr(e: &Expr, paths: &mut Vec<String>) {
         }
         _ => {}
     }
+}
+
+fn block_calls_any(block: &Block, names: &[&str]) -> bool {
+    let fns = collect_fn_names_block(block);
+    fns.iter().any(|f| names.contains(&f.as_str()))
 }
 
 fn collect_fn_names_block(block: &Block) -> Vec<String> {

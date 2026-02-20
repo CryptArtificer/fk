@@ -675,8 +675,9 @@ impl<'a> Executor<'a> {
         Value::from_number(result as f64)
     }
 
-    /// asort(arr) — sort array by values, re-key with 1..N.
-    /// asorti(arr) — sort array by keys, store sorted keys as values with 1..N.
+    /// asort(arr [, dest]) — sort array by values, re-key with 1..N.
+    /// asorti(arr [, dest]) — sort array by keys, store sorted keys as values with 1..N.
+    /// With dest: writes to dest, leaves source intact.
     pub(crate) fn builtin_asort(&mut self, args: &[Expr], by_index: bool) -> Value {
         if args.is_empty() {
             eprintln!("fk: asort/asorti requires at least 1 argument");
@@ -689,6 +690,13 @@ impl<'a> Executor<'a> {
                 return Value::from_number(0.0);
             }
         };
+        let dest_name = args.get(1).and_then(|e| {
+            if let Expr::Var(name) = e {
+                Some(name.clone())
+            } else {
+                None
+            }
+        });
 
         let mut items: Vec<(String, String)> = self
             .rt
@@ -715,13 +723,14 @@ impl<'a> Executor<'a> {
         }
 
         let count = items.len();
-        self.rt.delete_array_all(&array_name);
+        let target = dest_name.as_deref().unwrap_or(&array_name);
+        self.rt.delete_array_all(target);
         for (i, (key, val)) in items.into_iter().enumerate() {
             let new_key = (i + 1).to_string();
             if by_index {
-                self.rt.set_array(&array_name, &new_key, &key);
+                self.rt.set_array(target, &new_key, &key);
             } else {
-                self.rt.set_array(&array_name, &new_key, &val);
+                self.rt.set_array(target, &new_key, &val);
             }
         }
         Value::from_number(count as f64)
