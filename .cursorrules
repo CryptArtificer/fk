@@ -32,7 +32,8 @@ incrementally as a learning exercise. The user values:
 
 ```
 main.rs               — CLI dispatch, record loop
-cli.rs                — argument parsing (-F, -f, -v, -i, -H, -d, --repl, --explain)
+cli.rs                — argument parsing (-F, -f, -v, -i, -H, -d, --repl, --explain),
+                        hidden --hierarchical-menu easter egg (RLE-encoded Great Auk logo)
 analyze.rs            — static AST analysis → ProgramInfo (field/NF/regex hints,
                         array_sources, var_sources)
 explain.rs            — single-pass AST → terse one-line description; ExplainContext,
@@ -158,6 +159,8 @@ Phase 20: Array convenience & language constructs — collect(a, expr): per-reco
  every N { block }: pattern sugar for NR % N == 0.
  last N { block }: buffer last N records, replay after end-of-input.
  Sorted for-in: for (k in arr) @sort/@rsort/@nsort/@rnsort/@val/@rval.
+ Hidden easter egg: --hierarchical-menu renders an RLE-encoded Great Auk
+ silhouette in black & white using Unicode half-block characters.
 Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
   (array_sources + var_sources in ProgramInfo, one level of variable
   indirection), combined with FILENAME at hist() time. Smart formatting:
