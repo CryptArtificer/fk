@@ -119,6 +119,9 @@ pub fn parse_args() -> Args {
         } else if arg == "--version" {
             println!("fk {}", env!("CARGO_PKG_VERSION"));
             process::exit(0);
+        } else if arg == "--hierarchical-menu" {
+            print_logo();
+            process::exit(0);
         } else if arg == "--highlight" {
             highlight = true;
         } else if arg == "--format" {
@@ -253,6 +256,67 @@ fn print_usage() {
     eprintln!("  fk '/error/ {{ print $2 }}' server.log");
     eprintln!("  fk -F: '!/^#/{{ u[$1]++ }} END {{ print u }}' /etc/passwd");
     eprintln!("    # split on ':', skip comments, unique users sorted");
+}
+
+fn print_logo() {
+    // RLE-encoded Great Auk silhouette: s=space, b=body, w=white. Rows separated by '|'.
+    const RLE: &str = "5s6w5s13w|3s3w4b7w11b4w|2s2w27b3w|s2w20b2w8b2w|2w21b3w8bw|w22b3w8b2w|5w30bw|4s3w28bw|6s7w3b2w5b6w6bw|12s3wb14w5bw|14sw2b13w5bw|14s2w2b12w5bw|15s2w2b7w2bw6b2w|16s2w2b6w10bw|17s2w2b6w9b3w|18s2wb6w11b2w|19s2wb5w12bw|20s2wb5w11b2w|21s2wb4w12b3w|22swb5w13b3w|22swb6w14b2w|22s2wb5w15b4w|22s2wb6w17b2w|22sw2b7w17b3w|22swb11w16b2w|22swb14w14b2w|22swb16w13b2w|22swb18w12b2w|22swb19w12b2w|22swb20w12b2w|22sw2b20w12bw|22s2wb21w11b2w|23swb22w11b2w|23sw2b21w12bw|23sw2b21w12b2w|23s2w2b20w13bw|24sw2b20w13b2w|24s2wb20w14b2w|25swb21w14bw|25s2wb7wb12w14b2w|26swb7wb12w15bw|26s2wb6w2b12w14bw|27sw3b4w2b12w14b2w|27s2w3b4wb13w14bw|28s2w3b3w2b12w14b2w|29sw4b3wb13w14bw|29s2w5b2wb13w13b2w|30s2w7b14w13bw|31s2w9b12w12b2w|32s2w10b11w12b2w|33s2w10b11w12b2w|34s2w10b11w12b2w|35sw11b11w12b2w|35s2w11b10w13b2w|36s2w11b10w13b2w|37sw12b9w14bw|37s2w12b8w14b2w|38sw13b8w14b2w|38s2w13b7w15b2w|39s2w13b7w12bw2b2w|40s2w12b7w13b2wbw|41s2w13b6w8b3wb4w|42s3w11b7w8b3wbw|38s8w11b6w8b5w|37s2w4b5w11b5w9bw|37sw8b3w11b5w8b2w|36s2w23b4w9b3w|36swb3w13b2w8b2w10b2w|36s5wb5w3b2w2b7w16b2w|39swb11w2b13w11bw|39s5w10bw11s13w|41sw12bw|40s2w12bw|40sw12b2w|40s3w10bw|41s2w9b2w|41sw10bw|41swb4w4b2w|41swb5w2b2w|41s3w2swb3w|46swbw|46swbw";
+
+    fn decode_rle(rle: &str) -> Vec<Vec<u8>> {
+        rle.split('|').map(|row| {
+            let mut out = Vec::new();
+            let bytes = row.as_bytes();
+            let mut i = 0;
+            while i < bytes.len() {
+                let mut n: usize = 0;
+                while i < bytes.len() && bytes[i].is_ascii_digit() {
+                    n = n * 10 + (bytes[i] - b'0') as usize;
+                    i += 1;
+                }
+                if n == 0 { n = 1; }
+                if i < bytes.len() {
+                    let v = match bytes[i] { b'b' => 2, b'w' => 1, _ => 0 };
+                    out.extend(std::iter::repeat_n(v, n));
+                    i += 1;
+                }
+            }
+            out
+        }).collect()
+    }
+
+    let rows = decode_rle(RLE);
+    let blk = "\x1b[30m";
+    let wht = "\x1b[97m";
+    let rst = "\x1b[0m";
+    println!("\n");
+    for pair in rows.chunks(2) {
+        let top = &pair[0];
+        let bot = if pair.len() > 1 { &pair[1] } else { &vec![] };
+        let w = top.len().max(bot.len());
+        let mut line = String::new();
+        for x in 0..w {
+            let t = top.get(x).copied().unwrap_or(0);
+            let b = bot.get(x).copied().unwrap_or(0);
+            match (t, b) {
+                (0, 0) => { line.push(' '); continue; }
+                (2, 2) => { line.push_str(blk); line.push('█'); }
+                (1, 1) => { line.push_str(wht); line.push('█'); }
+                (2, 1) => { line.push_str("\x1b[30;107m▀"); }
+                (1, 2) => { line.push_str("\x1b[97;40m▀"); }
+                (2, 0) => { line.push_str(blk); line.push('▀'); }
+                (0, 2) => { line.push_str(blk); line.push('▄'); }
+                (1, 0) => { line.push_str(wht); line.push('▀'); }
+                (0, 1) => { line.push_str(wht); line.push('▄'); }
+                _ => { line.push(' '); continue; }
+            }
+            line.push_str(rst);
+        }
+        println!(" {}", line.trim_end());
+    }
+    let v = env!("CARGO_PKG_VERSION");
+    println!(
+        "\n\x1b[2m  fk {v} — filter-kernel\n  in memory of the Great Auk\x1b[0m\n"
+    );
 }
 
 fn parse_input_mode(s: &str) -> InputMode {
