@@ -124,10 +124,8 @@ Fields from structured readers (CSV, TSV, JSON) are joined by \fBOFS\fR
 \fB\-O,\fR to preserve CSV.
 .
 .PP
-\fBBare function call auto-print:\fR when the program is a single
-function call without braces (e.g. \fBrev()\fR, \fBtolower($1)\fR),
-\fBfk\fR wraps it as \fB{print func(...)}\fR automatically.
-This makes \fBfk 'rev()' data.csv\fR print the result of each call.
+\fBBare function call:\fR a program without braces like \fBrev()\fR
+becomes \fB{print rev()}\fR automatically.
 .
 .\" ─────────────────────────────────────────────────────────────
 .SH OPTIONS
