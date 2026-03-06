@@ -209,11 +209,12 @@ Pretty\-print the program with indentation and line breaks, then exit.
 .TP
 \fB\-\-explain\fR
 Print a terse one\-line description of what the program does, then exit.
-Extracts semantic fragments from the AST (histogram, stats, frequency,
-aggregate, sum, filter, transform, unique, join), reduces redundancies,
-and renders within a 72\-character budget.  Environment\-aware: includes
-input format, compression, headers, and filenames when flags/files are
-given (e.g. \fBstats $2 (CSV, headers, sales.csv)\fR).
+.nf
+\fBfk \-\-explain '{ s += $1 } END { print s }'\fR
+  sum of column 1
+\fBfk \-\-explain \-H '{ a[$1]++ } END { print a }' users.csv\fR
+  frequency of column 1 (CSV, headers, users.csv)
+.fi
 .
 .TP
 \fB\-\-repl\fR
