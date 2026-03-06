@@ -231,6 +231,19 @@ seq 1 100 | fk 'last 3 { print }'
 # sorted for-in: deterministic iteration
 echo -e "c 3\na 1\nb 2" | fk '{ freq[$1]=$2 } END { for (k in freq) @val { print k, freq[k] } }'
 
+# rev(arr): reverse array elements
+seq 1 5 | fk '{ a[NR]=$1 } END { rev(a); print join(a, ",") }'
+
+# rev(): reverse fields of each row (CSV in, TSV out)
+fk -t 'rev()' data.csv
+
+# bare function call auto-print (no braces needed)
+fk 'tolower($1)' file.txt
+
+# -O sep: set output field separator; -t: tab output
+fk -t '{ print $2, $1 }' data.csv
+fk -O, '{ print $1, $3 }' data.tsv
+
 # typeof() introspection
 echo "" | fk 'BEGIN { x=42; y="hi"; z[1]=1; print typeof(x), typeof(y), typeof(z), typeof(w) }'
 

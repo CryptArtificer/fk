@@ -53,7 +53,7 @@ Sum a column
 View a CSV file
 .nf
 \fBfk data.csv\fR
-\fBfk \-H \-v 'OFS=\\t' data.csv\fR
+\fBfk \-H \-t data.csv\fR
 .fi
 .
 .TP
@@ -98,8 +98,14 @@ A filename of \fB\-\fR also means stdin.
 defaults to \fB{ print }\fR.
 This makes \fBfk data.csv\fR work as a quick viewer.
 Fields from structured readers (CSV, TSV, JSON) are joined by \fBOFS\fR
-(default: space); use \fB\-v 'OFS=\\t'\fR for tab output or
-\fB\-v 'OFS=,'\fR to preserve CSV.
+(default: space); use \fB\-t\fR for tab output or
+\fB\-O,\fR to preserve CSV.
+.
+.PP
+\fBBare function call auto-print:\fR when the program is a single
+function call without braces (e.g. \fBrev()\fR, \fBtolower($1)\fR),
+\fBfk\fR wraps it as \fB{print func(...)}\fR automatically.
+This makes \fBfk 'rev()' data.csv\fR print the result of each call.
 .
 .\" ─────────────────────────────────────────────────────────────
 .SH OPTIONS
