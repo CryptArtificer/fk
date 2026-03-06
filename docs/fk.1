@@ -234,7 +234,7 @@ Print the version number and exit.
 .\" ─────────────────────────────────────────────────────────────
 .SH INPUT MODE PRECEDENCE
 .
-When opening files, \fBfk\fR determines the input mode as follows:
+\fBfk\fR determines the input mode as follows:
 .
 .IP 1. 4
 \fB\-i\fR (explicit) always wins.
@@ -251,6 +251,14 @@ Compression wrappers (\fB.gz\fR, \fB.zst\fR, \fB.bz2\fR, \fB.xz\fR, \fB.lz4\fR)
 are stripped before matching.
 .IP 4. 4
 Default: line mode with whitespace splitting.
+.PP
+Auto-detection (step 3) only works with file arguments.
+Piped data has no extension, so stdin always falls through to the default.
+Use \fB\-i csv\fR or \fB\-F,\fR explicitly when piping CSV:
+.nf
+\fBcurl ... | fk \-i csv \-H '{ print $name }'\fR
+\fBcat data.csv | fk \-F, '{ print $2 }'\fR
+.fi
 .
 .\" ─────────────────────────────────────────────────────────────
 .SH PROGRAM STRUCTURE
