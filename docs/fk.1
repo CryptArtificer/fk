@@ -84,6 +84,13 @@ Dig into JSON
 .fi
 .
 .TP
+Compressed files (auto-decompressed)
+.nf
+\fBfk -H '{ print $name }' data.csv.gz\fR
+\fBfk '$3 > 100' logs.tsv.zst\fR
+.fi
+.
+.TP
 Describe unknown data
 .nf
 \fBfk \-\-describe mystery.csv.gz\fR
