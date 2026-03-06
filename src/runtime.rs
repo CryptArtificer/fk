@@ -382,6 +382,15 @@ impl Runtime {
         self.nf = self.fields.len();
     }
 
+    pub fn reverse_fields(&mut self) {
+        if self.fields_lazy {
+            self.materialize_fields();
+        }
+        self.fields.reverse();
+        self.fields_dirty = true;
+        self.record_text_valid = false;
+    }
+
     pub fn set_record(&mut self, line: &str) {
         self.record_text.clear();
         self.record_text.push_str(line);

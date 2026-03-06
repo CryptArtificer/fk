@@ -4,6 +4,7 @@
 
 ```sh
 fk [options] 'program' [file ...]
+fk [options] 'func(...)' [file ...]  # bare function call → {print func(...)}
 fk [options] file ...              # defaults to { print }
 fk -f progfile [file ...]          # read program from file
 fk --describe [file ...]           # sniff format, show schema & examples
@@ -17,7 +18,9 @@ fk --help / fk --version
 
 | Flag | Description |
 |------|-------------|
-| `-F sep` | Set field separator |
+| `-F sep` | Set input field separator |
+| `-O sep` | Set output field separator (OFS) |
+| `-t` | Tab-separated output (`-O '\t'`) |
 | `-f file` | Read program from file |
 | `-v var=val` | Set variable before execution |
 | `-i csv` | CSV input mode (RFC 4180) |
@@ -165,6 +168,7 @@ print ... > "/dev/stderr"   # write to stderr
 | `endswith(s, suffix)` | Returns 1 if s ends with suffix |
 | `repeat(s, n)` | Repeat string n times |
 | `rev(s)` | Reverse a string (unicode-aware) |
+| `rev()` | Reverse fields of current record, return new $0 |
 | `chr(n)` / `ord(s)` | Character ↔ codepoint |
 | `hex(n)` | Format number as hexadecimal (0x...) |
 | `lpad(s, width [, char])` | Left-pad to width (default: space) |

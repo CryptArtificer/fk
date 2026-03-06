@@ -111,6 +111,14 @@ Default is whitespace (runs of spaces/tabs, leading/trailing trimmed).
 A single character splits on that character exactly.
 .
 .TP
+\fB\-O\fR \fIsep\fR
+Set the output field separator (OFS).
+.
+.TP
+\fB\-t\fR
+Tab-separated output. Shorthand for \fB\-O\fR \(aq\\t\(aq.
+.
+.TP
 \fB\-f\fR \fIprogfile\fR
 Read the program from a file instead of the command line.
 If both \fB\-f\fR and an inline program are given, the inline argument
@@ -562,6 +570,9 @@ Randomize order, re-key as 1..N. Returns count.
 .TP
 \fBrev(\fIarr\fB)\fR
 Reverse element order, re-key as 1..N. Returns count.
+.TP
+\fBrev()\fR
+Reverse fields of the current record in place. Returns new \fB$0\fR.
 .TP
 \fBdiff(\fIa\fB,\fR \fIb\fB)\fR
 Set difference: remove from \fIa\fR any key present in \fIb\fR.

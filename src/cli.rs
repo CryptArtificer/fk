@@ -13,6 +13,7 @@ pub enum InputMode {
 #[derive(Debug)]
 pub struct Args {
     pub field_separator: Option<String>,
+    pub output_separator: Option<String>,
     pub assignments: Vec<(String, String)>,
     pub program: String,
     pub files: Vec<String>,
@@ -31,6 +32,7 @@ pub fn parse_args() -> Args {
     let args: Vec<String> = env::args().skip(1).collect();
 
     let mut field_separator: Option<String> = None;
+    let mut output_separator: Option<String> = None;
     let mut assignments: Vec<(String, String)> = Vec::new();
     let mut program: Option<String> = None;
     let mut files: Vec<String> = Vec::new();
@@ -67,6 +69,17 @@ pub fn parse_args() -> Args {
             field_separator = Some(interpret_escapes(&args[i]));
         } else if let Some(fs) = arg.strip_prefix("-F") {
             field_separator = Some(interpret_escapes(fs));
+        } else if arg == "-O" {
+            i += 1;
+            if i >= args.len() {
+                eprintln!("fk: -O requires an argument");
+                process::exit(1);
+            }
+            output_separator = Some(interpret_escapes(&args[i]));
+        } else if let Some(os) = arg.strip_prefix("-O") {
+            output_separator = Some(interpret_escapes(os));
+        } else if arg == "-t" || arg == "-tab" {
+            output_separator = Some("\t".to_string());
         } else if arg == "-v" {
             i += 1;
             if i >= args.len() {
@@ -197,6 +210,15 @@ pub fn parse_args() -> Args {
         program = Some("{ print }".to_string());
     }
 
+    // Bare function call without braces → {print expr}
+    // e.g. fk 'rev()' file → fk '{print rev()}' file
+    if let Some(ref p) = program
+        && !p.contains('{')
+        && is_bare_func_call(p.trim())
+    {
+        program = Some(format!("{{print {}}}", p.trim()));
+    }
+
     let program = match program {
         Some(p) => p,
         None if repl => String::new(),
@@ -209,6 +231,7 @@ pub fn parse_args() -> Args {
 
     Args {
         field_separator,
+        output_separator,
         assignments,
         program,
         files,
@@ -235,6 +258,8 @@ fn print_usage() {
     eprintln!();
     eprintln!("Options:");
     eprintln!("  -F fs            Field separator (implies line mode)");
+    eprintln!("  -O ofs           Output field separator (shorthand for -v OFS=...)");
+    eprintln!("  -t               Tab-separated output (shorthand for -O '\\t')");
     eprintln!("  -v var=val       Set variable (e.g. -v 'OFS=\\t')");
     eprintln!("  -f progfile      Read program from file (repeatable)");
     eprintln!("  -i mode          Input mode: csv, tsv, json, parquet");
@@ -433,6 +458,46 @@ fn read_hex(chars: &[char], start: usize, count: usize) -> Option<(char, usize)>
     let code = u32::from_str_radix(&hex, 16).ok()?;
     let ch = char::from_u32(code)?;
     Some((ch, count))
+}
+
+/// Check if a program string is a bare function call like `rev()` or `toupper($1)`.
+/// Must be: identifier, `(`, balanced content, `)` at end.
+fn is_bare_func_call(s: &str) -> bool {
+    let bytes = s.as_bytes();
+    // Must start with identifier char
+    if bytes.first().is_none_or(|b| !b.is_ascii_alphabetic() && *b != b'_') {
+        return false;
+    }
+    // Find opening paren
+    let paren = match bytes.iter().position(|&b| b == b'(') {
+        Some(p) if p > 0 => p,
+        _ => return false,
+    };
+    // Before paren: all identifier chars
+    if !bytes[..paren]
+        .iter()
+        .all(|b| b.is_ascii_alphanumeric() || *b == b'_')
+    {
+        return false;
+    }
+    // Must end with ), and parens must balance with final ) being the match for the first (
+    if *bytes.last().unwrap() != b')' {
+        return false;
+    }
+    let mut depth = 0i32;
+    for (i, &b) in bytes[paren..].iter().enumerate() {
+        match b {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return paren + i + 1 == bytes.len();
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 fn is_valid_ident(s: &str) -> bool {

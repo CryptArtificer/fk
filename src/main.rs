@@ -149,9 +149,12 @@ fn main() {
     // Set up runtime
     let mut rt = runtime::Runtime::new();
 
-    // Apply -F
+    // Apply -F and -O
     if let Some(ref fs) = args.field_separator {
         rt.set_var("FS", fs);
+    }
+    if let Some(ref os) = args.output_separator {
+        rt.set_var("OFS", os);
     }
 
     // Apply -v assignments

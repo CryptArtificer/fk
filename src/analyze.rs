@@ -204,14 +204,22 @@ fn walk_expr(expr: &Expr, info: &mut ProgramInfo) {
             walk_expr(f, info);
         }
         Expr::Sprintf(args) | Expr::FuncCall(_, args) => {
-            if let Expr::FuncCall(name, fargs) = expr
-                && name == "collect"
-                && fargs.len() >= 2
-                && let Expr::Var(arr) = &fargs[0]
-            {
-                info.array_sources
-                    .entry(arr.clone())
-                    .or_insert_with(|| fargs[1].clone());
+            if let Expr::FuncCall(name, fargs) = expr {
+                if name == "collect"
+                    && fargs.len() >= 2
+                    && let Expr::Var(arr) = &fargs[0]
+                {
+                    info.array_sources
+                        .entry(arr.clone())
+                        .or_insert_with(|| fargs[1].clone());
+                }
+                // Functions that implicitly operate on fields when called with no args
+                if fargs.is_empty()
+                    && matches!(name.as_str(), "rev" | "reverse")
+                {
+                    info.needs_fields = true;
+                    info.max_field = None;
+                }
             }
             for a in args {
                 walk_expr(a, info);

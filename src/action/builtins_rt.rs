@@ -444,6 +444,12 @@ impl<'a> Executor<'a> {
         Value::from_number(count as f64)
     }
 
+    /// rev() — reverse fields of current record in place. Returns new $0.
+    pub(crate) fn builtin_reverse_fields(&mut self) -> Value {
+        self.rt.reverse_fields();
+        Value::from_string(self.rt.get_field(0))
+    }
+
     /// rev(arr) — reverse order, re-key 1..N. Returns count.
     pub(crate) fn builtin_reverse_array(&mut self, args: &[Expr]) -> Value {
         let array_name = match extract_array_name(args) {

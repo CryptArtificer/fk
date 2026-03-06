@@ -2375,7 +2375,27 @@ fn shuffle_preserves_elements() {
     assert_eq!(rt.get_var("result"), "3");
 }
 
-// --- reverse ---
+// --- rev (fields) ---
+
+#[test]
+fn rev_no_args_reverses_fields() {
+    let rt = eval(
+        r#"{ rev(); r = $1 "," $2 "," $3 }"#,
+        &["a b c"],
+    );
+    assert_eq!(rt.get_var("r"), "c,b,a");
+}
+
+#[test]
+fn rev_no_args_returns_new_record() {
+    let rt = eval(
+        r#"{ r = rev() }"#,
+        &["a b c"],
+    );
+    assert_eq!(rt.get_var("r"), "c b a");
+}
+
+// --- rev (array) ---
 
 #[test]
 fn rev_reverses_array() {

@@ -32,7 +32,8 @@ incrementally as a learning exercise. The user values:
 
 ```
 main.rs               — CLI dispatch, record loop
-cli.rs                — argument parsing (-F, -f, -v, -i, -H, -d, --repl, --explain),
+cli.rs                — argument parsing (-F, -O, -t, -f, -v, -i, -H, -d, --repl, --explain),
+                        bare func call auto-print (fk 'func()' → {print func()}),
                         hidden --hierarchical-menu easter egg (RLE-encoded Great Auk logo)
 analyze.rs            — static AST analysis → ProgramInfo (field/NF/regex hints,
                         array_sources, var_sources)
