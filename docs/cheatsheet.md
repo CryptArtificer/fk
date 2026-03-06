@@ -417,7 +417,7 @@ fk -i parquet 'BEGIN { col="user-name" } { print $col }' data.parquet
 fk -i parquet '{ dept[$department] += $revenue } END { for (d in dept) print d, dept[d] }' sales.parquet
 
 # CSV with named columns
-fk -F, -H '$status == "active" { print $email }' users.csv
+fk -H '$status == "active" { print $email }' users.csv
 
 # ── Phase 8 signatures ──
 
@@ -431,7 +431,7 @@ fk '{ a[NR]=$1 } END { asort(a); print join(a, ",") }' file
 fk '{ if (and($1, 0x04)) print "flag set:", $0 }' file
 
 # Parse dates
-fk -F, -H '{ ts = parsedate($created, "%Y-%m-%d"); if (ts > 1700000000) print $name }' data.csv
+fk -H '{ ts = parsedate($created, "%Y-%m-%d"); if (ts > 1700000000) print $name }' data.csv
 
 # ── Statistics ──
 

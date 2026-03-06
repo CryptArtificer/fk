@@ -11,7 +11,7 @@ section "1. collect() — build arrays without boilerplate"
 # collect(a, expr) auto-keys, skips NaN/empty, and returns the new count.
 
 echo "Gather all revenues into an array, then summarise:"
-show $FK -F, -H '{ collect(a, $revenue) }
+show $FK -H '{ collect(a, $revenue) }
 END { printf "  n=%d sum=%d mean=%.0f median=%.0f\n",
       length(a), sum(a), mean(a), median(a) }' "$TMPDIR/sales.csv"
 echo ""
@@ -24,22 +24,22 @@ section "2. Array transforms — top, bottom, runtotal, norm"
 # (count for top/bottom, array name for runtotal/norm).
 
 echo "top(a, 3) — keep only the 3 largest values:"
-show $FK -F, -H '{ collect(a, $revenue) }
+show $FK -H '{ collect(a, $revenue) }
 END { top(a, 3); print "  ", join(a, ", ") }' "$TMPDIR/sales.csv"
 echo ""
 
 echo "bottom(a, 3) — keep only the 3 smallest:"
-show $FK -F, -H '{ collect(a, $revenue) }
+show $FK -H '{ collect(a, $revenue) }
 END { bottom(a, 3); print "  ", join(a, ", ") }' "$TMPDIR/sales.csv"
 echo ""
 
 echo "runtotal(a) — replace each value with its running total:"
-show $FK -F, -H '{ collect(a, $revenue) }
+show $FK -H '{ collect(a, $revenue) }
 END { runtotal(a); print "  ", join(a, ", ") }' "$TMPDIR/sales.csv"
 echo ""
 
 echo "norm(a) — scale values to the 0..1 range (min→0, max→1):"
-show $FK -F, -H '{ collect(a, $revenue) }
+show $FK -H '{ collect(a, $revenue) }
 END { norm(a)
   for (i = 1; i <= length(a); i++)
     printf "  %.2f\n", a[i]
@@ -75,12 +75,12 @@ section "5. Sorted for-in — deterministic iteration order"
 # so output is reproducible without piping through sort(1).
 
 echo "@sort — iterate keys in ascending alphabetical order:"
-show $FK -F, -H '{ rev[$region] += $revenue }
+show $FK -H '{ rev[$region] += $revenue }
 END { for (k in rev) @sort print "  ", k, rev[k] }' "$TMPDIR/sales.csv"
 echo ""
 
 echo "@rval — iterate by descending value (biggest first):"
-show $FK -F, -H '{ rev[$region] += $revenue }
+show $FK -H '{ rev[$region] += $revenue }
 END { for (k in rev) @rval print "  ", k, rev[k] }' "$TMPDIR/sales.csv"
 
 section "6. Composability — chaining it all together"
@@ -93,7 +93,7 @@ END { top(a, 10); print plotbox(hist(a), 30) }' "$TMPDIR/latencies.txt"
 echo ""
 
 echo "collect → norm → join (inline normalised values):"
-show $FK -F, -H '{ collect(a, $units) }
+show $FK -H '{ collect(a, $units) }
 END { norm(a); print "  normalized:", join(a, ", ") }' "$TMPDIR/sales.csv"
 echo ""
 

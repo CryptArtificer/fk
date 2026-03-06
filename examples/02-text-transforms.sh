@@ -48,7 +48,7 @@ echo ""
 
 # ── Field reordering ─────────────────────────────────────────────
 echo "4) Reorder and reformat CSV → TSV:"
-echo "$CSV" | show $FK -F, -v 'OFS=\t' 'NR > 1 { print $2, $1, $3 }'
+echo "$CSV" | show $FK -F, -t 'NR > 1 { print $2, $1, $3 }'
 echo ""
 
 # ── Deduplication ────────────────────────────────────────────────
