@@ -3,7 +3,7 @@ use super::{format_number, to_number};
 /// Dispatch string built-in functions.
 pub fn call(name: &str, args: &[String]) -> String {
     match name {
-        "length" => {
+        "length" | "len" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             format_number(s.chars().count() as f64)
         }
@@ -22,7 +22,7 @@ pub fn call(name: &str, args: &[String]) -> String {
                 s.chars().skip(start).collect()
             }
         }
-        "index" => {
+        "index" | "idx" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             let target = args.get(1).map(|s| s.as_str()).unwrap_or("");
             match s.find(target) {
@@ -33,11 +33,11 @@ pub fn call(name: &str, args: &[String]) -> String {
                 None => "0".to_string(),
             }
         }
-        "tolower" => {
+        "tolower" | "lower" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             s.to_lowercase()
         }
-        "toupper" => {
+        "toupper" | "upper" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             s.to_uppercase()
         }
@@ -53,22 +53,22 @@ pub fn call(name: &str, args: &[String]) -> String {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             s.trim_end().to_string()
         }
-        "startswith" => {
+        "startswith" | "sw" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             let prefix = args.get(1).map(|s| s.as_str()).unwrap_or("");
             format_number(if s.starts_with(prefix) { 1.0 } else { 0.0 })
         }
-        "endswith" => {
+        "endswith" | "ew" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             let suffix = args.get(1).map(|s| s.as_str()).unwrap_or("");
             format_number(if s.ends_with(suffix) { 1.0 } else { 0.0 })
         }
-        "repeat" => {
+        "repeat" | "rep" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             let n = args.get(1).map(|s| to_number(s) as usize).unwrap_or(0);
             s.repeat(n)
         }
-        "reverse" => {
+        "rev" | "reverse" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             s.chars().rev().collect()
         }

@@ -5,7 +5,7 @@ use super::to_number;
 /// Dispatch time built-in functions.
 pub fn call(name: &str, args: &[String]) -> String {
     match name {
-        "systime" => systime(),
+        "systime" | "now" => systime(),
         "strftime" => {
             let fmt = args
                 .first()
@@ -18,7 +18,7 @@ pub fn call(name: &str, args: &[String]) -> String {
             let spec = args.first().map(|s| s.as_str()).unwrap_or("");
             mktime(spec)
         }
-        "parsedate" => {
+        "parsedate" | "pdate" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             let fmt = args
                 .get(1)

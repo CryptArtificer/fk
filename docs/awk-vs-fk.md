@@ -905,7 +905,7 @@ fk  '{a[NR]=$0} END{for(i=NR;i>=1;i--) print a[i]}' file
 
 # T16. rev — reverse each line
 rev file
-fk  '{print reverse($0)}' file
+fk  '{print rev($0)}' file
 
 # T17. paste -sd, — join lines with comma
 paste -sd, file
@@ -1056,7 +1056,7 @@ fk '{print lpad($1,10), rpad($2,20)}' file
 fk 'BEGIN{print repeat("=-",40)}'
 
 # D19. Reverse a string (unicode-aware)
-fk '{print reverse($0)}' file
+fk '{print rev($0)}' file
 
 # D20. Named column access with header mode
 fk -H '{print $"first-name", $"last-name"}' data.csv

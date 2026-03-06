@@ -164,7 +164,7 @@ print ... > "/dev/stderr"   # write to stderr
 | `startswith(s, prefix)` | Returns 1 if s starts with prefix |
 | `endswith(s, suffix)` | Returns 1 if s ends with suffix |
 | `repeat(s, n)` | Repeat string n times |
-| `reverse(s)` | Reverse a string (unicode-aware) |
+| `rev(s)` | Reverse a string (unicode-aware) |
 | `chr(n)` / `ord(s)` | Character ↔ codepoint |
 | `hex(n)` | Format number as hexadecimal (0x...) |
 | `lpad(s, width [, char])` | Left-pad to width (default: space) |
@@ -215,6 +215,7 @@ print ... > "/dev/stderr"   # write to stderr
 | `inv(arr)` | Swap keys ↔ values |
 | `tidy(arr)` | Remove empty/zero entries |
 | `shuf(arr)` | Randomize order, re-key 1..N |
+| `rev(arr)` | Reverse order, re-key 1..N |
 | `diff(a, b)` | Set difference: remove from `a` keys in `b` |
 | `inter(a, b)` | Set intersection: keep in `a` only keys also in `b` |
 | `union(a, b)` | Set union: merge keys from `b` into `a` |
@@ -262,6 +263,48 @@ print ... > "/dev/stderr"   # write to stderr
 | `jpath(json, path, arr)` | Extract into array, return count |
 
 **jpath paths:** `.key`, `[N]`, `.key.sub`, `.arr[]`, `.arr.key` (implicit iteration)
+
+## Function aliases
+
+Every function has a short or long alias. Both forms are interchangeable.
+
+| Short | Long | Category |
+|-------|------|----------|
+| `len` | `length` | string/array |
+| `idx` | `index` | string |
+| `lower` | `tolower` | string |
+| `upper` | `toupper` | string |
+| `sw` | `startswith` | string |
+| `ew` | `endswith` | string |
+| `rep` | `repeat` | string |
+| `rev` | `reverse` | string/array |
+| `now` | `systime` | time |
+| `pdate` | `parsedate` | time |
+| `sys` | `system` | I/O |
+| `jp` | `jpath` | JSON |
+| `vals` | `values` | array |
+| `uniq` | `unique` | array |
+| `inv` | `invert` | array |
+| `shuf` | `shuffle` | array |
+| `seq` | `sequence` | array |
+| `samp` | `sample` | array |
+| `acc` | `collect`, `accumulate` | array |
+| `bot` | `bottom` | array |
+| `runtot` | `runtotal` | stats |
+| `norm` | `normalize` | stats |
+| `win` | `window` | array |
+| `avg` | `mean` | stats |
+| `med` | `median` | stats |
+| `sd` | `stddev` | stats |
+| `var` | `variance` | stats |
+| `pct` | `percentile` | stats |
+| `p` | `percentile` | stats |
+| `q` | `quantile` | stats |
+| `hist` | `histogram` | stats |
+| `pbox` | `plotbox` | viz |
+| `clk` | `clock` | diag |
+| `tic` | `start` | diag |
+| `toc` | `elapsed` | diag |
 
 ## Arrays
 

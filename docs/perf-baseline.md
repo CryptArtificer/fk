@@ -32,7 +32,7 @@ Report file: `bench_data/perf_strict_1000000_20260219-114547.txt`.
 |---|---:|---:|---:|
 | mean() builtin | 0.229s | 0.377s | 0.61x |
 | median() builtin | 1.039s | 0.516s | 2.01x |
-| reverse() builtin | 0.144s | 0.185s | 0.78x |
+| rev() builtin | 0.144s | 0.185s | 0.78x |
 
 ## Top Regression Targets
 

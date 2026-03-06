@@ -76,7 +76,7 @@ src/
     parquet_reader.rs  – Apache Parquet reader (optional feature)
   builtins/
     mod.rs             – dispatch table, coercion helpers
-    string.rs          – length, substr, index, trim, reverse, chr, ord, …
+    string.rs          – length, substr, index, trim, rev, chr, ord, …
     math.rs            – sin, cos, sqrt, abs, ceil, floor, rand, min, max, …
     time.rs            – systime, strftime, mktime, parsedate
     printf.rs          – format_printf and spec helpers
@@ -240,8 +240,8 @@ echo "" | fk 'BEGIN { print and(0xFF, 0x0F), lshift(1, 8) }'
 # Math: rand, abs, ceil, floor, round, min, max
 echo "" | fk 'BEGIN { srand(42); print rand(), abs(-5), ceil(2.3), floor(2.7), min(3,7), max(3,7) }'
 
-# String: trim, reverse, chr, ord, hex
-echo "  hello  " | fk '{ print trim($0), reverse("abc"), chr(65), ord("A"), hex(255) }'
+# String: trim, rev, chr, ord, hex
+echo "  hello  " | fk '{ print trim($0), rev("abc"), chr(65), ord("A"), hex(255) }'
 
 # parsedate — parse date string to epoch
 echo "" | fk 'BEGIN { print parsedate("2025-01-15 10:30:00", "%Y-%m-%d %H:%M:%S") }'

@@ -54,12 +54,12 @@ echo ""
 echo "Target a specific occurrence (replace only the 2nd dash):"
 show_pipe "echo 'one-two-three-four-five' | $FK '{ print gensub(\"-\", \" | \", 2) }'"
 
-section "4. String toolkit — trim, pad, reverse"
+section "4. String toolkit — trim, pad, rev"
 
 echo "Clean up messy whitespace and display aligned:"
 show_pipe "printf '  hello world  \n  fk rocks  \n' | $FK '{
     t = trim(\$0)
-    printf \"  %-20s → reversed: %s\n\", \"\\\"\" t \"\\\"\", reverse(t)
+    printf \"  %-20s → reversed: %s\n\", \"\\\"\" t \"\\\"\", rev(t)
 }'"
 
 echo ""

@@ -94,7 +94,7 @@ echo "x" | show $FK 'BEGIN {
     print "  startswith(\"abc\",\"ab\") =", startswith("abc", "ab")
     print "  endswith(\"abc\",\"bc\")   =", endswith("abc", "bc")
     print "  repeat(\"ab\", 3)       =", repeat("ab", 3)
-    print "  reverse(\"hello\")      =", reverse("hello")
+    print "  rev(\"hello\")           =", rev("hello")
     print "  chr(65)               =", chr(65)
     print "  ord(\"A\")              =", ord("A")
     print "  hex(255)              =", hex(255)

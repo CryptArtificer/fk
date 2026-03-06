@@ -125,7 +125,7 @@
 - [x] `typeof(x)` — return `"number"`, `"string"`, `"array"`, or `"uninitialized"`
 - [x] Bitwise: `and()`, `or()`, `xor()`, `lshift()`, `rshift()`, `compl()`
 - [x] Math: `rand()`, `srand()`, `atan2()`, `abs()`, `ceil()`, `floor()`, `round()`, `min()`, `max()`, `log2()`, `log10()`
-- [x] String: `trim()`, `ltrim()`, `rtrim()`, `startswith()`, `endswith()`, `repeat()`, `reverse()`, `chr()`, `ord()`, `hex()`
+- [x] String: `trim()`, `ltrim()`, `rtrim()`, `startswith()`, `endswith()`, `repeat()`, `rev()`, `chr()`, `ord()`, `hex()`
 - [x] Date: `parsedate(str, fmt)` — parse dates back to epoch
 - [x] Richer `strftime()` specifiers (`%j %u %w %e %C %y %p %I`)
 

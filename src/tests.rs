@@ -1508,7 +1508,7 @@ fn string_repeat() {
 
 #[test]
 fn string_reverse() {
-    let rt = eval(r#"BEGIN { x = reverse("hello") }"#, &[]);
+    let rt = eval(r#"BEGIN { x = rev("hello") }"#, &[]);
     assert_eq!(rt.get_var("x"), "olleh");
 }
 
@@ -2375,6 +2375,26 @@ fn shuffle_preserves_elements() {
     assert_eq!(rt.get_var("result"), "3");
 }
 
+// --- reverse ---
+
+#[test]
+fn rev_reverses_array() {
+    let rt = eval(
+        r#"BEGIN { a[1]="a"; a[2]="b"; a[3]="c"; rev(a); result=a[1] "," a[2] "," a[3] }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "c,b,a");
+}
+
+#[test]
+fn rev_returns_count() {
+    let rt = eval(
+        r#"BEGIN { a[1]="x"; a[2]="y"; n=rev(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("n"), "2");
+}
+
 // --- slurp ---
 
 #[test]
@@ -2806,4 +2826,163 @@ fn forin_rval_descending() {
         &[],
     );
     assert_eq!(rt.get_var("result"), "xzy");
+}
+
+// --- function aliases ---
+
+#[test]
+fn alias_string_builtins() {
+    let rt = eval(
+        r#"{ r = len($0) "," idx($0,"ll") "," lower("HI") "," upper("hi") "," sw("abc","ab") "," ew("abc","bc") "," rep("x",3) "," reverse("ab") }"#,
+        &["hello"],
+    );
+    assert_eq!(rt.get_var("r"), "5,3,hi,HI,1,1,xxx,ba");
+}
+
+#[test]
+fn alias_array_long_forms() {
+    let rt = eval(
+        r#"BEGIN {
+            sequence(a, 1, 5)
+            shuffle(a); unique(a); n = length(a)
+            invert(a); sample(a, 2)
+            result = n
+        }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "5");
+}
+
+#[test]
+fn alias_array_short_forms() {
+    let rt = eval(
+        r#"BEGIN {
+            seq(a, 1, 5)
+            bot(a, 2); r1 = join(a, ",")
+            seq(b, 1, 4)
+            normalize(b); r2 = join(b, ",")
+        }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("r1"), "1,2");
+    assert_eq!(rt.get_var("r2"), "0,0.333333,0.666667,1");
+}
+
+#[test]
+fn alias_stats() {
+    let rt = eval(
+        r#"{ a[NR] = $1 } END { r = avg(a) "," med(a) }"#,
+        &["10", "20", "30"],
+    );
+    assert_eq!(rt.get_var("r"), "20,20");
+    let rt2 = eval(
+        r#"{ a[NR] = $1 } END { r = sd(a); v = var(a) }"#,
+        &["10", "20", "30"],
+    );
+    assert!(rt2.get_var("r").starts_with("8.16"));
+    assert!(rt2.get_var("v").starts_with("66.6"));
+}
+
+#[test]
+fn alias_collect_acc() {
+    let rt = eval(
+        r#"{ acc(a, $1) } END { r = join(a, ",") }"#,
+        &["x", "y", "z"],
+    );
+    assert_eq!(rt.get_var("r"), "x,y,z");
+}
+
+#[test]
+fn alias_accumulate() {
+    let rt = eval(
+        r#"{ accumulate(a, $1) } END { r = join(a, ",") }"#,
+        &["a", "b"],
+    );
+    assert_eq!(rt.get_var("r"), "a,b");
+}
+
+#[test]
+fn alias_time_now() {
+    let rt = eval(r#"BEGIN { t = now(); r = (t > 0) }"#, &[]);
+    assert_eq!(rt.get_var("r"), "1");
+}
+
+#[test]
+fn alias_pbox() {
+    let rt = eval(
+        r#"BEGIN { for(i=1;i<=20;i++) a[i]=i; s = pbox(a) }"#,
+        &[],
+    );
+    let s = rt.get_var("s");
+    assert!(!s.is_empty(), "pbox should produce box plot output");
+}
+
+#[test]
+fn alias_sys() {
+    let rt = eval(r#"BEGIN { r = sys("true") }"#, &[]);
+    assert_eq!(rt.get_var("r"), "0");
+}
+
+#[test]
+fn alias_histogram() {
+    let rt = eval(
+        r#"BEGIN { for(i=1;i<=20;i++) a[i]=i; n = histogram(a) }"#,
+        &[],
+    );
+    assert!(!rt.get_var("n").is_empty());
+}
+
+#[test]
+fn alias_values() {
+    let rt = eval(
+        r#"BEGIN { a["x"]=3; a["y"]=1; a["z"]=2; r = values(a) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("r"), "3\n1\n2");
+}
+
+#[test]
+fn alias_runtot() {
+    let rt = eval(
+        r#"BEGIN { a[1]=10; a[2]=20; a[3]=30; runtot(a); r = a[1] "," a[2] "," a[3] }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("r"), "10,30,60");
+}
+
+#[test]
+fn alias_win() {
+    let rt = eval(
+        r#"{ win(a, 3, $1) } END { r = join(a, ",") }"#,
+        &["1", "2", "3", "4", "5"],
+    );
+    assert_eq!(rt.get_var("r"), "3,4,5");
+}
+
+#[test]
+fn alias_pct_and_q() {
+    let rt = eval(
+        r#"BEGIN { for(i=1;i<=100;i++) a[i]=i; r = pct(a,50); s = q(a,0.5) }"#,
+        &[],
+    );
+    assert!(rt.get_var("r").starts_with("50"));
+    assert!(rt.get_var("s").starts_with("50"));
+}
+
+#[test]
+fn alias_jp() {
+    let rt = eval(
+        r#"BEGIN { r = jp("{\"a\":1}", ".a") }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("r"), "1");
+}
+
+#[test]
+fn alias_pdate() {
+    let rt = eval(
+        r#"BEGIN { r = pdate("2024-01-15", "%Y-%m-%d"); ok = (r > 0) }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("ok"), "1");
 }

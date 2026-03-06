@@ -127,12 +127,14 @@ impl<'a> Executor<'a> {
                     "gsub" => return self.builtin_sub(args, true),
                     "match" => return self.builtin_match(args),
                     "split" => return self.builtin_split(args),
-                    "jpath" if args.len() >= 3 => return self.builtin_jpath_extract(args),
-                    "length" if args.is_empty() => {
+                    "jpath" | "jp" if args.len() >= 3 => {
+                        return self.builtin_jpath_extract(args);
+                    }
+                    "length" | "len" if args.is_empty() => {
                         let s = self.rt.get_field(0);
                         return Value::from_number(s.chars().count() as f64);
                     }
-                    "length" if args.len() == 1 => {
+                    "length" | "len" if args.len() == 1 => {
                         if let Expr::Var(var_name) = &args[0]
                             && self.rt.has_array(var_name)
                         {
@@ -142,27 +144,34 @@ impl<'a> Executor<'a> {
                     "close" => return self.builtin_close(args),
                     "gensub" => return self.builtin_gensub(args),
                     "fflush" => return self.builtin_fflush(args),
-                    "system" => return self.builtin_system(args),
+                    "system" | "sys" => return self.builtin_system(args),
                     "join" => return self.builtin_join(args),
                     "typeof" => return self.builtin_typeof(args),
                     "asort" => return self.builtin_asort(args, false),
                     "asorti" => return self.builtin_asort(args, true),
                     "keys" => return self.builtin_keys(args),
-                    "vals" => return self.builtin_vals(args),
-                    "uniq" => return self.builtin_uniq(args),
-                    "inv" => return self.builtin_invert(args),
+                    "vals" | "values" => return self.builtin_vals(args),
+                    "uniq" | "unique" => return self.builtin_uniq(args),
+                    "inv" | "invert" => return self.builtin_invert(args),
                     "tidy" => return self.builtin_compact(args),
-                    "shuf" => return self.builtin_shuffle(args),
+                    "shuf" | "shuffle" => return self.builtin_shuffle(args),
+                    "rev" | "reverse" if args.len() == 1 => {
+                        if let Expr::Var(v) = &args[0]
+                            && self.rt.has_array(v)
+                        {
+                            return self.builtin_reverse_array(args);
+                        }
+                    }
                     "diff" | "inter" | "union" => return self.builtin_set_op(name, args),
-                    "seq" => return self.builtin_seq(args),
-                    "samp" => return self.builtin_sample(args),
+                    "seq" | "sequence" => return self.builtin_seq(args),
+                    "samp" | "sample" => return self.builtin_sample(args),
                     "slurp" => return self.builtin_slurp(args),
-                    "collect" => return self.builtin_collect(args),
+                    "collect" | "acc" | "accumulate" => return self.builtin_collect(args),
                     "top" => return self.builtin_top_bottom(args, false),
-                    "bottom" => return self.builtin_top_bottom(args, true),
-                    "runtotal" => return self.builtin_runtotal(args),
-                    "norm" => return self.builtin_norm(args),
-                    "window" => return self.builtin_window(args),
+                    "bottom" | "bot" => return self.builtin_top_bottom(args, true),
+                    "runtotal" | "runtot" => return self.builtin_runtotal(args),
+                    "norm" | "normalize" => return self.builtin_norm(args),
+                    "window" | "win" => return self.builtin_window(args),
                     "dump" => return self.builtin_dump(args),
                     "clk" | "clock" => return self.builtin_clock(),
                     "tic" | "start" => return self.builtin_start(args),
@@ -174,9 +183,15 @@ impl<'a> Executor<'a> {
                     | "iqm" | "quantile" => {
                         return self.builtin_stats(name, args);
                     }
-                    "hist" => return self.builtin_hist(args),
+                    "avg" => return self.builtin_stats("mean", args),
+                    "med" => return self.builtin_stats("median", args),
+                    "sd" => return self.builtin_stats("stddev", args),
+                    "var" => return self.builtin_stats("variance", args),
+                    "pct" => return self.builtin_stats("percentile", args),
+                    "q" => return self.builtin_stats("quantile", args),
+                    "hist" | "histogram" => return self.builtin_hist(args),
                     "plot" => return self.builtin_plot(args),
-                    "plotbox" => return self.builtin_plotbox(args),
+                    "plotbox" | "pbox" => return self.builtin_plotbox(args),
                     "min" if args.len() == 1 => {
                         if let Expr::Var(v) = &args[0]
                             && self.rt.has_array(v)

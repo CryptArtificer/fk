@@ -434,7 +434,7 @@ Returns 1 if \fIs\fR starts/ends with the given string, 0 otherwise. \fI[fk]\fR
 \fBrepeat(\fIs\fB,\fR \fIn\fB)\fR
 Repeat string \fIs\fR \fIn\fR times. \fI[fk]\fR
 .TP
-\fBreverse(\fIs\fB)\fR
+\fBrev(\fIs\fB)\fR
 Reverse a string (unicode-aware). \fI[fk]\fR
 .TP
 \fBchr(\fIn\fB)\fR / \fBord(\fIs\fB)\fR
@@ -559,6 +559,9 @@ Remove entries with empty or zero values. Returns remaining count.
 .TP
 \fBshuf(\fIarr\fB)\fR
 Randomize order, re-key as 1..N. Returns count.
+.TP
+\fBrev(\fIarr\fB)\fR
+Reverse element order, re-key as 1..N. Returns count.
 .TP
 \fBdiff(\fIa\fB,\fR \fIb\fB)\fR
 Set difference: remove from \fIa\fR any key present in \fIb\fR.
@@ -902,7 +905,7 @@ Notably:
 .IP \(bu 2
 \fBsum()\fR, \fBmean()\fR, \fBmedian()\fR, \fBstddev()\fR, \fBvariance()\fR, \fBhist()\fR, \fBp()\fR, \fBiqm()\fR, \fBquantile()\fR
 .IP \(bu 2
-\fBtrim()\fR, \fBltrim()\fR, \fBrtrim()\fR, \fBstartswith()\fR, \fBendswith()\fR, \fBrepeat()\fR, \fBreverse()\fR, \fBlpad()\fR, \fBrpad()\fR
+\fBtrim()\fR, \fBltrim()\fR, \fBrtrim()\fR, \fBstartswith()\fR, \fBendswith()\fR, \fBrepeat()\fR, \fBrev()\fR, \fBlpad()\fR, \fBrpad()\fR
 .IP \(bu 2
 \fBabs()\fR, \fBceil()\fR, \fBfloor()\fR, \fBround()\fR, \fBmin()\fR, \fBmax()\fR, \fBlog2()\fR, \fBlog10()\fR
 .IP \(bu 2

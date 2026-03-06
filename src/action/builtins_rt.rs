@@ -444,6 +444,30 @@ impl<'a> Executor<'a> {
         Value::from_number(count as f64)
     }
 
+    /// rev(arr) — reverse order, re-key 1..N. Returns count.
+    pub(crate) fn builtin_reverse_array(&mut self, args: &[Expr]) -> Value {
+        let array_name = match extract_array_name(args) {
+            Some(n) => n,
+            None => {
+                eprintln!("fk: rev: argument must be an array name");
+                return Value::from_number(0.0);
+            }
+        };
+        let mut keys = self.rt.array_keys(&array_name);
+        smart_sort_keys(&mut keys);
+        let mut vals: Vec<String> = keys
+            .iter()
+            .map(|k| self.rt.get_array(&array_name, k))
+            .collect();
+        vals.reverse();
+        let count = vals.len();
+        self.rt.delete_array_all(&array_name);
+        for (i, v) in vals.into_iter().enumerate() {
+            self.rt.set_array(&array_name, &(i + 1).to_string(), &v);
+        }
+        Value::from_number(count as f64)
+    }
+
     /// diff(a, b) — remove from a any key present in b. Returns remaining count.
     pub(crate) fn builtin_set_op(&mut self, op: &str, args: &[Expr]) -> Value {
         if args.len() < 2 {

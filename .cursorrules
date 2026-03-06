@@ -57,7 +57,7 @@ input/json.rs  — JSON Lines reader
 input/regex_rs.rs    — regex-based RS reader
 input/parquet_reader.rs — Apache Parquet reader (optional feature)
 builtins/mod.rs      — dispatch + coercion helpers (to_number, format_number)
-builtins/string.rs   — length, substr, index, trim, reverse, chr, ord, hex, ...
+builtins/string.rs   — length, substr, index, trim, rev, chr, ord, hex, ...
 builtins/math.rs     — int, sqrt, abs, ceil, floor, rand, min, max, ...
                        (stats builtins in action.rs: sum, mean, median, stddev, hist, p, iqm, ...)
 builtins/printf.rs   — format_printf
@@ -70,7 +70,7 @@ builtins/json.rs     — jpath() with JSON parser, path evaluator, iteration
 - `RecordReader` trait returns `Record { text, fields: Option<Vec<String>> }`
   so structured readers (CSV/JSON) can pre-split fields
 - Builtins that need runtime access (sub, gsub, split, close, gensub, jpath 3-arg, system,
- stats (hist), bitwise, asort, keys, vals, uniq, inv, tidy, shuf, diff, inter, union,
+ stats (hist), bitwise, asort, keys, vals, uniq, inv, tidy, shuf, rev, diff, inter, union,
  seq, samp, slurp, collect, top, bottom, runtotal, norm, window) live in
  action/builtins_rt.rs; pure builtins go through builtins::call_builtin
 - Lexer uses O(1) incremental line/col tracking; produces `Spanned` tokens (token + Span)
@@ -116,7 +116,7 @@ Phase 8: Header names as field accessors ($name, $"col-name", $var in -H mode),
   Parquet input (-i parquet, optional feature), match() with capture groups,
   asort/asorti, join, typeof, bitwise ops (and/or/xor/lshift/rshift/compl),
   math (rand, srand, atan2, abs, ceil, floor, round, min, max, log2, log10),
-  string (trim, ltrim, rtrim, startswith, endswith, repeat, reverse, chr, ord, hex),
+  string (trim, ltrim, rtrim, startswith, endswith, repeat, rev, chr, ord, hex),
   date (parsedate), richer strftime specifiers
 Phase 9: printf enhancement (0-pad, +sign, %x, %o), statistical builtins
   (sum, mean, median, stddev, variance, hist, p/percentile, quantile, iqm, min/max on arrays)
