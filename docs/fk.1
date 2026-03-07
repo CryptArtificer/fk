@@ -440,17 +440,21 @@ print ... \fB>\fR  "/dev/stderr"   stderr
 All string functions are unicode-aware: they count characters, not bytes.
 .
 .TP
-\fBlength(\fIs\fB)\fR
+\fBlength(\fIs\fB)\fR / \fBlen(\fR...\fB)\fR
 Number of characters.
 Also works on arrays: \fBlength(arr)\fR returns the element count.
 .TP
 \fBsubstr(\fIs\fB,\fR \fIstart\fR [\fB,\fR \fIlen\fR]\fB)\fR
 Substring starting at position \fIstart\fR (1-indexed).
 .TP
-\fBindex(\fIs\fB,\fR \fItarget\fB)\fR
+\fBindex(\fIs\fB,\fR \fItarget\fB)\fR / \fBidx(\fR...\fB)\fR
 Position of \fItarget\fR in \fIs\fR, or 0 if not found.
 .TP
-\fBtolower(\fIs\fB)\fR / \fBtoupper(\fIs\fB)\fR
+\fBtolower(\fIs\fB)\fR / \fBlower(\fR...\fB)\fR
+.PD 0
+.TP
+\fBtoupper(\fIs\fB)\fR / \fBupper(\fR...\fB)\fR
+.PD
 Case conversion.
 .TP
 \fBsub(\fIpat\fB,\fR \fIrepl\fR [\fB,\fR \fItarget\fR]\fB)\fR
@@ -474,13 +478,17 @@ Returns the element count.
 \fBtrim(\fIs\fB)\fR / \fBltrim(\fIs\fB)\fR / \fBrtrim(\fIs\fB)\fR
 Strip leading/trailing whitespace. \fI[fk]\fR
 .TP
-\fBstartswith(\fIs\fB,\fR \fIprefix\fB)\fR / \fBendswith(\fIs\fB,\fR \fIsuffix\fB)\fR
+\fBstartswith(\fIs\fB,\fR \fIprefix\fB)\fR / \fBsw(\fR...\fB)\fR
+.PD 0
+.TP
+\fBendswith(\fIs\fB,\fR \fIsuffix\fB)\fR / \fBew(\fR...\fB)\fR
+.PD
 Returns 1 if \fIs\fR starts/ends with the given string, 0 otherwise. \fI[fk]\fR
 .TP
-\fBrepeat(\fIs\fB,\fR \fIn\fB)\fR
+\fBrepeat(\fIs\fB,\fR \fIn\fB)\fR / \fBrep(\fR...\fB)\fR
 Repeat string \fIs\fR \fIn\fR times. \fI[fk]\fR
 .TP
-\fBrev(\fIs\fB)\fR
+\fBrev(\fIs\fB)\fR / \fBreverse(\fR...\fB)\fR
 Reverse a string (unicode-aware). \fI[fk]\fR
 .TP
 \fBchr(\fIn\fB)\fR / \fBord(\fIs\fB)\fR
@@ -528,7 +536,7 @@ Seed the RNG. Returns previous seed.
 .
 .SS Time \fI[fk extensions]\fR
 .TP
-\fBsystime()\fR
+\fBsystime()\fR / \fBnow()\fR
 Current time as seconds since epoch.
 .TP
 \fBstrftime(\fIfmt\fB,\fR \fIepoch\fB)\fR
@@ -538,7 +546,7 @@ Supports \fB%Y %m %d %H %M %S %A %B %a %b %j %u %w %e %C %y %p %I\fR.
 \fBmktime("\fIY M D H M S\fB")\fR
 Convert a date string back to epoch.
 .TP
-\fBparsedate(\fIstr\fB,\fR \fIfmt\fB)\fR
+\fBparsedate(\fIstr\fB,\fR \fIfmt\fB)\fR / \fBpdate(\fR...\fB)\fR
 Parse a date string using the same \fB%Y %m %d %H %M %S\fR specifiers
 as strftime. Returns epoch seconds. \fI[fk]\fR
 .
@@ -632,7 +640,7 @@ Direction is automatic. Returns count.
 Keep \fIn\fR random elements, re-key as 1..\fIn\fR.
 Uses Fisher\-Yates partial shuffle. Returns \fIn\fR.
 .TP
-\fBcollect(\fIarr\fB,\fR \fIexpr\fB)\fR
+\fBcollect(\fIarr\fB,\fR \fIexpr\fB)\fR / \fBacc(\fR...\fB)\fR
 Append \fIexpr\fR to \fIarr\fR with auto-incrementing keys (1, 2, 3, ...).
 Skips NaN and empty-string values. Returns the new count.
 Replaces the common \fBa[++n] = $3\fR idiom. \fI[fk]\fR
@@ -640,18 +648,18 @@ Replaces the common \fBa[++n] = $3\fR idiom. \fI[fk]\fR
 \fBtop(\fIarr\fB,\fR \fIn\fB)\fR
 Keep the \fIn\fR largest values, re-key as 1..\fIn\fR. Returns count kept. \fI[fk]\fR
 .TP
-\fBbottom(\fIarr\fB,\fR \fIn\fB)\fR
+\fBbottom(\fIarr\fB,\fR \fIn\fB)\fR / \fBbot(\fR...\fB)\fR
 Keep the \fIn\fR smallest values, re-key as 1..\fIn\fR. Returns count kept. \fI[fk]\fR
 .TP
-\fBruntotal(\fIarr\fB)\fR
+\fBruntotal(\fIarr\fB)\fR / \fBruntot(\fR...\fB)\fR
 Replace each value with the running total up to that point.
 Returns the array name for chaining (e.g. \fBplotbox(runtotal(a))\fR). \fI[fk]\fR
 .TP
-\fBnorm(\fIarr\fB)\fR
+\fBnorm(\fIarr\fB)\fR / \fBnormalize(\fR...\fB)\fR
 Normalize values to 0..1 range (min\(->0, max\(->1).
 Returns the array name for chaining. \fI[fk]\fR
 .TP
-\fBwindow(\fIarr\fB,\fR \fIn\fB,\fR \fIexpr\fB)\fR
+\fBwindow(\fIarr\fB,\fR \fIn\fB,\fR \fIexpr\fB)\fR / \fBwin(\fR...\fB)\fR
 Sliding window: maintain the last \fIn\fR values in \fIarr\fR.
 Each call appends \fIexpr\fR (skipping NaN/empty), evicts the oldest
 when full, and re-keys 1..\fIn\fR. Returns the current window size.
@@ -664,16 +672,16 @@ on the numeric values in that array.
 \fBsum(\fIarr\fB)\fR
 Sum of all values.
 .TP
-\fBmean(\fIarr\fB)\fR
+\fBmean(\fIarr\fB)\fR / \fBavg(\fR...\fB)\fR
 Arithmetic mean.
 .TP
-\fBmedian(\fIarr\fB)\fR
+\fBmedian(\fIarr\fB)\fR / \fBmed(\fR...\fB)\fR
 Median value (50th percentile).
 .TP
-\fBstddev(\fIarr\fB)\fR
+\fBstddev(\fIarr\fB)\fR / \fBsd(\fR...\fB)\fR
 Population standard deviation.
 .TP
-\fBvariance(\fIarr\fB)\fR
+\fBvariance(\fIarr\fB)\fR / \fBvar(\fR...\fB)\fR
 Population variance.
 .TP
 \fBhist(\fIarr\fB [\fB,\fR \fIbins\fR [\fB,\fR \fIout\fR [\fB,\fR \fImin\fR [\fB,\fR \fImax\fR]]]]]\fR
@@ -682,10 +690,10 @@ keys 1..bins. Bins default to Sturges' rule. Returns the output array
 name, enabling chaining: \fBplotbox(hist(a))\fR. Metadata is stored
 internally as a typed enum (not in the array).
 .TP
-\fBp(\fIarr\fB,\fR \fIn\fB)\fR / \fBpercentile(\fIarr\fB,\fR \fIn\fB)\fR
+\fBpercentile(\fIarr\fB,\fR \fIn\fB)\fR / \fBpct(\fR...\fB)\fR / \fBp(\fR...\fB)\fR
 \fIn\fRth percentile (0\(en100). Uses linear interpolation.
 .TP
-\fBquantile(\fIarr\fB,\fR \fIq\fB)\fR
+\fBquantile(\fIarr\fB,\fR \fIq\fB)\fR / \fBq(\fR...\fB)\fR
 Same as percentile but \fIq\fR is 0\(en1 (e.g. 0.95 for p95).
 .TP
 \fBiqm(\fIarr\fB)\fR
@@ -707,7 +715,7 @@ name or a string returned by \fBhist()\fR. Auto-detects histogram metadata
 for range labels. \fIcolor\fR: \fBred\fR, \fBgreen\fR, \fByellow\fR,
 \fBblue\fR, \fBmagenta\fR, \fBcyan\fR, \fBgray\fR, or \fBnone\fR.
 .TP
-\fBplotbox(\fIarr\fB [\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR [\fB,\fR \fIprecision\fR [\fB,\fR \fItitle\fR [\fB,\fR \fIxlabel\fR [\fB,\fR \fIcolor\fR]]]]]]])\fR
+\fBplotbox(\fIarr\fB [\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR [\fB,\fR \fIprecision\fR [\fB,\fR \fItitle\fR [\fB,\fR \fIxlabel\fR [\fB,\fR \fIcolor\fR]]]]]]])\fR / \fBpbox(\fR...\fB)\fR
 Boxed horizontal bar chart with optional title/x-label and color.
 An auto-generated subtitle is derived from the source expression and
 filename via AST analysis (e.g. \fBapi.jsonl \(em [].ms\fR for data
@@ -726,10 +734,10 @@ Bitwise complement.
 .
 .SS JSON \fI[fk extensions]\fR
 .TP
-\fBjpath(\fIjson\fB,\fR \fIpath\fB)\fR
+\fBjpath(\fIjson\fB,\fR \fIpath\fB)\fR / \fBjp(\fR...\fB)\fR
 Navigate into a JSON string and return the value at \fIpath\fR.
 .TP
-\fBjpath(\fIjson\fB,\fR \fIpath\fB,\fR \fIarr\fB)\fR
+\fBjpath(\fIjson\fB,\fR \fIpath\fB,\fR \fIarr\fB)\fR / \fBjp(\fR...\fB)\fR
 Same, but extract into an awk array.
 Arrays become \fIarr\fR[1], \fIarr\fR[2], etc.
 Objects become \fIarr\fR["key"].
