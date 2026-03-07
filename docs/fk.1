@@ -962,6 +962,13 @@ END { for (d in dept) @rval print d, dept[d] }' sales.parquet\fR
 # Timestamp
 \fBecho x | fk '{ print strftime("%Y-%m-%d %H:%M:%S", now()) }'\fR
 
+# FizzBuzz — no modulo, just pattern rules
+\fBseq 1 100 | fk '
+  every 15 { $0 = "FizzBuzz" }
+  every 3  { if ($0+0) $0 = "Fizz" }
+  every 5  { if ($0+0) $0 = "Buzz" }
+  { print }'\fR
+
 # Diagnostics: inspect and time
 \fBfk '{ dump($0) }' file\fR
 \fBseq 1 100000 | fk 'BEGIN{tic("sum")} {s+=$1} END{printf "sum=%d in %.3fs\\n", s, toc("sum")}'\fR
