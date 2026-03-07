@@ -2336,6 +2336,18 @@ fn seq_reverse_range() {
 }
 
 #[test]
+fn seq_two_arg_returns_joined_string() {
+    let rt = eval(r#"BEGIN { result = seq(1, 5) }"#, &[]);
+    assert_eq!(rt.get_var("result"), "1\n2\n3\n4\n5");
+}
+
+#[test]
+fn seq_two_arg_reverse() {
+    let rt = eval(r#"BEGIN { result = seq(3, 1) }"#, &[]);
+    assert_eq!(rt.get_var("result"), "3\n2\n1");
+}
+
+#[test]
 fn sample_reduces_array() {
     let rt = eval(
         r#"BEGIN { srand(42); seq(a,1,100); n=samp(a,5); result=n }"#,

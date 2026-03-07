@@ -525,8 +525,28 @@ impl<'a> Executor<'a> {
 
     /// seq(arr, from, to) — fill arr with from..to, keyed 1..N. Returns count.
     pub(crate) fn builtin_seq(&mut self, args: &[Expr]) -> Value {
+        // 2-arg form: seq(from, to) → return values joined by ORS
+        if args.len() == 2 {
+            let from = self.eval_expr(&args[0]).to_number() as i64;
+            let to = self.eval_expr(&args[1]).to_number() as i64;
+            let ors = self.rt.get_var("ORS").to_string();
+            let step: i64 = if from <= to { 1 } else { -1 };
+            let mut parts = Vec::new();
+            let mut i = from;
+            loop {
+                parts.push(i.to_string());
+                if i == to {
+                    break;
+                }
+                i += step;
+                if parts.len() > 1_000_000 {
+                    break;
+                }
+            }
+            return Value::from_string(parts.join(&ors));
+        }
         if args.len() < 3 {
-            eprintln!("fk: seq requires 3 arguments (array, from, to)");
+            eprintln!("fk: seq requires 2 or 3 arguments: seq(from, to) or seq(arr, from, to)");
             return Value::from_number(0.0);
         }
         let array_name = match &args[0] {

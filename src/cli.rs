@@ -210,13 +210,20 @@ pub fn parse_args() -> Args {
         program = Some("{ print }".to_string());
     }
 
-    // Bare function call without braces → {print expr}
-    // e.g. fk 'rev()' file → fk '{print rev()}' file
+    // Bare function call without braces → {print expr} or BEGIN{print expr}
+    // If the call has no field/record dependencies, wrap as BEGIN (generator).
+    // e.g. fk 'seq(1,100)' → BEGIN{print seq(1,100)}
+    //      fk 'rev()' file → {print rev()} (rev() touches fields)
     if let Some(ref p) = program
         && !p.contains('{')
         && is_bare_func_call(p.trim())
     {
-        program = Some(format!("{{print {}}}", p.trim()));
+        let trimmed = p.trim();
+        if is_generator_call(trimmed) && files.is_empty() {
+            program = Some(format!("BEGIN{{print {}}}", trimmed));
+        } else {
+            program = Some(format!("{{print {}}}", trimmed));
+        }
     }
 
     let program = match program {
@@ -460,6 +467,32 @@ fn read_hex(chars: &[char], start: usize, count: usize) -> Option<(char, usize)>
     Some((ch, count))
 }
 
+/// Check if a bare function call is a generator (no field/record dependencies).
+/// Generators wrap as BEGIN{print ...} so they don't read stdin.
+/// A call is a generator if:
+/// - args contain no `$` (no field references)
+/// - it's not a no-arg function that implicitly uses fields (rev, length, etc.)
+fn is_generator_call(s: &str) -> bool {
+    let paren = match s.find('(') {
+        Some(p) => p,
+        None => return false,
+    };
+    let name = &s[..paren];
+    let args = &s[paren..];
+    // No-arg functions that implicitly use fields/record
+    if args == "()" {
+        return !matches!(
+            name,
+            "rev" | "reverse" | "length" | "len" | "systime" | "now" | "rand" | "srand"
+        );
+    }
+    // If args reference fields ($), NR, NF, FNR — not a generator
+    !args.contains('$')
+        && !args.contains("NR")
+        && !args.contains("NF")
+        && !args.contains("FNR")
+}
+
 /// Check if a program string is a bare function call like `rev()` or `toupper($1)`.
 /// Must be: identifier, `(`, balanced content, `)` at end.
 fn is_bare_func_call(s: &str) -> bool {
@@ -507,4 +540,19 @@ fn is_valid_ident(s: &str) -> bool {
         _ => return false,
     }
     chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generator_detection() {
+        assert!(is_generator_call("seq(1,100)"));
+        assert!(is_generator_call("chr(65)"));
+        assert!(!is_generator_call("rev()"));
+        assert!(!is_generator_call("length()"));
+        assert!(!is_generator_call("tolower($1)"));
+        assert!(!is_generator_call("substr($0,1,5)"));
+    }
 }
