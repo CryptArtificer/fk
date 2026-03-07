@@ -190,6 +190,7 @@ pub fn token_style(t: &Token) -> Style {
         | Token::And
         | Token::Or
         | Token::Question
+        | Token::NullCoalesce
         | Token::Colon
         | Token::Append
         | Token::Pipe => Style::Operator,

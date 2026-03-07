@@ -2348,6 +2348,86 @@ fn seq_two_arg_reverse() {
 }
 
 #[test]
+// --- null coalesce (??) ---
+
+#[test]
+fn null_coalesce_returns_left_when_nonempty() {
+    let rt = eval(r#"BEGIN { a = "hello"; result = a ?? "default" }"#, &[]);
+    assert_eq!(rt.get_var("result"), "hello");
+}
+
+#[test]
+fn null_coalesce_returns_right_when_empty() {
+    let rt = eval(r#"BEGIN { a = ""; result = a ?? "default" }"#, &[]);
+    assert_eq!(rt.get_var("result"), "default");
+}
+
+#[test]
+fn null_coalesce_returns_right_for_unset() {
+    let rt = eval(r#"BEGIN { result = x ?? "fallback" }"#, &[]);
+    assert_eq!(rt.get_var("result"), "fallback");
+}
+
+#[test]
+fn null_coalesce_chains() {
+    let rt = eval(r#"BEGIN { result = a ?? b ?? "end" }"#, &[]);
+    assert_eq!(rt.get_var("result"), "end");
+}
+
+#[test]
+fn null_coalesce_number_is_nonempty() {
+    let rt = eval(r#"BEGIN { a = 0; result = a ?? "default" }"#, &[]);
+    assert_eq!(rt.get_var("result"), "0");
+}
+
+// --- clr ---
+
+#[test]
+fn clr_returns_value_and_clears() {
+    let rt = eval(
+        r#"BEGIN { f = "Fizz"; result = clr(f); leftover = f }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "Fizz");
+    assert_eq!(rt.get_var("leftover"), "");
+}
+
+#[test]
+fn clr_empty_returns_empty() {
+    let rt = eval(r#"BEGIN { result = clr(a) }"#, &[]);
+    assert_eq!(rt.get_var("result"), "");
+}
+
+#[test]
+fn clr_concat_with_coalesce() {
+    // clr(f) clr(b) ?? $0
+    let rt = eval(
+        r#"BEGIN { f = "Fizz"; b = ""; result = clr(f) clr(b) ?? "fallback" }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "Fizz");
+}
+
+#[test]
+fn clr_all_empty_coalesces() {
+    let rt = eval(
+        r#"BEGIN { result = clr(f) clr(b) ?? "42" }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "42");
+}
+
+#[test]
+fn clr_alias_clear() {
+    let rt = eval(
+        r#"BEGIN { x = "hello"; result = clear(x); leftover = x }"#,
+        &[],
+    );
+    assert_eq!(rt.get_var("result"), "hello");
+    assert_eq!(rt.get_var("leftover"), "");
+}
+
+#[test]
 fn sample_reduces_array() {
     let rt = eval(
         r#"BEGIN { srand(42); seq(a,1,100); n=samp(a,5); result=n }"#,

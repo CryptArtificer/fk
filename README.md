@@ -37,6 +37,8 @@ The pattern-action model is the same. Everything below is new.
 - **Program explanation** — `--explain` (used by describe and examples) produces a terse one-line description of what a program does, derived from the AST and reductions (no special-case idioms).
 - **Capture groups in match()** — `match($0, /(\d+)-(\d+)/, cap)` extracts groups into an array. Standard awk can't do this.
 - **Better errors** — source-location-aware diagnostics with line and column numbers.
+- **Null coalesce** — `$nickname ?? $name` returns the first non-empty value. `c ?? 0` replaces the `c+0` idiom.
+- **clr()** — clear a variable, return its last value. Useful for one-shot state: `print clr(hdr), $0`.
 - **Negative field indexes** — `$-1` is the last field, `$-2` is second-to-last.
 - **REPL** — interactive mode for exploration (`--repl`).
 - **Format & highlight** — `--highlight` prints a syntax-highlighted program (keywords, literals, built-in vars distinct); `--format` pretty-prints with indentation and line breaks. Examples and `--suggest` output use highlighting when available.
@@ -243,6 +245,19 @@ fk 'tolower($1)' file.txt
 # -O sep: set output field separator; -t: tab output
 fk -t '{ print $2, $1 }' data.csv
 fk -O, '{ print $1, $3 }' data.tsv
+
+# ?? null coalesce — first non-empty value wins
+fk -H '{ print $nickname ?? $name }' contacts.csv
+fk '/error/ { c++ } END { print c ?? 0 }' log.txt
+
+# clr() — clear variable, return last value
+fk '/^##/ { hdr = $0 }; /^-/ { print clr(hdr), $0 }' notes.md
+
+# seq(from, to) as a generator — no stdin needed
+fk 'seq(1,10)'
+
+# FizzBuzz — pure fk
+fk 'seq(1,100)' | fk 'every 3 {f="Fizz"} every 5 {b="Buzz"} {print clr(f) clr(b) ?? $0}'
 
 # typeof() introspection
 echo "" | fk 'BEGIN { x=42; y="hi"; z[1]=1; print typeof(x), typeof(y), typeof(z), typeof(w) }'

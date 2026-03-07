@@ -972,7 +972,7 @@ fn collect_expr_refs(e: &Expr, vs: &HashMap<String, Expr>, out: &mut Vec<String>
             collect_expr_refs(l, vs, out, depth - 1);
             collect_expr_refs(r, vs, out, depth - 1);
         }
-        Expr::Ternary(_, t, f) => {
+        Expr::Ternary(_, t, f) | Expr::NullCoalesce(t, f) => {
             collect_expr_refs(t, vs, out, depth - 1);
             collect_expr_refs(f, vs, out, depth - 1);
         }
@@ -1237,7 +1237,8 @@ fn expr_calls_fn(e: &Expr, fname: &str) -> bool {
         | Expr::BinOp(l, _, r)
         | Expr::Concat(l, r)
         | Expr::LogicalAnd(l, r)
-        | Expr::LogicalOr(l, r) => expr_calls_fn(l, fname) || expr_calls_fn(r, fname),
+        | Expr::LogicalOr(l, r)
+        | Expr::NullCoalesce(l, r) => expr_calls_fn(l, fname) || expr_calls_fn(r, fname),
         Expr::UnaryMinus(e) | Expr::LogicalNot(e) | Expr::Field(e) => expr_calls_fn(e, fname),
         Expr::Ternary(c, t, f) => {
             expr_calls_fn(c, fname) || expr_calls_fn(t, fname) || expr_calls_fn(f, fname)
@@ -1359,7 +1360,8 @@ fn collect_fn_names_expr(e: &Expr, fns: &mut Vec<String>) {
         Expr::BinOp(l, _, r)
         | Expr::Concat(l, r)
         | Expr::LogicalAnd(l, r)
-        | Expr::LogicalOr(l, r) => {
+        | Expr::LogicalOr(l, r)
+        | Expr::NullCoalesce(l, r) => {
             collect_fn_names_expr(l, fns);
             collect_fn_names_expr(r, fns);
         }
@@ -1726,7 +1728,7 @@ fn expr_has_non_jpath_call(e: &Expr, vs: &HashMap<String, Expr>, depth: u8) -> b
         | Expr::LogicalOr(l, r) => {
             expr_has_non_jpath_call(l, vs, depth - 1) || expr_has_non_jpath_call(r, vs, depth - 1)
         }
-        Expr::Ternary(_, t, f) => {
+        Expr::Ternary(_, t, f) | Expr::NullCoalesce(t, f) => {
             expr_has_non_jpath_call(t, vs, depth - 1) || expr_has_non_jpath_call(f, vs, depth - 1)
         }
         Expr::UnaryMinus(inner) | Expr::LogicalNot(inner) | Expr::Field(inner) => {
@@ -1749,6 +1751,7 @@ fn expr_mentions_counter(expr: &Expr) -> bool {
         Expr::Ternary(c, t, f) => {
             expr_mentions_counter(c) || expr_mentions_counter(t) || expr_mentions_counter(f)
         }
+        Expr::NullCoalesce(l, r) => expr_mentions_counter(l) || expr_mentions_counter(r),
         Expr::Field(e) | Expr::UnaryMinus(e) | Expr::LogicalNot(e) => expr_mentions_counter(e),
         _ => false,
     }

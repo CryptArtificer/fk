@@ -387,6 +387,7 @@ l l.
 \fB&&\fR	Logical and
 \fB||\fR	Logical or
 \fB?:\fR	Ternary
+\fB??\fR	Null coalesce (return left if non-empty string, else right)
 \fB= += \-= *= /= %=\fR	Assignment
 .TE
 .
@@ -632,6 +633,10 @@ Returns remaining count of \fIa\fR.
 Set union: copy keys from \fIb\fR into \fIa\fR (without overwriting).
 Returns total count of \fIa\fR.
 .TP
+\fBseq(\fIfrom\fB,\fR \fIto\fB)\fR
+Return integers from \fIfrom\fR to \fIto\fR joined by ORS.
+As a bare call (\fBfk 'seq(1,100)'\fR), wraps as a generator (no stdin).
+.TP
 \fBseq(\fIarr\fB,\fR \fIfrom\fB,\fR \fIto\fB)\fR
 Fill \fIarr\fR with integers from \fIfrom\fR to \fIto\fR, keyed 1..N.
 Direction is automatic. Returns count.
@@ -708,6 +713,9 @@ Minimum / maximum value in the array.
 .TP
 \fBtypeof(\fIx\fB)\fR
 Returns \fB"number"\fR, \fB"string"\fR, \fB"array"\fR, or \fB"uninitialized"\fR.
+.TP
+\fBclr(\fIvar\fB)\fR / \fBclear(\fIvar\fB)\fR
+Clear variable, return its last value.
 .TP
 \fBplot(\fIarr\fB [\fB,\fR \fIwidth\fR [\fB,\fR \fIchar\fR [\fB,\fR \fIprecision\fR [\fB,\fR \fIcolor\fR]]]]])\fR
 Render a simple horizontal bar chart from array values. Accepts an array
@@ -865,7 +873,7 @@ These are meant to be stolen.
 \fBfk '{ sum[$1] += $2 } END { for (k in sum) print k, sum[k] }' file\fR
 
 # Count lines matching a pattern
-\fBfk '/error/ { c++ } END { print c+0 }' log.txt\fR
+\fBfk '/error/ { c++ } END { print c ?? 0 }' log.txt\fR
 .fi
 .
 .SS CSV and structured data
@@ -875,6 +883,9 @@ These are meant to be stolen.
 
 # CSV with headers — access fields by name
 \fBfk -H '$status == "active" { print $name }' users.csv\fR
+
+# Fallback column — use nickname if present, else name
+\fBfk -H '{ print $nickname ?? $name }' contacts.csv\fR
 
 # Convert CSV to TSV
 \fBfk -t '1' data.csv\fR
@@ -965,8 +976,14 @@ END { for (d in dept) @rval print d, dept[d] }' sales.parquet\fR
 # FizzBuzz — pure fk, no external tools
 \fBfk 'seq(1,100)' | fk '
   every 3 { f = "Fizz" }
-  every 5 { f = f "Buzz" }
-  { print (f ? f : $0); f = "" }'\fR
+  every 5 { b = "Buzz" }
+  { print clr(f) clr(b) ?? $0 }'\fR
+
+# Default values — ?? returns left if non-empty, else right
+\fBfk -H '{ print $email ?? "(none)" }' users.csv\fR
+
+# clr: print heading once, then clear it
+\fBfk '/^##/ { hdr = $0 }; /^-/ { print clr(hdr), $0 }' notes.md\fR
 
 # Diagnostics: inspect and time
 \fBfk '{ dump($0) }' file\fR
@@ -1001,6 +1018,7 @@ acc	collect	array
 bot	bottom	array
 runtot	runtotal	array
 win	window	array
+clr	clear	utility
 .TE
 .
 .\" ─────────────────────────────────────────────────────────────

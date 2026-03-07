@@ -203,6 +203,10 @@ fn walk_expr(expr: &Expr, info: &mut ProgramInfo) {
             walk_expr(t, info);
             walk_expr(f, info);
         }
+        Expr::NullCoalesce(l, r) => {
+            walk_expr(l, info);
+            walk_expr(r, info);
+        }
         Expr::Sprintf(args) | Expr::FuncCall(_, args) => {
             if let Expr::FuncCall(name, fargs) = expr {
                 if name == "collect"
@@ -570,6 +574,11 @@ fn fmt_expr(expr: &Expr, buf: &mut String, depth: usize) {
             fmt_expr(t, buf, depth + 1);
             buf.push_str(" : ");
             fmt_expr(f, buf, depth + 1);
+        }
+        Expr::NullCoalesce(l, r) => {
+            fmt_expr(l, buf, depth + 1);
+            buf.push_str(" ?? ");
+            fmt_expr(r, buf, depth + 1);
         }
         Expr::Sprintf(args) | Expr::FuncCall(_, args) => {
             let name = if let Expr::FuncCall(n, _) = expr {

@@ -105,6 +105,14 @@ impl<'a> Executor<'a> {
                 let val = self.eval_expr(inner);
                 Value::from_number(-val.to_number())
             }
+            Expr::NullCoalesce(left, right) => {
+                let val = self.eval_expr(left);
+                if !val.to_string_val().is_empty() {
+                    val
+                } else {
+                    self.eval_expr(right)
+                }
+            }
             Expr::Ternary(cond, then_expr, else_expr) => {
                 let val = self.eval_expr(cond);
                 if val.is_truthy() {
@@ -175,6 +183,7 @@ impl<'a> Executor<'a> {
                     "runtotal" | "runtot" => return self.builtin_runtotal(args),
                     "norm" | "normalize" => return self.builtin_norm(args),
                     "window" | "win" => return self.builtin_window(args),
+                    "clr" | "clear" => return self.builtin_clr(args),
                     "dump" => return self.builtin_dump(args),
                     "clk" | "clock" => return self.builtin_clock(),
                     "tic" | "start" => return self.builtin_start(args),

@@ -23,7 +23,7 @@ incrementally as a learning exercise. The user values:
 ## Current state
 
 - **~17,000 lines of Rust** across 33 source files
-- **480 Rust + 152 shell tests**, zero warnings, clippy clean
+- **490 Rust + 152 shell tests**, zero warnings, clippy clean
 - **Phases 0–20 complete** (20 = array convenience & language constructs)
 - Dependencies: `regex` crate; `parquet` + `arrow` (default feature, disable with `--no-default-features`)
 - Dev dependency: `criterion` (benchmarks)
@@ -73,7 +73,7 @@ builtins/json.rs     — jpath() with JSON parser, path evaluator, iteration
   so structured readers (CSV/JSON) can pre-split fields
 - Builtins that need runtime access (sub, gsub, split, close, gensub, jpath 3-arg, system,
  stats (hist), bitwise, asort, keys, vals, uniq, inv, tidy, shuf, rev, diff, inter, union,
- seq, samp, slurp, collect, top, bottom, runtotal, norm, window) live in
+ seq, samp, slurp, collect, top, bottom, runtotal, norm, window, clr) live in
  action/builtins_rt.rs; pure builtins go through builtins::call_builtin
 - Lexer uses O(1) incremental line/col tracking; produces `Spanned` tokens (token + Span)
 - Parser/lexer errors are structured `FkError` (span + message, implements Display + Error)
@@ -167,6 +167,11 @@ Phase 20: Array convenience & language constructs — collect(a, expr): per-reco
  -O sep: output field separator. -t: tab output shorthand.
  Bare func call auto-print: fk 'func()' → {print func()}.
  Function aliases: short names for all builtins (len, idx, lower, upper, etc.).
+Phase 21: Null coalesce (??) operator — returns left if non-empty string, else right.
+ Short-circuit evaluation, precedence between ternary and logical or.
+ clr(var) / clear(var): return value then clear variable to "". Single-purpose primitive.
+ seq(from, to) 2-arg form: returns values joined by ORS (generator, wraps as BEGIN).
+ Generator detection: bare func calls without field/record deps wrap as BEGIN{print ...}.
 Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
   (array_sources + var_sources in ProgramInfo, one level of variable
   indirection), combined with FILENAME at hist() time. Smart formatting:

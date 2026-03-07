@@ -483,6 +483,13 @@ impl Pretty {
                 self.space();
                 self.expr(else_e, 0);
             }
+            Expr::NullCoalesce(l, r) => {
+                self.expr(l, 0);
+                self.space();
+                self.out.push_str("??");
+                self.space();
+                self.expr(r, 0);
+            }
             Expr::Sprintf(args) => {
                 self.out.push_str("sprintf");
                 self.out.push('(');

@@ -1,6 +1,6 @@
 [package]
 name = "fk"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "A slightly modernized awk clone built in Rust"
 license = "MIT"

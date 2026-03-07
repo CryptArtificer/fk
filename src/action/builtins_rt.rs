@@ -1563,6 +1563,21 @@ impl<'a> Executor<'a> {
             Err(_) => Value::from_number(-1.0),
         }
     }
+    // ── Clear-and-return ─────────────────────────────────────────────
+
+    /// clr(var) — return current value, then clear the variable to "".
+    pub(crate) fn builtin_clr(&mut self, args: &[Expr]) -> Value {
+        if args.len() != 1 {
+            eprintln!("fk: clr requires exactly 1 argument");
+            return Value::from_string(String::new());
+        }
+        let val = self.eval_expr(&args[0]);
+        if let Expr::Var(name) = &args[0] {
+            self.rt.set_var(name, "");
+        }
+        val
+    }
+
     // ── Diagnostics ─────────────────────────────────────────────────
 
     /// dump(x [, file]) — write detailed variable/array info to stderr or file.

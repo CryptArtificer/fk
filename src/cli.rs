@@ -283,7 +283,7 @@ fn print_usage() {
     eprintln!();
     eprintln!("Examples:");
     eprintln!("  fk data.csv                              # view CSV as columns");
-    eprintln!("  fk -H -v 'OFS=\\t' data.csv               # skip header, tab output");
+    eprintln!("  fk -H -t data.csv                         # skip header, tab output");
     eprintln!("  fk -H '{{ print $name, $age }}' data.csv");
     eprintln!("  fk '/error/ {{ print $2 }}' server.log");
     eprintln!("  fk -F: '!/^#/{{ u[$1]++ }} END {{ print u }}' /etc/passwd");

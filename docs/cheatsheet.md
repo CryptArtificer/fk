@@ -5,6 +5,7 @@
 ```sh
 fk [options] 'program' [file ...]
 fk [options] 'func(...)' [file ...]  # bare function call → {print func(...)}
+fk 'seq(1,100)'                    # generator call → BEGIN{print seq(1,100)}
 fk [options] file ...              # defaults to { print }
 fk -f progfile [file ...]          # read program from file
 fk --describe [file ...]           # sniff format, show schema & examples
@@ -108,6 +109,7 @@ Unicode-aware by default: `.` matches any codepoint (not byte).
 | `~` `!~` | Regex match / not match |
 | `&&` `\|\|` `!` | Logical |
 | `? :` | Ternary |
+| `??` | Null coalesce — left if non-empty, else right |
 | `string string` | Concatenation (implicit) |
 
 ## Control flow
@@ -223,7 +225,8 @@ print ... > "/dev/stderr"   # write to stderr
 | `diff(a, b)` | Set difference: remove from `a` keys in `b` |
 | `inter(a, b)` | Set intersection: keep in `a` only keys also in `b` |
 | `union(a, b)` | Set union: merge keys from `b` into `a` |
-| `seq(arr, from, to)` | Fill with integer range, re-key 1..N |
+| `seq(from, to)` | Return integer range joined by ORS (generator) |
+| `seq(arr, from, to)` | Fill array with integer range, re-key 1..N |
 | `samp(arr, n)` | Random n elements, re-key 1..n |
 | `collect(arr, expr)` | Append expr (skip NaN/empty), auto-key; returns count |
 | `top(arr, n)` | Keep n largest values, re-key 1..n |
@@ -250,6 +253,7 @@ print ... > "/dev/stderr"   # write to stderr
 | Function | Description |
 |----------|-------------|
 | `typeof(x)` | `"number"`, `"string"`, `"array"`, or `"uninitialized"` |
+| `clr(var)` / `clear(var)` | Clear variable, return its last value |
 | `plot(arr [, width [, char [, precision [, color]]]])` | Render simple horizontal bar chart |
 | `plotbox(arr [, width [, char [, precision [, title [, xlabel [, color]]]]]])` | Boxed horizontal bar chart; auto-subtitle from source expression and filename |
 
@@ -306,6 +310,7 @@ Every function has a short or long alias. Both forms are interchangeable.
 | `q` | `quantile` | stats |
 | `hist` | `histogram` | stats |
 | `pbox` | `plotbox` | viz |
+| `clr` | `clear` | utility |
 | `clk` | `clock` | diag |
 | `tic` | `start` | diag |
 | `toc` | `elapsed` | diag |

@@ -102,6 +102,7 @@ pub enum Expr {
     UnaryMinus(Box<Expr>),
     Concat(Box<Expr>, Box<Expr>),
     Ternary(Box<Expr>, Box<Expr>, Box<Expr>),
+    NullCoalesce(Box<Expr>, Box<Expr>),
     Sprintf(Vec<Expr>),
     FuncCall(String, Vec<Expr>),
     /// getline [var] [< file]. Fields: optional var name, optional source file expr.
@@ -747,7 +748,7 @@ impl Parser {
     }
 
     fn parse_ternary(&mut self) -> Result<Expr, FkError> {
-        let expr = self.parse_logical_or()?;
+        let expr = self.parse_null_coalesce()?;
 
         if self.check(&Token::Question) {
             self.advance();
@@ -762,6 +763,18 @@ impl Parser {
         } else {
             Ok(expr)
         }
+    }
+
+    fn parse_null_coalesce(&mut self) -> Result<Expr, FkError> {
+        let mut left = self.parse_logical_or()?;
+
+        while self.check(&Token::NullCoalesce) {
+            self.advance();
+            let right = self.parse_logical_or()?;
+            left = Expr::NullCoalesce(Box::new(left), Box::new(right));
+        }
+
+        Ok(left)
     }
 
     fn parse_logical_or(&mut self) -> Result<Expr, FkError> {

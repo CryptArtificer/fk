@@ -247,3 +247,9 @@
 - [x] `-t` — tab-separated output (shorthand for `-O '\t'`)
 - [x] Bare function call auto-print: `fk 'func()' file` wraps to `{print func()}`
 - [x] Function aliases: short names for all builtins (len, idx, lower, upper, sw, ew, rep, rev, now, pdate, jp, avg, med, sd, var, pct, q, pbox, acc, bot, runtot, norm, win)
+
+#### Phase 21 — Null coalesce & emit
+- [x] `??` operator — return left if non-empty string, else right (short-circuit)
+- [x] `clr(var)` / `clear(var)` — return value, then clear variable to ""
+- [x] `seq(from, to)` 2-arg form — return values joined by ORS (generator)
+- [x] Generator detection — bare func calls without field/record deps wrap as `BEGIN{print ...}`

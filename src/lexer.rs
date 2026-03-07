@@ -63,8 +63,9 @@ pub enum Token {
     Not,      // !
     And,      // &&
     Or,       // ||
-    Question, // ?
-    Colon,    // :
+    Question,       // ?
+    NullCoalesce,   // ??
+    Colon,          // :
     Append,   // >>
     Pipe,     // | (single, for output redirection)
 
@@ -305,7 +306,12 @@ impl Lexer {
                 }
                 '?' => {
                     self.advance_char();
-                    Token::Question
+                    if self.peek() == Some('?') {
+                        self.advance_char();
+                        Token::NullCoalesce
+                    } else {
+                        Token::Question
+                    }
                 }
                 ':' => {
                     self.advance_char();
