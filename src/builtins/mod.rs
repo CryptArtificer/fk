@@ -77,7 +77,7 @@ pub fn format_number(n: f64) -> String {
 /// Dispatch pure built-in function calls (those that don't need runtime access).
 pub fn call_builtin(name: &str, args: &[String]) -> String {
     match name {
-        "length" | "len" | "substr" | "index" | "idx" | "tolower" | "lower" | "toupper"
+        "length" | "len" | "l" | "substr" | "index" | "idx" | "tolower" | "lower" | "toupper"
         | "upper" | "trim" | "ltrim" | "rtrim" | "startswith" | "sw" | "endswith" | "ew"
         | "repeat" | "rep" | "rev" | "reverse" | "chr" | "ord" | "hex" | "lpad"
         | "rpad" | "emoji" | "moji" => string::call(name, args),

@@ -28,17 +28,17 @@ printf "2025-01-15\n2024-06-30\n" | show $FK '{
 echo ""
 
 # ── asort / asorti ──────────────────────────────────────────────
-echo "3) asort — sort array by values:"
+echo "3) asort — sort array by values (chainable):"
 printf "banana\napple\ncherry\ndate\n" | show $FK '
     { a[NR] = $0 }
-    END { asort(a); print "  Sorted:", join(a, " ") }
+    END { print "  Sorted:", join(asort(a), " ") }
 '
 echo ""
 
-echo "   asorti — sort by keys:"
+echo "   asorti — sort by keys (chainable):"
 printf "c:3\na:1\nb:2\n" | show $FK -F: '
     { a[$1] = $2 }
-    END { n = asorti(a); print "  Keys:", join(a, " ") }
+    END { print "  Keys:", join(asorti(a), " ") }
 '
 echo ""
 

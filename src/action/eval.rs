@@ -138,11 +138,11 @@ impl<'a> Executor<'a> {
                     "jpath" | "jp" if args.len() >= 3 => {
                         return self.builtin_jpath_extract(args);
                     }
-                    "length" | "len" if args.is_empty() => {
+                    "length" | "len" | "l" if args.is_empty() => {
                         let s = self.rt.get_field(0);
                         return Value::from_number(s.chars().count() as f64);
                     }
-                    "length" | "len" if args.len() == 1 => {
+                    "length" | "len" | "l" if args.len() == 1 => {
                         if let Expr::Var(var_name) = &args[0]
                             && self.rt.has_array(var_name)
                         {

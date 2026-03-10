@@ -28,7 +28,7 @@ echo ""
 # ── uniq ─────────────────────────────────────────────────────────
 echo "3) uniq() — deduplicate:"
 printf 'red\nblue\nred\ngreen\nblue\nblue\n' | \
-    show $FK '{ a[NR]=$1 } END { n=uniq(a); print " ", n, "unique:"; print a }'
+    show $FK '{ a[NR]=$1 } END { print " ", l(uniq(a)), "unique:"; print a }'
 echo ""
 
 # ── invert ───────────────────────────────────────────────────────
@@ -57,21 +57,21 @@ echo "   diff(a, b) — in a but not b:"
 echo "x" | show $FK 'BEGIN {
     a["apple"]=1; a["banana"]=1; a["cherry"]=1; a["date"]=1
     b["banana"]=1; b["date"]=1; b["elderberry"]=1
-    diff(a, b); asorti(a); print "  ", join(a, " ")
+    print "  ", join(asorti(diff(a, b)), " ")
 }'
 
 echo "   inter(a, b) — in both:"
 echo "x" | show $FK 'BEGIN {
     a["apple"]=1; a["banana"]=1; a["cherry"]=1; a["date"]=1
     b["banana"]=1; b["date"]=1; b["elderberry"]=1
-    inter(a, b); asorti(a); print "  ", join(a, " ")
+    print "  ", join(asorti(inter(a, b)), " ")
 }'
 
 echo "   union(a, b) — in either:"
 echo "x" | show $FK 'BEGIN {
     a["apple"]=1; a["banana"]=1
     b["cherry"]=1; b["date"]=1
-    union(a, b); asorti(a); print "  ", join(a, " ")
+    print "  ", join(asorti(union(a, b)), " ")
 }'
 echo ""
 

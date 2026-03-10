@@ -67,4 +67,27 @@ END {
     for (i in line) print line[i]
 }' "$TMPDIR/orders.csv"
 
-printf "\n${C_BOLD}Done.${C_RESET} asort/asorti/join + parsedate/strftime — awk has none of these.\n"
+section "5. Chaining — functional pipelines"
+
+echo "Filter long names, sort, and uppercase in one expression:"
+show $FK '
+function long(x) { return length(x) > 5 }
+{ a[NR]=$1 }
+END { print join(map(asort(filter(a, "long")), "toupper"), ", ") }
+' <<'EOF'
+cherry
+apple
+fig
+banana
+date
+elderberry
+grape
+apricot
+EOF
+
+echo ""
+echo "Deduplicate, sort, and join:"
+printf "red\nblue\nred\ngreen\nblue\n" | \
+    show $FK '{ a[NR]=$1 } END { print join(asort(uniq(a)), " → ") }'
+
+printf "\n${C_BOLD}Done.${C_RESET} asort/asorti/join/map/filter + parsedate/strftime — awk has none of these.\n"

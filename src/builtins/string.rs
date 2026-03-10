@@ -3,7 +3,7 @@ use super::{format_number, to_number};
 /// Dispatch string built-in functions.
 pub fn call(name: &str, args: &[String]) -> String {
     match name {
-        "length" | "len" => {
+        "length" | "len" | "l" => {
             let s = args.first().map(|s| s.as_str()).unwrap_or("");
             format_number(s.chars().count() as f64)
         }

@@ -280,7 +280,7 @@ Every function has a short or long alias. Both forms are interchangeable.
 
 | Short | Long | Category |
 |-------|------|----------|
-| `len` | `length` | string/array |
+| `len`, `l` | `length` | string/array |
 | `idx` | `index` | string |
 | `lower` | `tolower` | string |
 | `upper` | `toupper` | string |
