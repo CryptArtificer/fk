@@ -1602,7 +1602,7 @@ fn asort_by_values() {
         r#"BEGIN { a["x"]="3"; a["y"]="1"; a["z"]="2"; n = asort(a); r = a[1] "," a[2] "," a[3] }"#,
         &[],
     );
-    assert_eq!(rt.get_var("n"), "3");
+    assert_eq!(rt.get_var("n"), "a"); // returns array name for chaining
     assert_eq!(rt.get_var("r"), "1,2,3");
 }
 
@@ -1612,7 +1612,7 @@ fn asorti_by_keys() {
         r#"BEGIN { a["c"]=1; a["a"]=2; a["b"]=3; n = asorti(a); r = a[1] "," a[2] "," a[3] }"#,
         &[],
     );
-    assert_eq!(rt.get_var("n"), "3");
+    assert_eq!(rt.get_var("n"), "a"); // returns array name for chaining
     assert_eq!(rt.get_var("r"), "a,b,c");
 }
 
@@ -2268,7 +2268,7 @@ fn bare_regex_in_expression_context() {
 #[test]
 fn uniq_deduplicates_values() {
     let rt = eval(
-        r#"{ a[NR]=$1 } END { n=uniq(a); result=n ":" a[1] "," a[2] "," a[3] }"#,
+        r#"{ a[NR]=$1 } END { uniq(a); result=length(a) ":" a[1] "," a[2] "," a[3] }"#,
         &["x", "y", "x", "z", "y"],
     );
     assert_eq!(rt.get_var("result"), "3:x,y,z");
@@ -2286,7 +2286,7 @@ fn invert_swaps_keys_values() {
 #[test]
 fn compact_removes_falsy() {
     let rt = eval(
-        r#"BEGIN { a[1]="hi"; a[2]=""; a[3]=0; a[4]="ok"; n=tidy(a); result=n }"#,
+        r#"BEGIN { a[1]="hi"; a[2]=""; a[3]=0; a[4]="ok"; tidy(a); result=length(a) }"#,
         &[],
     );
     assert_eq!(rt.get_var("result"), "2");
@@ -2499,12 +2499,13 @@ fn rev_reverses_array() {
 }
 
 #[test]
-fn rev_returns_count() {
+fn rev_returns_array_name() {
     let rt = eval(
-        r#"BEGIN { a[1]="x"; a[2]="y"; n=rev(a) }"#,
+        r#"BEGIN { a[1]="x"; a[2]="y"; n=rev(a); result=a[1] "," a[2] }"#,
         &[],
     );
-    assert_eq!(rt.get_var("n"), "2");
+    assert_eq!(rt.get_var("n"), "a"); // returns array name for chaining
+    assert_eq!(rt.get_var("result"), "y,x");
 }
 
 // --- slurp ---
@@ -2740,9 +2741,9 @@ fn bottom_keeps_smallest() {
 }
 
 #[test]
-fn top_returns_count() {
+fn top_returns_array_name() {
     let rt = eval(
-        r#"BEGIN { a[1]=10; a[2]=20; result = top(a, 5) }"#,
+        r#"BEGIN { a[1]=10; a[2]=20; top(a, 5); result = length(a) }"#,
         &[],
     );
     assert_eq!(rt.get_var("result"), "2");

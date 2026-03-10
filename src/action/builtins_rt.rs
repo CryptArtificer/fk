@@ -24,6 +24,32 @@ impl<'a> Executor<'a> {
         self.eval_string(expr)
     }
 
+    /// Extract array name from an expression. Supports bare Var for direct use,
+    /// or evaluates the expression (for chaining like join(map(a, "f"))).
+    /// Returns None with an error if the result doesn't name a known array.
+    fn resolve_array_arg(&mut self, expr: &Expr, caller: &str) -> Option<String> {
+        let name = match expr {
+            Expr::Var(name) => name.clone(),
+            other => {
+                let val = self.eval_string(other);
+                if val.is_empty() {
+                    eprintln!("fk: {}: argument must be an array", caller);
+                    return None;
+                }
+                val
+            }
+        };
+        if !self.rt.has_array(&name) {
+            // Var might be an uninitialized array — that's ok, treat as empty
+            if let Expr::Var(_) = expr {
+                return Some(name);
+            }
+            eprintln!("fk: {}: '{}' is not an array", caller, name);
+            return None;
+        }
+        Some(name)
+    }
+
     /// sub/gsub: these need runtime access to modify lvalues.
     pub(crate) fn builtin_sub(&mut self, args: &[Expr], global: bool) -> Value {
         if args.len() < 2 {
@@ -253,10 +279,9 @@ impl<'a> Executor<'a> {
             eprintln!("fk: join requires at least 1 argument (array [, separator])");
             return Value::default();
         }
-        let array_name = match &args[0] {
-            Expr::Var(name) => name.clone(),
-            // Support chaining: join(map(a, "f"), sep) — map returns array name
-            other => self.eval_string(other),
+        let array_name = match self.resolve_array_arg(&args[0], "join") {
+            Some(n) => n,
+            None => return Value::default(),
         };
         let sep = if args.len() >= 2 {
             self.eval_string(&args[1])
@@ -284,12 +309,9 @@ impl<'a> Executor<'a> {
             eprintln!("fk: keys requires 1 argument (array)");
             return Value::default();
         }
-        let array_name = match &args[0] {
-            Expr::Var(name) => name.clone(),
-            _ => {
-                eprintln!("fk: keys: argument must be an array name");
-                return Value::default();
-            }
+        let array_name = match self.resolve_array_arg(&args[0], "keys") {
+            Some(n) => n,
+            None => return Value::default(),
         };
         let mut keys = self.rt.array_keys(&array_name);
         smart_sort_keys(&mut keys);
@@ -303,12 +325,9 @@ impl<'a> Executor<'a> {
             eprintln!("fk: vals requires 1 argument (array)");
             return Value::default();
         }
-        let array_name = match &args[0] {
-            Expr::Var(name) => name.clone(),
-            _ => {
-                eprintln!("fk: vals: argument must be an array name");
-                return Value::default();
-            }
+        let array_name = match self.resolve_array_arg(&args[0], "vals") {
+            Some(n) => n,
+            None => return Value::default(),
         };
         let mut keys = self.rt.array_keys(&array_name);
         smart_sort_keys(&mut keys);
@@ -344,14 +363,11 @@ impl<'a> Executor<'a> {
         let _ = self.stdout.write_all(ors.as_bytes());
     }
 
-    /// uniq(arr) — deduplicate values, re-key 1..N. Returns new count.
+    /// uniq(arr) — deduplicate values, re-key 1..N. Returns array name.
     pub(crate) fn builtin_uniq(&mut self, args: &[Expr]) -> Value {
-        let array_name = match extract_array_name(args) {
+        let array_name = match self.resolve_array_arg(&args[0], "uniq") {
             Some(n) => n,
-            None => {
-                eprintln!("fk: uniq: argument must be an array name");
-                return Value::from_number(0.0);
-            }
+            None => return Value::default(),
         };
         let mut keys = self.rt.array_keys(&array_name);
         smart_sort_keys(&mut keys);
@@ -363,44 +379,36 @@ impl<'a> Executor<'a> {
                 unique.push(v);
             }
         }
-        let count = unique.len();
         self.rt.delete_array_all(&array_name);
         for (i, v) in unique.into_iter().enumerate() {
             self.rt.set_array(&array_name, &(i + 1).to_string(), &v);
         }
-        Value::from_number(count as f64)
+        Value::from_string(array_name)
     }
 
-    /// inv(arr) — swap keys and values in place. Returns count.
+    /// inv(arr) — swap keys and values in place. Returns array name.
     pub(crate) fn builtin_invert(&mut self, args: &[Expr]) -> Value {
-        let array_name = match extract_array_name(args) {
+        let array_name = match self.resolve_array_arg(&args[0], "inv") {
             Some(n) => n,
-            None => {
-                eprintln!("fk: inv: argument must be an array name");
-                return Value::from_number(0.0);
-            }
+            None => return Value::default(),
         };
         let keys = self.rt.array_keys(&array_name);
         let pairs: Vec<(String, String)> = keys
             .iter()
             .map(|k| (k.clone(), self.rt.get_array(&array_name, k)))
             .collect();
-        let count = pairs.len();
         self.rt.delete_array_all(&array_name);
         for (k, v) in pairs {
             self.rt.set_array(&array_name, &v, &k);
         }
-        Value::from_number(count as f64)
+        Value::from_string(array_name)
     }
 
-    /// tidy(arr) — remove entries with empty or zero values. Returns remaining count.
+    /// tidy(arr) — remove entries with empty or zero values. Returns array name.
     pub(crate) fn builtin_compact(&mut self, args: &[Expr]) -> Value {
-        let array_name = match extract_array_name(args) {
+        let array_name = match self.resolve_array_arg(&args[0], "tidy") {
             Some(n) => n,
-            None => {
-                eprintln!("fk: tidy: argument must be an array name");
-                return Value::from_number(0.0);
-            }
+            None => return Value::default(),
         };
         let keys = self.rt.array_keys(&array_name);
         let mut to_remove = Vec::new();
@@ -413,17 +421,14 @@ impl<'a> Executor<'a> {
         for k in &to_remove {
             self.rt.delete_array(&array_name, k);
         }
-        Value::from_number(self.rt.array_len(&array_name) as f64)
+        Value::from_string(array_name)
     }
 
-    /// shuf(arr) — randomize order, re-key 1..N. Returns count.
+    /// shuf(arr) — randomize order, re-key 1..N. Returns array name.
     pub(crate) fn builtin_shuffle(&mut self, args: &[Expr]) -> Value {
-        let array_name = match extract_array_name(args) {
+        let array_name = match self.resolve_array_arg(&args[0], "shuf") {
             Some(n) => n,
-            None => {
-                eprintln!("fk: shuf: argument must be an array name");
-                return Value::from_number(0.0);
-            }
+            None => return Value::default(),
         };
         let keys = self.rt.array_keys(&array_name);
         let mut vals: Vec<String> = keys
@@ -434,12 +439,11 @@ impl<'a> Executor<'a> {
             let j = (builtins::math::rng_next() * (i + 1) as f64) as usize;
             vals.swap(i, j.min(i));
         }
-        let count = vals.len();
         self.rt.delete_array_all(&array_name);
         for (i, v) in vals.into_iter().enumerate() {
             self.rt.set_array(&array_name, &(i + 1).to_string(), &v);
         }
-        Value::from_number(count as f64)
+        Value::from_string(array_name)
     }
 
     /// rev() — reverse fields of current record in place. Returns new $0.
@@ -448,14 +452,11 @@ impl<'a> Executor<'a> {
         Value::from_string(self.rt.get_field(0))
     }
 
-    /// rev(arr) — reverse order, re-key 1..N. Returns count.
+    /// rev(arr) — reverse order, re-key 1..N. Returns array name.
     pub(crate) fn builtin_reverse_array(&mut self, args: &[Expr]) -> Value {
-        let array_name = match extract_array_name(args) {
+        let array_name = match self.resolve_array_arg(&args[0], "rev") {
             Some(n) => n,
-            None => {
-                eprintln!("fk: rev: argument must be an array name");
-                return Value::from_number(0.0);
-            }
+            None => return Value::default(),
         };
         let mut keys = self.rt.array_keys(&array_name);
         smart_sort_keys(&mut keys);
@@ -464,33 +465,26 @@ impl<'a> Executor<'a> {
             .map(|k| self.rt.get_array(&array_name, k))
             .collect();
         vals.reverse();
-        let count = vals.len();
         self.rt.delete_array_all(&array_name);
         for (i, v) in vals.into_iter().enumerate() {
             self.rt.set_array(&array_name, &(i + 1).to_string(), &v);
         }
-        Value::from_number(count as f64)
+        Value::from_string(array_name)
     }
 
-    /// diff(a, b) — remove from a any key present in b. Returns remaining count.
+    /// diff(a, b) — remove from a any key present in b. Returns array name.
     pub(crate) fn builtin_set_op(&mut self, op: &str, args: &[Expr]) -> Value {
         if args.len() < 2 {
             eprintln!("fk: {} requires 2 arguments (array, array)", op);
-            return Value::from_number(0.0);
+            return Value::default();
         }
-        let name_a = match &args[0] {
-            Expr::Var(n) => n.clone(),
-            _ => {
-                eprintln!("fk: {}: arguments must be array names", op);
-                return Value::from_number(0.0);
-            }
+        let name_a = match self.resolve_array_arg(&args[0], op) {
+            Some(n) => n,
+            None => return Value::default(),
         };
-        let name_b = match &args[1] {
-            Expr::Var(n) => n.clone(),
-            _ => {
-                eprintln!("fk: {}: arguments must be array names", op);
-                return Value::from_number(0.0);
-            }
+        let name_b = match self.resolve_array_arg(&args[1], op) {
+            Some(n) => n,
+            None => return Value::default(),
         };
         let keys_a: std::collections::HashSet<String> =
             self.rt.array_keys(&name_a).into_iter().collect();
@@ -518,7 +512,7 @@ impl<'a> Executor<'a> {
             }
             _ => {}
         }
-        Value::from_number(self.rt.array_len(&name_a) as f64)
+        Value::from_string(name_a)
     }
 
     /// seq(arr, from, to) — fill arr with from..to, keyed 1..N. Returns count.
@@ -646,13 +640,10 @@ impl<'a> Executor<'a> {
             eprintln!("fk: {} requires 2 arguments (array, n)", name);
             return Value::from_number(0.0);
         }
-        let array_name = match &args[0] {
-            Expr::Var(n) => n.clone(),
-            _ => {
-                let name = if smallest { "bottom" } else { "top" };
-                eprintln!("fk: {}: first argument must be an array name", name);
-                return Value::from_number(0.0);
-            }
+        let fn_name = if smallest { "bottom" } else { "top" };
+        let array_name = match self.resolve_array_arg(&args[0], fn_name) {
+            Some(n) => n,
+            None => return Value::default(),
         };
         let n = self.eval_expr(&args[1]).to_number() as usize;
         let mut keys = self.rt.array_keys(&array_name);
@@ -673,18 +664,15 @@ impl<'a> Executor<'a> {
             self.rt
                 .set_array_value(&array_name, &(i + 1).to_string(), Value::from_number(v));
         }
-        Value::from_number(take as f64)
+        Value::from_string(array_name)
     }
 
     /// runtotal(a) — replace each value with the running total up to that point.
-    /// Returns the array name for chaining (like hist()).
+    /// Returns the array name for chaining.
     pub(crate) fn builtin_runtotal(&mut self, args: &[Expr]) -> Value {
-        let array_name = match extract_array_name(args) {
+        let array_name = match self.resolve_array_arg(&args[0], "runtotal") {
             Some(n) => n,
-            None => {
-                eprintln!("fk: runtotal: argument must be an array name");
-                return Value::default();
-            }
+            None => return Value::default(),
         };
         let mut keys = self.rt.array_keys(&array_name);
         smart_sort_keys(&mut keys);
@@ -699,12 +687,9 @@ impl<'a> Executor<'a> {
 
     /// norm(a) — normalize values to 0..1 (min→0, max→1). Returns array name for chaining.
     pub(crate) fn builtin_norm(&mut self, args: &[Expr]) -> Value {
-        let array_name = match extract_array_name(args) {
+        let array_name = match self.resolve_array_arg(&args[0], "norm") {
             Some(n) => n,
-            None => {
-                eprintln!("fk: norm: argument must be an array name");
-                return Value::default();
-            }
+            None => return Value::default(),
         };
         let keys = self.rt.array_keys(&array_name);
         if keys.is_empty() {
@@ -902,12 +887,9 @@ impl<'a> Executor<'a> {
             eprintln!("fk: asort/asorti requires at least 1 argument");
             return Value::from_number(0.0);
         }
-        let array_name = match &args[0] {
-            Expr::Var(name) => name.clone(),
-            _ => {
-                eprintln!("fk: asort/asorti: argument must be an array name");
-                return Value::from_number(0.0);
-            }
+        let array_name = match self.resolve_array_arg(&args[0], if by_index { "asorti" } else { "asort" }) {
+            Some(n) => n,
+            None => return Value::default(),
         };
         let dest_name = args.get(1).and_then(|e| {
             if let Expr::Var(name) = e {
@@ -941,7 +923,6 @@ impl<'a> Executor<'a> {
             });
         }
 
-        let count = items.len();
         let target = dest_name.as_deref().unwrap_or(&array_name);
         self.rt.delete_array_all(target);
         for (i, (key, val)) in items.into_iter().enumerate() {
@@ -952,7 +933,7 @@ impl<'a> Executor<'a> {
                 self.rt.set_array(target, &new_key, &val);
             }
         }
-        Value::from_number(count as f64)
+        Value::from_string(target.to_string())
     }
 
     /// Extract sorted numeric values from an array.
@@ -1596,12 +1577,9 @@ impl<'a> Executor<'a> {
             eprintln!("fk: map requires at least 2 arguments: map(arr, \"func\" [, fmt])");
             return Value::default();
         }
-        let array_name = match &args[0] {
-            Expr::Var(name) => name.clone(),
-            _ => {
-                eprintln!("fk: map: first argument must be an array name");
-                return Value::default();
-            }
+        let array_name = match self.resolve_array_arg(&args[0], "map") {
+            Some(n) => n,
+            None => return Value::default(),
         };
         let func_name = self.eval_string(&args[1]);
         let fmt = if args.len() >= 3 {
@@ -1629,12 +1607,9 @@ impl<'a> Executor<'a> {
             eprintln!("fk: filter requires 2 arguments: filter(arr, \"func\")");
             return Value::from_number(0.0);
         }
-        let array_name = match &args[0] {
-            Expr::Var(name) => name.clone(),
-            _ => {
-                eprintln!("fk: filter: first argument must be an array name");
-                return Value::from_number(0.0);
-            }
+        let array_name = match self.resolve_array_arg(&args[0], "filter") {
+            Some(n) => n,
+            None => return Value::default(),
         };
         let func_name = self.eval_string(&args[1]);
         let mut keys: Vec<String> = self.rt.array_keys(&array_name);
@@ -1777,16 +1752,6 @@ impl<'a> Executor<'a> {
             }
         }
         entries
-    }
-}
-
-fn extract_array_name(args: &[Expr]) -> Option<String> {
-    if args.is_empty() {
-        return None;
-    }
-    match &args[0] {
-        Expr::Var(name) => Some(name.clone()),
-        _ => None,
     }
 }
 

@@ -229,9 +229,9 @@ assert_eq "D40" "map toupper" "$out" "HELLO,WORLD"
 out="$(printf "1\n2\n3\n" | $FK 'function dbl(x){return x*2} { a[NR]=$1 } END { print join(map(a,"dbl"), ",") }')"
 assert_eq "D41" "map user func" "$out" "2,4,6"
 
-# D42 map: format string (emoji prefix)
-out="$(printf "apple\nbanana\n" | $FK '{ a[NR]=$1 } END { asort(a); print join(map(a,"emoji","%s %s"), ", ") }')"
-assert_eq "D42" "map with fmt" "$out" "🍎 apple, 🍌 banana"
+# D42 full chain: join(map(asort(a), ...))
+out="$(printf "banana\napple\n" | $FK '{ a[NR]=$1 } END { print join(map(asort(a),"emoji","%s %s"), ", ") }')"
+assert_eq "D42" "join(map(asort()))" "$out" "🍎 apple, 🍌 banana"
 
 # D43 filter: keep matching elements (chained with join)
 out="$(printf "1\n2\n3\n4\n5\n6\n" | $FK 'function even(n){return n%2==0} { a[NR]=$1 } END { print join(filter(a,"even"), ",") }')"
