@@ -207,7 +207,15 @@ pub fn parse_args() -> Args {
         && std::path::Path::new(p).exists()
     {
         files.insert(0, p.clone());
-        program = Some("{ print }".to_string());
+        // Check if any "file" arg is actually a program (contains '{'
+        // and doesn't exist as a file). Supports `fk file 'program'` order.
+        if let Some(idx) = files.iter().position(|f| {
+            f.contains('{') && !std::path::Path::new(f).exists()
+        }) {
+            program = Some(files.remove(idx));
+        } else {
+            program = Some("{ print }".to_string());
+        }
     }
 
     // Bare function call without braces → {print expr} or BEGIN{print expr}

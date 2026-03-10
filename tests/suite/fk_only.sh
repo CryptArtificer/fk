@@ -211,5 +211,15 @@ assert_eq "D36" "toc no tic" "$out" "ok"
 out="$(seq 1 10000 | $FK 'BEGIN{tic("a"); tic("b")} END{ea=toc("a"); eb=toc("b"); r=(ea>=0 && eb>=0) ? "ok" : "bad"; print r}')"
 assert_eq "D37" "multiple timers" "$out" "ok"
 
+# D38 asort + join: sort words alphabetically and reassemble
+printf "banana\napple\ncherry\n" > "$W/d38.txt"
+out="$($FK '{ a[NR]=$1 } END { asort(a); print join(a, " ") }' "$W/d38.txt")"
+assert_eq "D38" "asort + join" "$out" "apple banana cherry"
+
+# D39 file-before-program argument order (fk file 'program')
+printf "hello\nworld\n" > "$W/d39.txt"
+out="$($FK "$W/d39.txt" '{print NR, $0}')"
+assert_eq "D39" "file before program" "$out" "$(printf '1 hello\n2 world')"
+
 # ════════════════════════════════════════════════════════════════════
 print_summary "fk_only"
