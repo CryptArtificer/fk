@@ -20,22 +20,22 @@ echo "collect() pairs naturally with the stats builtins — no manual NR index,"
 echo "no +0 coercion, no empty-string guards."
 
 section "2. Array transforms — top, bottom, runtotal, norm"
-# All four mutate the array in place and return a chainable value
-# (count for top/bottom, array name for runtotal/norm).
+# All four transform the array and return it, so they chain naturally
+# into join(), hist(), plotbox(), etc.
 
 echo "top(a, 3) — keep only the 3 largest values:"
 show $FK -H '{ collect(a, $revenue) }
-END { top(a, 3); print "  ", join(a, ", ") }' "$TMPDIR/sales.csv"
+END { print "  ", join(top(a, 3), ", ") }' "$TMPDIR/sales.csv"
 echo ""
 
 echo "bottom(a, 3) — keep only the 3 smallest:"
 show $FK -H '{ collect(a, $revenue) }
-END { bottom(a, 3); print "  ", join(a, ", ") }' "$TMPDIR/sales.csv"
+END { print "  ", join(bottom(a, 3), ", ") }' "$TMPDIR/sales.csv"
 echo ""
 
 echo "runtotal(a) — replace each value with its running total:"
 show $FK -H '{ collect(a, $revenue) }
-END { runtotal(a); print "  ", join(a, ", ") }' "$TMPDIR/sales.csv"
+END { print "  ", join(runtotal(a), ", ") }' "$TMPDIR/sales.csv"
 echo ""
 
 echo "norm(a) — scale values to the 0..1 range (min→0, max→1):"
@@ -89,16 +89,16 @@ section "6. Composability — chaining it all together"
 
 echo "collect → top 10 → histogram → plotbox:"
 show $FK '{ collect(a, $1) }
-END { top(a, 10); print plotbox(hist(a), 30) }' "$TMPDIR/latencies.txt"
+END { print plotbox(hist(top(a, 10)), 30) }' "$TMPDIR/latencies.txt"
 echo ""
 
 echo "collect → norm → join (inline normalised values):"
 show $FK -H '{ collect(a, $units) }
-END { norm(a); print "  normalized:", join(a, ", ") }' "$TMPDIR/sales.csv"
+END { print "  normalized:", join(norm(a), ", ") }' "$TMPDIR/sales.csv"
 echo ""
 
 echo "collect → bottom (trim outliers) → histogram:"
 show $FK '{ collect(a, $1) }
-END { bottom(a, 12); print plotbox(hist(a), 30) }' "$TMPDIR/latencies.txt"
+END { print plotbox(hist(bottom(a, 12)), 30) }' "$TMPDIR/latencies.txt"
 
 printf "\n${C_BOLD}Done.${C_RESET} 6 new builtins + 2 patterns + sorted for-in.\n"

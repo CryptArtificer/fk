@@ -127,7 +127,7 @@ echo "x" | show $FK 'BEGIN {
 }
 {
     for(k in s1) d[k]=1; for(k in s1) n[k]=1; for(k in s1) u[k]=1
-    diff(d, s2);   asorti(d);  print "  only in s1:", join(d, " ")
-    inter(n, s2);  asorti(n);  print "  common:    ", join(n, " ")
-    union(u, s2);  asorti(u);  print "  union:     ", join(u, " ")
+    print "  only in s1:", join(asorti(diff(d, s2)), " ")
+    print "  common:    ", join(asorti(inter(n, s2)), " ")
+    print "  union:     ", join(asorti(union(u, s2)), " ")
 }'

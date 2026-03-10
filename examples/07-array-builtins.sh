@@ -45,8 +45,7 @@ echo "5) tidy() — remove falsy entries:"
 echo "x" | show $FK 'BEGIN {
     a[1]="hello"; a[2]=""; a[3]=0; a[4]="world"; a[5]=""
     printf "  before: %d entries\n", length(a)
-    tidy(a)
-    printf "  after:  %d entries\n", length(a)
+    printf "  after:  %d entries\n", l(tidy(a))
     for (k in a) printf "  a[%s] = %s\n", k, a[k]
 }'
 echo ""
@@ -86,8 +85,7 @@ echo "8) shuf() and samp():"
 echo "x" | show $FK 'BEGIN {
     srand(42)
     seq(deck, 1, 10)
-    shuf(deck)
-    print "  shuffled:", join(deck, ",")
+    print "  shuffled:", join(shuf(deck), ",")
     samp(deck, 3)
     print "  sampled 3:", join(deck, ",")
 }'

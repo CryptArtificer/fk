@@ -118,4 +118,4 @@ echo "$SALES" | show $FK -i csv -H '
 echo ""
 
 echo "10) JSON lines — collect and print sorted keys:"
-echo "$JSONL" | show $FK -i json '{ roles[$2]++ } END { asorti(roles); print "  Roles:", join(roles, ", ") }'
+echo "$JSONL" | show $FK -i json '{ roles[$2]++ } END { print "  Roles:", join(asorti(roles), ", ") }'
