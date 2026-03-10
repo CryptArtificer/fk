@@ -923,7 +923,9 @@ impl<'a> Executor<'a> {
             });
         }
 
+        let has_dest = dest_name.is_some();
         let target = dest_name.as_deref().unwrap_or(&array_name);
+        let count = items.len();
         self.rt.delete_array_all(target);
         for (i, (key, val)) in items.into_iter().enumerate() {
             let new_key = (i + 1).to_string();
@@ -933,7 +935,12 @@ impl<'a> Executor<'a> {
                 self.rt.set_array(target, &new_key, &val);
             }
         }
-        Value::from_string(target.to_string())
+        // 1-arg: return array name for chaining; 2-arg: return count (gawk compat)
+        if has_dest {
+            Value::from_number(count as f64)
+        } else {
+            Value::from_string(target.to_string())
+        }
     }
 
     /// Extract sorted numeric values from an array.
