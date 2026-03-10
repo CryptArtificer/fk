@@ -255,10 +255,8 @@ impl<'a> Executor<'a> {
         }
         let array_name = match &args[0] {
             Expr::Var(name) => name.clone(),
-            _ => {
-                eprintln!("fk: join: first argument must be an array name");
-                return Value::default();
-            }
+            // Support chaining: join(map(a, "f"), sep) — map returns array name
+            other => self.eval_string(other),
         };
         let sep = if args.len() >= 2 {
             self.eval_string(&args[1])
@@ -1590,28 +1588,39 @@ impl<'a> Executor<'a> {
         }
     }
 
-    /// map(arr, "func") — apply func to every value in-place. Returns count.
+    /// map(arr, "func" [, fmt]) — apply func to every value in-place.
+    /// Returns array name for chaining: join(map(a, "emoji", "%s %s"), " → ")
+    /// Optional fmt: %s for func result and original value.
     pub(crate) fn builtin_map(&mut self, args: &[Expr]) -> Value {
         if args.len() < 2 {
-            eprintln!("fk: map requires 2 arguments: map(arr, \"func\")");
-            return Value::from_number(0.0);
+            eprintln!("fk: map requires at least 2 arguments: map(arr, \"func\" [, fmt])");
+            return Value::default();
         }
         let array_name = match &args[0] {
             Expr::Var(name) => name.clone(),
             _ => {
                 eprintln!("fk: map: first argument must be an array name");
-                return Value::from_number(0.0);
+                return Value::default();
             }
         };
         let func_name = self.eval_string(&args[1]);
+        let fmt = if args.len() >= 3 {
+            Some(self.eval_string(&args[2]))
+        } else {
+            None
+        };
         let keys: Vec<String> = self.rt.array_keys(&array_name);
-        let count = keys.len();
         for k in &keys {
             let val = self.rt.get_array(&array_name, k);
-            let new_val = self.call_func_by_name(&func_name, &val);
+            let mapped = self.call_func_by_name(&func_name, &val);
+            let new_val = if let Some(ref f) = fmt {
+                f.replacen("%s", &mapped, 1).replacen("%s", &val, 1)
+            } else {
+                mapped
+            };
             self.rt.set_array(&array_name, k, &new_val);
         }
-        Value::from_number(count as f64)
+        Value::from_string(array_name)
     }
 
     /// filter(arr, "func") — keep elements where func(val) is truthy, re-key 1..N.
@@ -1642,7 +1651,7 @@ impl<'a> Executor<'a> {
         for (i, v) in kept.iter().enumerate() {
             self.rt.set_array(&array_name, &(i + 1).to_string(), v);
         }
-        Value::from_number(kept.len() as f64)
+        Value::from_string(array_name)
     }
 
     // ── Diagnostics ─────────────────────────────────────────────────
