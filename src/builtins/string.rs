@@ -116,6 +116,11 @@ pub fn call(name: &str, args: &[String]) -> String {
                 out
             }
         }
+        // secret — not documented
+        "emoji" | "moji" => {
+            let s = args.first().map(|s| s.as_str()).unwrap_or("");
+            super::emoji::lookup(s).to_string()
+        }
         _ => String::new(),
     }
 }

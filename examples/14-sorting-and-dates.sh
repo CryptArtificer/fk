@@ -13,6 +13,10 @@ echo "Sort words alphabetically:"
 show $FK '{ a[NR]=$1 } END { asort(a); print join(a, " → ") }' "$TMPDIR/fruits.txt"
 
 echo ""
+echo "With emoji:"
+show $FK '{ a[NR]=emoji($1) } END { asort(a); print join(a, " ") }' "$TMPDIR/fruits.txt"
+
+echo ""
 echo "Sort numerically (highest revenue regions):"
 show $FK -H '{
     rev[$region] += $revenue

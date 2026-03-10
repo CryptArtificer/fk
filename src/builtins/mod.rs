@@ -1,3 +1,4 @@
+pub mod emoji;
 pub mod json;
 pub mod math;
 pub mod printf;
@@ -79,7 +80,7 @@ pub fn call_builtin(name: &str, args: &[String]) -> String {
         "length" | "len" | "substr" | "index" | "idx" | "tolower" | "lower" | "toupper"
         | "upper" | "trim" | "ltrim" | "rtrim" | "startswith" | "sw" | "endswith" | "ew"
         | "repeat" | "rep" | "rev" | "reverse" | "chr" | "ord" | "hex" | "lpad"
-        | "rpad" => string::call(name, args),
+        | "rpad" | "emoji" | "moji" => string::call(name, args),
         "int" | "sin" | "cos" | "sqrt" | "log" | "exp" | "atan2" | "abs" | "ceil" | "floor"
         | "round" | "log2" | "log10" | "min" | "max" | "rand" | "srand" => math::call(name, args),
         "systime" | "now" | "strftime" | "mktime" | "parsedate" | "pdate" => {
