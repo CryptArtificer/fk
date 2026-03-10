@@ -73,7 +73,7 @@ builtins/json.rs     — jpath() with JSON parser, path evaluator, iteration
   so structured readers (CSV/JSON) can pre-split fields
 - Builtins that need runtime access (sub, gsub, split, close, gensub, jpath 3-arg, system,
  stats (hist), bitwise, asort, keys, vals, uniq, inv, tidy, shuf, rev, diff, inter, union,
- seq, samp, slurp, collect, top, bottom, runtotal, norm, window, clr) live in
+ seq, samp, slurp, collect, top, bottom, runtotal, norm, window, clr, map, filter) live in
  action/builtins_rt.rs; pure builtins go through builtins::call_builtin
 - Lexer uses O(1) incremental line/col tracking; produces `Spanned` tokens (token + Span)
 - Parser/lexer errors are structured `FkError` (span + message, implements Display + Error)
@@ -135,7 +135,7 @@ Phase 12: CSV robustness (single-pass RFC 4180, unclosed quote damage limiting),
 Phase 13: !/regex/ (bare regex in expression context), print arr (smart array dump),
   keys(arr), vals(arr), join(arr) defaults to OFS.
   Lodash-inspired array builtins: uniq, inv, tidy, shuf, diff, inter, union,
-  seq, samp. String: lpad, rpad. I/O: slurp.
+  seq, samp, map, filter. String: lpad, rpad. I/O: slurp.
 Phase 14: Awk compat fixes — `in` operator for any expr (`$0 in a`,
   `($1,$2) in arr`), regex literals in sub/gsub/match/split, printf %c
   with numeric arg, bare `length` / `length()` defaults to $0.

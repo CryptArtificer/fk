@@ -10,7 +10,7 @@ setup_data
 section "1. asort + join — sort and reassemble"
 
 echo "Sort words alphabetically:"
-show $FK '{ a[NR]=$1 } END { asort(a); for(i=1;i<=length(a);i++) a[i]=emoji(a[i]) " " a[i]; print join(a, " → ") }' "$TMPDIR/fruits.txt"
+show $FK '{ a[NR]=$1 } END { asort(a); map(a, "emoji"); print join(a, " → ") }' "$TMPDIR/fruits.txt"
 
 echo ""
 echo "Sort numerically (highest revenue regions):"

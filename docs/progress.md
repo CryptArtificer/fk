@@ -154,7 +154,7 @@
 #### Phase 13 — Array & I/O builtins
 - [x] `!/regex/` (bare regex in expression context), `print arr` (smart array dump)
 - [x] `keys(arr)`, `vals(arr)`, `join(arr)` defaults to OFS
-- [x] Lodash-inspired array builtins: `uniq`, `inv`, `tidy`, `shuf`, `diff`, `inter`, `union`, `seq`, `samp`
+- [x] Lodash-inspired array builtins: `uniq`, `inv`, `tidy`, `shuf`, `diff`, `inter`, `union`, `seq`, `samp`, `map`, `filter`
 - [x] String: `lpad`, `rpad`
 - [x] I/O: `slurp(file [, arr])`
 

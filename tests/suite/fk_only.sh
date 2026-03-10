@@ -221,5 +221,21 @@ printf "hello\nworld\n" > "$W/d39.txt"
 out="$($FK "$W/d39.txt" '{print NR, $0}')"
 assert_eq "D39" "file before program" "$out" "$(printf '1 hello\n2 world')"
 
+# D40 map: apply builtin to array values
+out="$(printf "hello\nworld\n" | $FK '{ a[NR]=$1 } END { map(a, "toupper"); print join(a, ",") }')"
+assert_eq "D40" "map toupper" "$out" "HELLO,WORLD"
+
+# D41 map: apply user-defined function
+out="$(printf "1\n2\n3\n" | $FK 'function dbl(x){return x*2} { a[NR]=$1 } END { map(a,"dbl"); print join(a,",") }')"
+assert_eq "D41" "map user func" "$out" "2,4,6"
+
+# D42 filter: keep matching elements
+out="$(printf "1\n2\n3\n4\n5\n6\n" | $FK 'function even(n){return n%2==0} { a[NR]=$1 } END { filter(a,"even"); print join(a,",") }')"
+assert_eq "D42" "filter" "$out" "2,4,6"
+
+# D43 filter alias fltr
+out="$(printf "a\n\nb\n\nc\n" | $FK '{ a[NR]=$1 } END { fltr(a,"length"); print join(a,",") }')"
+assert_eq "D43" "fltr alias" "$out" "a,b,c"
+
 # ════════════════════════════════════════════════════════════════════
 print_summary "fk_only"

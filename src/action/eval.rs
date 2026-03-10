@@ -184,6 +184,8 @@ impl<'a> Executor<'a> {
                     "norm" | "normalize" => return self.builtin_norm(args),
                     "window" | "win" => return self.builtin_window(args),
                     "clr" | "clear" => return self.builtin_clr(args),
+                    "map" => return self.builtin_map(args),
+                    "filter" | "fltr" => return self.builtin_filter(args),
                     "dump" => return self.builtin_dump(args),
                     "clk" | "clock" => return self.builtin_clock(),
                     "tic" | "start" => return self.builtin_start(args),

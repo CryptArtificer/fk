@@ -669,6 +669,16 @@ Sliding window: maintain the last \fIn\fR values in \fIarr\fR.
 Each call appends \fIexpr\fR (skipping NaN/empty), evicts the oldest
 when full, and re-keys 1..\fIn\fR. Returns the current window size.
 Use with stats for moving averages: \fB{ window(w, 5, $3); print mean(w) }\fR. \fI[fk]\fR
+.TP
+\fBmap(\fIarr\fB,\fR \fI"func"\fB)\fR
+Apply named function to every value in \fIarr\fR in place.
+Works with builtins and user-defined functions. Returns element count.
+Example: \fBmap(a, "toupper")\fR. \fI[fk]\fR
+.TP
+\fBfilter(\fIarr\fB,\fR \fI"func"\fB)\fR / \fBfltr(\fR...\fB)\fR
+Keep only elements where \fIfunc(val)\fR is truthy (non-empty, non-zero).
+Re-keys 1..N. Returns new count.
+Example: \fBfunction big(x){return x>100} filter(a,"big")\fR. \fI[fk]\fR
 .
 .SS Statistics \fI[fk extensions]\fR
 All statistics functions take an array as the first argument and operate

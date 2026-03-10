@@ -1578,6 +1578,73 @@ impl<'a> Executor<'a> {
         val
     }
 
+    // ── Map / Filter ─────────────────────────────────────────────────
+
+    /// Call a named function (builtin or user-defined) with a single string arg.
+    fn call_func_by_name(&mut self, name: &str, arg: &str) -> String {
+        let args = &[arg.to_string()];
+        if let Some(func) = self.functions.get(name).cloned() {
+            self.call_user_func(&func, args).to_string_val()
+        } else {
+            builtins::call_builtin(name, args)
+        }
+    }
+
+    /// map(arr, "func") — apply func to every value in-place. Returns count.
+    pub(crate) fn builtin_map(&mut self, args: &[Expr]) -> Value {
+        if args.len() < 2 {
+            eprintln!("fk: map requires 2 arguments: map(arr, \"func\")");
+            return Value::from_number(0.0);
+        }
+        let array_name = match &args[0] {
+            Expr::Var(name) => name.clone(),
+            _ => {
+                eprintln!("fk: map: first argument must be an array name");
+                return Value::from_number(0.0);
+            }
+        };
+        let func_name = self.eval_string(&args[1]);
+        let keys: Vec<String> = self.rt.array_keys(&array_name);
+        let count = keys.len();
+        for k in &keys {
+            let val = self.rt.get_array(&array_name, k);
+            let new_val = self.call_func_by_name(&func_name, &val);
+            self.rt.set_array(&array_name, k, &new_val);
+        }
+        Value::from_number(count as f64)
+    }
+
+    /// filter(arr, "func") — keep elements where func(val) is truthy, re-key 1..N.
+    pub(crate) fn builtin_filter(&mut self, args: &[Expr]) -> Value {
+        if args.len() < 2 {
+            eprintln!("fk: filter requires 2 arguments: filter(arr, \"func\")");
+            return Value::from_number(0.0);
+        }
+        let array_name = match &args[0] {
+            Expr::Var(name) => name.clone(),
+            _ => {
+                eprintln!("fk: filter: first argument must be an array name");
+                return Value::from_number(0.0);
+            }
+        };
+        let func_name = self.eval_string(&args[1]);
+        let mut keys: Vec<String> = self.rt.array_keys(&array_name);
+        smart_sort_keys(&mut keys);
+        let mut kept: Vec<String> = Vec::new();
+        for k in &keys {
+            let val = self.rt.get_array(&array_name, k);
+            let result = self.call_func_by_name(&func_name, &val);
+            if !result.is_empty() && result != "0" {
+                kept.push(val);
+            }
+        }
+        self.rt.delete_array_all(&array_name);
+        for (i, v) in kept.iter().enumerate() {
+            self.rt.set_array(&array_name, &(i + 1).to_string(), v);
+        }
+        Value::from_number(kept.len() as f64)
+    }
+
     // ── Diagnostics ─────────────────────────────────────────────────
 
     /// dump(x [, file]) — write detailed variable/array info to stderr or file.

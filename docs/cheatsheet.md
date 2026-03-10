@@ -234,6 +234,8 @@ print ... > "/dev/stderr"   # write to stderr
 | `runtotal(arr)` | Running total in place; returns array name |
 | `norm(arr)` | Normalize to 0..1 in place; returns array name |
 | `window(arr, n, expr)` | Sliding window of last n values; returns size |
+| `map(arr, "func")` | Apply func to every value in place; returns count |
+| `filter(arr, "func")` / `fltr` | Keep elements where func(val) is truthy, re-key 1..N |
 
 ### Statistics (fk extensions)
 | Function | Description |
@@ -301,6 +303,7 @@ Every function has a short or long alias. Both forms are interchangeable.
 | `runtot` | `runtotal` | stats |
 | `norm` | `normalize` | stats |
 | `win` | `window` | array |
+| `fltr` | `filter` | array |
 | `avg` | `mean` | stats |
 | `med` | `median` | stats |
 | `sd` | `stddev` | stats |

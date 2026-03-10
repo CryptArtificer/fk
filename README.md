@@ -26,7 +26,7 @@ The pattern-action model is the same. Everything below is new.
 - **JSON navigation** — `jpath()` gives you jq-like path access from within a pattern-action program.
 - **Statistical builtins** — `sum`, `mean`, `median`, `stddev`, `variance`, `hist`, `percentile`, `quantile`, `iqm` on arrays.
 - **Quick plots** — `plot()` renders simple horizontal bars; `plotbox()` adds titles, axes, and boxed layout. Composable: `plotbox(hist(a))` chains naturally.
-- **Array builtins** — `asort`, `asorti`, `join`, `keys`, `vals`, `uniq`, `inv`, `tidy`, `shuf`, `diff`, `inter`, `union`, `seq`, `samp`, `collect`, `top`, `bottom`, `runtotal`, `norm`, `window`.
+- **Array builtins** — `asort`, `asorti`, `join`, `keys`, `vals`, `uniq`, `inv`, `tidy`, `shuf`, `diff`, `inter`, `union`, `seq`, `samp`, `collect`, `top`, `bottom`, `runtotal`, `norm`, `window`, `map`, `filter`.
 - **Sorted for-in** — `for (k in arr) @sort { ... }` with modifiers: `@sort`, `@rsort`, `@nsort`, `@rnsort`, `@val`, `@rval`.
 - **Pattern sugar** — `every N { ... }` fires every Nth record; `last N { ... }` replays the last N records after end-of-input.
 - **Diagnostics** — `dump(x)` inspects any variable or array to stderr. `clk()`, `tic(id)`, `toc(id)` for timing.
