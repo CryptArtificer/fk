@@ -119,8 +119,60 @@ show_pipe() {
         fi
     fi
 
-    printf "\n  ${C_DIM}\$${C_RESET} ${C_YEL}%s${C_RESET}\n\n" "$display"
+    # Highlight fk programs within the pipeline display
+    printf "\n  ${C_DIM}\$${C_RESET} "
+    _highlight_pipeline "$display"
+    printf "\n\n"
     eval "$desc"
+}
+
+# Split a pipeline display and syntax-highlight any 'program' blocks after fk.
+_highlight_pipeline() {
+    local text="$1"
+    local before after prog_text highlighted
+
+    # Process each fk '...' segment
+    while [[ "$text" == *"fk "* ]]; do
+        # Everything before "fk "
+        before="${text%%fk *}"
+        printf "${C_YEL}%s${C_RESET}" "$before"
+        text="${text#"$before"}"
+
+        # "fk" + flags before the quote
+        local fk_prefix="fk "
+        text="${text#fk }"
+        while [[ "$text" == -* ]]; do
+            local flag="${text%% *}"
+            fk_prefix+="$flag "
+            text="${text#"$flag" }"
+        done
+        printf "${C_CYAN}${C_BOLD}${fk_prefix%% }${C_RESET} "
+
+        # Extract the '...' program if present
+        if [[ "$text" == \'* ]]; then
+            local raw="${text#\'}"
+            # Handle multi-line: find the matching close quote
+            prog_text="${raw%%\'*}"
+            text="${raw:${#prog_text}+1}"
+
+            # Un-escape for --highlight
+            local clean="${prog_text//\\$/\$}"
+            clean="${clean//\\\"/\"}"
+            clean="${clean//\\\\/\\}"
+            highlighted=$("$FK" --highlight "$clean" 2>/dev/null)
+            if [[ -n "$highlighted" ]]; then
+                printf "${C_YEL}'${C_RESET}\n"
+                while IFS= read -r line; do
+                    printf "    %s\n" "$line"
+                done <<< "$highlighted"
+                printf "  ${C_YEL}'${C_RESET}"
+            else
+                printf "${C_YEL}'%s'${C_RESET}" "$prog_text"
+            fi
+        fi
+    done
+    # Remainder after last fk invocation
+    [[ -n "$text" ]] && printf "${C_YEL}%s${C_RESET}" "$text"
 }
 
 # ── Shared test data ───────────────────────────────────────────────

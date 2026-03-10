@@ -1,5 +1,5 @@
 .\" fk(1) man page — meant to be read, not endured
-.TH FK 1 "2026-03-07" "fk 0.1.0" "User Commands"
+.TH FK 1 "2026-03-10" "fk 0.2.0" "User Commands"
 .
 .SH NAME
 fk \(em filter-kernel: a modern awk for humans
@@ -594,44 +594,47 @@ Return all keys as a string, sorted and joined by ORS. \fI[fk]\fR
 Return all values as a string, sorted by key and joined by ORS. \fI[fk]\fR
 .TP
 \fBasort(\fIarr\fB)\fR
-Sort array by values, re-key with 1..N. Returns element count.
+Sort array by values, re-key with 1..N. Returns array name for chaining.
+With two arguments, \fBasort(src, dst)\fR copies into \fIdst\fR and returns
+the count (gawk-compatible).
 .TP
 \fBasorti(\fIarr\fB)\fR
 Sort array by keys, store sorted keys as values with 1..N.
+Returns array name for chaining (1-arg) or count (2-arg).
 .TP
 \fBjoin(\fIarr\fR [\fB,\fR \fIsep\fR]\fB)\fR
 Join array values into a string, separated by \fIsep\fR (default: OFS).
 Numeric keys are joined in order.
 .TP
 \fBuniq(\fIarr\fB)\fR
-Deduplicate values, re-key as 1..N. Returns new count.
+Deduplicate values, re-key as 1..N. Returns array name for chaining.
 .TP
 \fBinv(\fIarr\fB)\fR
-Swap keys and values in place. Returns count.
+Swap keys and values in place. Returns array name for chaining.
 .TP
 \fBtidy(\fIarr\fB)\fR
-Remove entries with empty or zero values. Returns remaining count.
+Remove entries with empty or zero values. Returns array name for chaining.
 .TP
 \fBshuf(\fIarr\fB)\fR
-Randomize order, re-key as 1..N. Returns count.
+Randomize order, re-key as 1..N. Returns array name for chaining.
 .TP
 \fBrev(\fIarr\fB)\fR
-Reverse element order, re-key as 1..N. Returns count.
+Reverse element order, re-key as 1..N. Returns array name for chaining.
 .TP
 \fBrev()\fR
 Reverse fields of the current record in place. Returns new \fB$0\fR.
 .TP
 \fBdiff(\fIa\fB,\fR \fIb\fB)\fR
 Set difference: remove from \fIa\fR any key present in \fIb\fR.
-Returns remaining count of \fIa\fR.
+Returns array name for chaining.
 .TP
 \fBinter(\fIa\fB,\fR \fIb\fB)\fR
 Set intersection: remove from \fIa\fR any key not in \fIb\fR.
-Returns remaining count of \fIa\fR.
+Returns array name for chaining.
 .TP
 \fBunion(\fIa\fB,\fR \fIb\fB)\fR
 Set union: copy keys from \fIb\fR into \fIa\fR (without overwriting).
-Returns total count of \fIa\fR.
+Returns array name for chaining.
 .TP
 \fBseq(\fIfrom\fB,\fR \fIto\fB)\fR
 Return integers from \fIfrom\fR to \fIto\fR joined by ORS.
@@ -643,7 +646,7 @@ Direction is automatic. Returns count.
 .TP
 \fBsamp(\fIarr\fB,\fR \fIn\fB)\fR
 Keep \fIn\fR random elements, re-key as 1..\fIn\fR.
-Uses Fisher\-Yates partial shuffle. Returns \fIn\fR.
+Uses Fisher\-Yates partial shuffle. Returns array name for chaining.
 .TP
 \fBcollect(\fIarr\fB,\fR \fIexpr\fB)\fR / \fBacc(\fR...\fB)\fR
 Append \fIexpr\fR to \fIarr\fR with auto-incrementing keys (1, 2, 3, ...).
@@ -651,10 +654,10 @@ Skips NaN and empty-string values. Returns the new count.
 Replaces the common \fBa[++n] = $3\fR idiom. \fI[fk]\fR
 .TP
 \fBtop(\fIarr\fB,\fR \fIn\fB)\fR
-Keep the \fIn\fR largest values, re-key as 1..\fIn\fR. Returns count kept. \fI[fk]\fR
+Keep the \fIn\fR largest values, re-key as 1..\fIn\fR. Returns array name for chaining. \fI[fk]\fR
 .TP
 \fBbottom(\fIarr\fB,\fR \fIn\fB)\fR / \fBbot(\fR...\fB)\fR
-Keep the \fIn\fR smallest values, re-key as 1..\fIn\fR. Returns count kept. \fI[fk]\fR
+Keep the \fIn\fR smallest values, re-key as 1..\fIn\fR. Returns array name for chaining. \fI[fk]\fR
 .TP
 \fBruntotal(\fIarr\fB)\fR / \fBruntot(\fR...\fB)\fR
 Replace each value with the running total up to that point.
@@ -996,6 +999,12 @@ END { for (d in dept) @rval print d, dept[d] }' sales.parquet\fR
 # clr: print heading once, then clear it
 \fBfk '/^##/ { hdr = $0 }; /^-/ { print clr(hdr), $0 }' notes.md\fR
 
+# Chainable array pipeline — sort, transform, join
+\fBfk '{ a[NR]=$1 } END { print join(map(asort(a), "toupper"), ", ") }' file\fR
+
+# Filter + sort + join
+\fBfk '{ a[NR]=$0 } END { print join(asort(filter(a, "length")), " ") }' file\fR
+
 # Diagnostics: inspect and time
 \fBfk '{ dump($0) }' file\fR
 \fBseq 1 100000 | fk 'BEGIN{tic("sum")} {s+=$1} END{printf "sum=%d in %.3fs\\n", s, toc("sum")}'\fR
@@ -1007,7 +1016,8 @@ Most builtins have short aliases. Both forms are interchangeable.
 l l l.
 \fBShort\fR	\fBFull name\fR	\fBCategory\fR
 _
-len	length	string
+l	length	string/array
+len	length	string/array
 idx	index	string
 lower	tolower	string
 upper	toupper	string
@@ -1027,6 +1037,7 @@ q	quantile	stats
 pbox	plotbox	stats
 acc	collect	array
 bot	bottom	array
+fltr	filter	array
 runtot	runtotal	array
 win	window	array
 clr	clear	utility
@@ -1082,6 +1093,11 @@ Bitwise: \fBand()\fR, \fBor()\fR, \fBxor()\fR, \fBlshift()\fR, \fBrshift()\fR, \
 \fBslurp()\fR for reading files into strings or arrays
 .IP \(bu 2
 \fBcollect()\fR, \fBtop()\fR, \fBbottom()\fR, \fBruntotal()\fR, \fBnorm()\fR, \fBwindow()\fR for data collection and transforms
+.IP \(bu 2
+\fBmap()\fR and \fBfilter()\fR for functional array transforms
+.IP \(bu 2
+Chainable array functions: most return the array name, enabling
+\fBjoin(map(asort(a), "toupper"), ",")\fR
 .IP \(bu 2
 \fBevery N { ... }\fR and \fBlast N { ... }\fR pattern sugar
 .IP \(bu 2
