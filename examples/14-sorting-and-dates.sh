@@ -14,7 +14,7 @@ show $FK '{ a[NR]=$1 } END { asort(a); print join(a, " → ") }' "$TMPDIR/fruits
 
 echo ""
 echo "With emoji:"
-show $FK '{ a[NR]=emoji($1) } END { asort(a); print join(a, " ") }' "$TMPDIR/fruits.txt"
+show $FK '{ a[NR]=emoji($1) " " $1 } END { asort(a); print join(a, "\n") }' "$TMPDIR/fruits.txt"
 
 echo ""
 echo "Sort numerically (highest revenue regions):"
