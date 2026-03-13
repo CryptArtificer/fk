@@ -77,7 +77,9 @@ impl Value {
 
     /// Consume the value and return its string representation.
     pub fn into_string(self) -> String {
-        if self.flags & STR_VALID != 0 {
+        if self.flags == 0 {
+            String::new()
+        } else if self.flags & STR_VALID != 0 {
             self.s
         } else {
             builtins::format_number(self.n)
@@ -86,7 +88,9 @@ impl Value {
 
     /// Clone the string representation (allocates if number-only).
     pub fn to_string_val(&self) -> String {
-        if self.flags & STR_VALID != 0 {
+        if self.flags == 0 {
+            String::new()
+        } else if self.flags & STR_VALID != 0 {
             self.s.clone()
         } else {
             builtins::format_number(self.n)
@@ -95,7 +99,9 @@ impl Value {
 
     /// Write string representation directly to a writer.
     pub fn write_to(&self, w: &mut impl std::io::Write) {
-        if self.flags & STR_VALID != 0 {
+        if self.flags == 0 {
+            return;
+        } else if self.flags & STR_VALID != 0 {
             let _ = w.write_all(self.s.as_bytes());
         } else {
             let s = builtins::format_number(self.n);
@@ -105,7 +111,9 @@ impl Value {
 
     /// Append string representation to an existing String.
     pub fn write_to_string(&self, buf: &mut String) {
-        if self.flags & STR_VALID != 0 {
+        if self.flags == 0 {
+            return;
+        } else if self.flags & STR_VALID != 0 {
             buf.push_str(&self.s);
         } else {
             buf.push_str(&builtins::format_number(self.n));
@@ -128,6 +136,14 @@ impl Value {
     /// (needs OFMT/CONVFMT formatting when converted to string).
     pub fn is_numeric_only(&self) -> bool {
         self.flags == NUM_VALID
+    }
+
+    pub fn null() -> Self {
+        Value { s: String::new(), n: 0.0, flags: 0 }
+    }
+
+    pub fn is_null(&self) -> bool {
+        self.flags == 0
     }
 
     /// Check if this value looks numeric (for comparison semantics).

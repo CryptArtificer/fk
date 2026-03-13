@@ -110,6 +110,7 @@ Unicode-aware by default: `.` matches any codepoint (not byte).
 | `&&` `\|\|` `!` | Logical |
 | `? :` | Ternary |
 | `??` | Null coalesce — left if non-empty, else right |
+| `expr?` | Try-val — null if empty; propagates through concat, parens fence it |
 | `string string` | Concatenation (implicit) |
 
 ## Control flow

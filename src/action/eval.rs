@@ -62,6 +62,9 @@ impl<'a> Executor<'a> {
             Expr::Concat(left, right) => {
                 let l = self.eval_expr(left);
                 let r = self.eval_expr(right);
+                if l.is_null() || r.is_null() {
+                    return Value::null();
+                }
                 let convfmt = self.rt.convfmt();
                 let mut s = if l.is_numeric_only() && convfmt != "%.6g" {
                     builtins::format_number_fmt(l.to_number(), convfmt)
@@ -104,6 +107,18 @@ impl<'a> Executor<'a> {
             Expr::UnaryMinus(inner) => {
                 let val = self.eval_expr(inner);
                 Value::from_number(-val.to_number())
+            }
+            Expr::TryVal(inner) => {
+                let val = self.eval_expr(inner);
+                if val.to_string_val().is_empty() {
+                    Value::null()
+                } else {
+                    val
+                }
+            }
+            Expr::NullFence(inner) => {
+                let val = self.eval_expr(inner);
+                if val.is_null() { Value::from_string(String::new()) } else { val }
             }
             Expr::NullCoalesce(left, right) => {
                 let val = self.eval_expr(left);

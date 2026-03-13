@@ -171,8 +171,13 @@ echo "19) Negated bare regex (!/pattern/):"
 printf "alice\n# comment\nbob\n# another\ncarol\n" | show $FK '!/^#/ { print "  " $0 }'
 echo ""
 
+# ── Try-val (?) — conditional string assembly ──────────────────
+echo "20) Try-val postfix ? — null-propagating concat:"
+printf "main.rs:42:10\nfoo.rs:7\nREADME.md\n" | show $FK -F: '{print "rustrover"(" --line " $2?(" --column " $3?)), $1}'
+echo ""
+
 # ── Statistical builtins ────────────────────────────────────────
-echo "20) Statistical builtins:"
+echo "21) Statistical builtins:"
 printf "10\n20\n30\n40\n50\n60\n70\n80\n90\n100\n" | show $FK '
     { a[NR]=$1 }
     END {

@@ -376,12 +376,12 @@ Listed by precedence (highest first):
 .TS
 l l.
 \fB$\fR	Field access
-\fB++ \-\-\fR	Increment / decrement
+\fB++ \-\- ?\fR	Increment / decrement / try-val \fI[fk: ?]\fR
 \fB**\fR	Exponentiation (right-associative) \fI[fk]\fR
 \fB!\fR	Logical not
 \fB* / %\fR	Multiply, divide, modulo
 \fB+ \-\fR	Add, subtract
-\fI(space)\fR	String concatenation
+\fI(space)\fR	String concatenation (null propagates)
 \fB< <= > >= == !=\fR	Comparison
 \fB~ !~\fR	Regex match / not-match
 \fB&&\fR	Logical and
@@ -390,6 +390,27 @@ l l.
 \fB??\fR	Null coalesce (return left if non-empty string, else right)
 \fB= += \-= *= /= %=\fR	Assignment
 .TE
+.
+.SS Try-val: the ? postfix operator \fI[fk]\fR
+.
+\fBexpr?\fR evaluates \fIexpr\fR and returns \fBnull\fR when the result is
+an empty string; otherwise returns the value unchanged.
+Null propagates through string concatenation: \fB"prefix" null\fR \(-> null.
+Parentheses act as a fence: null inside \fB(...)\fR collapses to \fB""\fR
+at the boundary, preventing further propagation.
+.PP
+This makes conditional string assembly trivial:
+.PP
+.nf
+# flat: each group is independent
+\fBprint "cmd" (" --verbose " $2?)(" --output " $3?)\fR
+
+# nested: column only appears when line is present
+\fBprint "cmd"(" --line " $2?(" --column " $3?))\fR
+.fi
+.PP
+Without \fB?\fR the same logic requires ternaries:
+\fB($2 ? " --line " $2 : "") ($3 ? " --column " $3 : "")\fR
 .
 .\" ─────────────────────────────────────────────────────────────
 .SH CONTROL FLOW
@@ -996,6 +1017,14 @@ END { for (d in dept) @rval print d, dept[d] }' sales.parquet\fR
 # Default values — ?? returns left if non-empty, else right
 \fBfk -H '{ print $email ?? "(none)" }' users.csv\fR
 
+# Try-val (?) — conditional string assembly
+# Parens fence null: empty ? collapses the group to ""
+# Nesting cascades: column only appears when line is present
+\fBfk -F: '{ print "rustrover"(" --line " $2?(" --column " $3?)), $1 }'\fR
+# input main.rs:42:10 → rustrover --line 42 --column 10 main.rs
+# input foo.rs:7       → rustrover --line 7 foo.rs
+# input README.md      → rustrover README.md
+
 # clr: print heading once, then clear it
 \fBfk '/^##/ { hdr = $0 }; /^-/ { print clr(hdr), $0 }' notes.md\fR
 
@@ -1085,6 +1114,10 @@ Notably:
 \fBchr()\fR, \fBord()\fR, \fBhex()\fR
 .IP \(bu 2
 Bitwise: \fBand()\fR, \fBor()\fR, \fBxor()\fR, \fBlshift()\fR, \fBrshift()\fR, \fBcompl()\fR
+.IP \(bu 2
+\fB??\fR null coalesce and \fBexpr?\fR try-val operators
+.IP \(bu 2
+\fBclr()\fR / \fBclear()\fR — return value, then clear variable
 .IP \(bu 2
 \fB\-\-repl\fR interactive mode
 .IP \(bu 2

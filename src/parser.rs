@@ -103,6 +103,8 @@ pub enum Expr {
     Concat(Box<Expr>, Box<Expr>),
     Ternary(Box<Expr>, Box<Expr>, Box<Expr>),
     NullCoalesce(Box<Expr>, Box<Expr>),
+    TryVal(Box<Expr>),   // postfix ? — returns null if empty, propagates through concat
+    NullFence(Box<Expr>), // parenthesized group — collapses null back to ""
     Sprintf(Vec<Expr>),
     FuncCall(String, Vec<Expr>),
     /// getline [var] [< file]. Fields: optional var name, optional source file expr.
@@ -1035,6 +1037,9 @@ impl Parser {
             } else if self.check(&Token::Decrement) {
                 self.advance();
                 expr = Expr::Decrement(Box::new(expr), false);
+            } else if self.check(&Token::Question) && !self.is_ternary_question() {
+                self.advance();
+                expr = Expr::TryVal(Box::new(expr));
             } else {
                 break;
             }
@@ -1156,7 +1161,11 @@ impl Parser {
                     ));
                 }
                 self.expect(&Token::RParen)?;
-                Ok(expr)
+                if Self::contains_tryval(&expr) {
+                    Ok(Expr::NullFence(Box::new(expr)))
+                } else {
+                    Ok(expr)
+                }
             }
             _ => Err(FkError::new(
                 self.current_span(),
@@ -1226,6 +1235,49 @@ impl Parser {
     fn advance(&mut self) {
         if self.pos < self.tokens.len() {
             self.pos += 1;
+        }
+    }
+
+    /// Look ahead to determine if `?` at current position is a ternary `? expr : expr`.
+    /// Ternary requires a `:` at the same paren depth after the `?`.
+    /// If next token is `(`, find matching `)` and check for `:`.
+    /// If next token can't start an expression, it's definitely postfix.
+    fn is_ternary_question(&self) -> bool {
+        let mut i = self.pos + 1; // token after ?
+        let tok = self.tokens.get(i).map(|s| &s.token).unwrap_or(&Token::Eof);
+        // If followed by something that can't start an expression, it's postfix
+        if matches!(tok,
+            Token::RParen | Token::RBracket | Token::RBrace
+            | Token::Semicolon | Token::Newline | Token::Eof
+            | Token::Comma | Token::NullCoalesce
+        ) {
+            return false;
+        }
+        // If followed by `(`, scan for matching `)` then check for `:`
+        if matches!(tok, Token::LParen) {
+            let mut depth = 1;
+            i += 1;
+            while i < self.tokens.len() && depth > 0 {
+                match &self.tokens[i].token {
+                    Token::LParen | Token::LBracket => depth += 1,
+                    Token::RParen | Token::RBracket => depth -= 1,
+                    _ => {}
+                }
+                i += 1;
+            }
+            // After matching `)`, check if `:` follows → ternary
+            return self.tokens.get(i).map(|s| &s.token) == Some(&Token::Colon);
+        }
+        // Default: assume ternary for safety
+        true
+    }
+
+    fn contains_tryval(expr: &Expr) -> bool {
+        match expr {
+            Expr::TryVal(_) => true,
+            Expr::Concat(l, r) => Self::contains_tryval(l) || Self::contains_tryval(r),
+            Expr::NullFence(e) => Self::contains_tryval(e),
+            _ => false,
         }
     }
 

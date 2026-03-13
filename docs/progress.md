@@ -250,6 +250,7 @@
 
 #### Phase 21 — Null coalesce & emit
 - [x] `??` operator — return left if non-empty string, else right (short-circuit)
+- [x] `expr?` postfix try-val — null if empty, propagates through concat, parens fence it
 - [x] `clr(var)` / `clear(var)` — return value, then clear variable to ""
 - [x] `seq(from, to)` 2-arg form — return values joined by ORS (generator)
 - [x] Generator detection — bare func calls without field/record deps wrap as `BEGIN{print ...}`

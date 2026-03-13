@@ -38,6 +38,7 @@ The pattern-action model is the same. Everything below is new.
 - **Capture groups in match()** — `match($0, /(\d+)-(\d+)/, cap)` extracts groups into an array. Standard awk can't do this.
 - **Better errors** — source-location-aware diagnostics with line and column numbers.
 - **Null coalesce** — `$nickname ?? $name` returns the first non-empty value. `c ?? 0` replaces the `c+0` idiom.
+- **Try-val `?`** — `(" --line " $2?)` collapses to `""` when `$2` is empty. Null propagates through concat, parens fence it.
 - **clr()** — clear a variable, return its last value. Useful for one-shot state: `print clr(hdr), $0`.
 - **Negative field indexes** — `$-1` is the last field, `$-2` is second-to-last.
 - **REPL** — interactive mode for exploration (`--repl`).
@@ -249,6 +250,9 @@ fk -O, '{ print $1, $3 }' data.tsv
 # ?? null coalesce — first non-empty value wins
 fk -H '{ print $nickname ?? $name }' contacts.csv
 fk '/error/ { c++ } END { print c ?? 0 }' log.txt
+
+# ? try-val — conditional string assembly (nesting cascades)
+fk -F: '{ print "rustrover"(" --line " $2?(" --column " $3?)), $1 }'
 
 # clr() — clear variable, return last value
 fk '/^##/ { hdr = $0 }; /^-/ { print clr(hdr), $0 }' notes.md

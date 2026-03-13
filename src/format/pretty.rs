@@ -467,6 +467,15 @@ impl Pretty {
                 self.out.push('-');
                 self.expr(x, 0);
             }
+            Expr::TryVal(x) => {
+                self.expr(x, 0);
+                self.out.push('?');
+            }
+            Expr::NullFence(x) => {
+                self.out.push('(');
+                self.expr(x, 0);
+                self.out.push(')');
+            }
             Expr::Concat(l, r) => {
                 self.expr(l, 0);
                 self.space();

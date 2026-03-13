@@ -169,6 +169,7 @@ Phase 20: Array convenience & language constructs — collect(a, expr): per-reco
  Function aliases: short names for all builtins (len, idx, lower, upper, etc.).
 Phase 21: Null coalesce (??) operator — returns left if non-empty string, else right.
  Short-circuit evaluation, precedence between ternary and logical or.
+ Try-val postfix ? — expr? returns null if empty; null propagates through concat, parens fence it.
  clr(var) / clear(var): return value then clear variable to "". Single-purpose primitive.
  seq(from, to) 2-arg form: returns values joined by ORS (generator, wraps as BEGIN).
  Generator detection: bare func calls without field/record deps wrap as BEGIN{print ...}.

@@ -195,7 +195,9 @@ fn walk_expr(expr: &Expr, info: &mut ProgramInfo) {
         Expr::LogicalNot(e)
         | Expr::UnaryMinus(e)
         | Expr::Increment(e, _)
-        | Expr::Decrement(e, _) => {
+        | Expr::Decrement(e, _)
+        | Expr::TryVal(e)
+        | Expr::NullFence(e) => {
             walk_expr(e, info);
         }
         Expr::Ternary(c, t, f) => {
@@ -555,6 +557,15 @@ fn fmt_expr(expr: &Expr, buf: &mut String, depth: usize) {
         Expr::UnaryMinus(e) => {
             buf.push('-');
             fmt_expr(e, buf, depth + 1);
+        }
+        Expr::TryVal(e) => {
+            fmt_expr(e, buf, depth + 1);
+            buf.push('?');
+        }
+        Expr::NullFence(e) => {
+            buf.push('(');
+            fmt_expr(e, buf, depth + 1);
+            buf.push(')');
         }
         Expr::Concat(l, r) => {
             if matches!(r.as_ref(), Expr::Var(n) if n == "SUBSEP") {

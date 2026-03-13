@@ -2347,7 +2347,6 @@ fn seq_two_arg_reverse() {
     assert_eq!(rt.get_var("result"), "3\n2\n1");
 }
 
-#[test]
 // --- null coalesce (??) ---
 
 #[test]
@@ -2378,6 +2377,80 @@ fn null_coalesce_chains() {
 fn null_coalesce_number_is_nonempty() {
     let rt = eval(r#"BEGIN { a = 0; result = a ?? "default" }"#, &[]);
     assert_eq!(rt.get_var("result"), "0");
+}
+
+// --- postfix ? (try-val) ---
+
+#[test]
+fn tryval_nonempty_passes_through() {
+    let rt = eval(r#"BEGIN { a = "hello"; result = a? }"#, &[]);
+    assert_eq!(rt.get_var("result"), "hello");
+}
+
+#[test]
+fn tryval_empty_returns_empty() {
+    let rt = eval(r#"BEGIN { result = x? }"#, &[]);
+    assert_eq!(rt.get_var("result"), "");
+}
+
+#[test]
+fn tryval_null_propagates_through_concat() {
+    // Inner concat with null should collapse to ""
+    let rt = eval(r#"BEGIN { a = ""; result = ("prefix" a?) }"#, &[]);
+    assert_eq!(rt.get_var("result"), "");
+}
+
+#[test]
+fn tryval_null_scoped_by_parens() {
+    // Null should not leak out of parenthesized group
+    let rt = eval(r#"BEGIN { a = ""; result = "keep" ("prefix" a?) }"#, &[]);
+    assert_eq!(rt.get_var("result"), "keep");
+}
+
+#[test]
+fn tryval_nonempty_concat_works() {
+    let rt = eval(r#"BEGIN { a = "X"; result = ("--flag " a?) }"#, &[]);
+    assert_eq!(rt.get_var("result"), "--flag X");
+}
+
+#[test]
+fn tryval_multi_group_full() {
+    let rt = eval(
+        r#"BEGIN { FS=":"; } { result = "cmd" (" --line " $2?)(" --col " $3?) " " $1 }"#,
+        &["file.rs:42:10"],
+    );
+    assert_eq!(rt.get_var("result"), "cmd --line 42 --col 10 file.rs");
+}
+
+#[test]
+fn tryval_multi_group_partial() {
+    let rt = eval(
+        r#"BEGIN { FS=":"; } { result = "cmd" (" --line " $2?)(" --col " $3?) " " $1 }"#,
+        &["file.rs:7"],
+    );
+    assert_eq!(rt.get_var("result"), "cmd --line 7 file.rs");
+}
+
+#[test]
+fn tryval_multi_group_none() {
+    let rt = eval(
+        r#"BEGIN { FS=":"; } { result = "cmd" (" --col " $2?) " " $1 }"#,
+        &["README.md"],
+    );
+    assert_eq!(rt.get_var("result"), "cmd README.md");
+}
+
+#[test]
+fn tryval_does_not_break_ternary() {
+    let rt = eval(r#"BEGIN { result = 1 ? "yes" : "no" }"#, &[]);
+    assert_eq!(rt.get_var("result"), "yes");
+}
+
+#[test]
+fn tryval_with_null_coalesce() {
+    // ? and ?? work together
+    let rt = eval(r#"BEGIN { a = ""; result = a? ?? "default" }"#, &[]);
+    assert_eq!(rt.get_var("result"), "default");
 }
 
 // --- clr ---
