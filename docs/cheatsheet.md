@@ -171,7 +171,7 @@ print ... > "/dev/stderr"   # write to stderr
 | `endswith(s, suffix)` | Returns 1 if s ends with suffix |
 | `repeat(s, n)` | Repeat string n times |
 | `rev(s)` | Reverse a string (unicode-aware) |
-| `rev()` | Reverse fields of current record, return new $0 |
+| `flip()` | Reverse fields of current record, return new $0 |
 | `chr(n)` / `ord(s)` | Character ↔ codepoint |
 | `hex(n)` | Format number as hexadecimal (0x...) |
 | `lpad(s, width [, char])` | Left-pad to width (default: space) |

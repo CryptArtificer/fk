@@ -446,7 +446,7 @@ impl<'a> Executor<'a> {
         Value::from_string(array_name)
     }
 
-    /// rev() — reverse fields of current record in place. Returns new $0.
+    /// flip() — reverse fields of current record in place. Returns new $0.
     pub(crate) fn builtin_reverse_fields(&mut self) -> Value {
         self.rt.reverse_fields();
         Value::from_string(self.rt.get_field(0))

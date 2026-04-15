@@ -2540,21 +2540,32 @@ fn shuffle_preserves_elements() {
     assert_eq!(rt.get_var("result"), "3");
 }
 
-// --- rev (fields) ---
+// --- rev() 0-arg: string reversal of $0 ---
 
 #[test]
-fn rev_no_args_reverses_fields() {
+fn rev_no_args_reverses_string() {
     let rt = eval(
-        r#"{ rev(); r = $1 "," $2 "," $3 }"#,
+        r#"{ r = rev() }"#,
+        &["hello"],
+    );
+    assert_eq!(rt.get_var("r"), "olleh");
+}
+
+// --- flip (fields) ---
+
+#[test]
+fn flip_reverses_fields() {
+    let rt = eval(
+        r#"{ flip(); r = $1 "," $2 "," $3 }"#,
         &["a b c"],
     );
     assert_eq!(rt.get_var("r"), "c,b,a");
 }
 
 #[test]
-fn rev_no_args_returns_new_record() {
+fn flip_returns_new_record() {
     let rt = eval(
-        r#"{ r = rev() }"#,
+        r#"{ r = flip() }"#,
         &["a b c"],
     );
     assert_eq!(rt.get_var("r"), "c b a");

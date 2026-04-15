@@ -219,10 +219,8 @@ fn walk_expr(expr: &Expr, info: &mut ProgramInfo) {
                         .entry(arr.clone())
                         .or_insert_with(|| fargs[1].clone());
                 }
-                // Functions that implicitly operate on fields when called with no args
-                if fargs.is_empty()
-                    && matches!(name.as_str(), "rev" | "reverse")
-                {
+                // flip() implicitly operates on fields
+                if matches!(name.as_str(), "flip") {
                     info.needs_fields = true;
                     info.max_field = None;
                 }

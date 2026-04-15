@@ -221,7 +221,7 @@ pub fn parse_args() -> Args {
     // Bare function call without braces → {print expr} or BEGIN{print expr}
     // If the call has no field/record dependencies, wrap as BEGIN (generator).
     // e.g. fk 'seq(1,100)' → BEGIN{print seq(1,100)}
-    //      fk 'rev()' file → {print rev()} (rev() touches fields)
+    //      fk 'flip()' file → {print flip()} (flip() touches fields)
     if let Some(ref p) = program
         && !p.contains('{')
         && is_bare_func_call(p.trim())
@@ -491,7 +491,7 @@ fn is_generator_call(s: &str) -> bool {
     if args == "()" {
         return !matches!(
             name,
-            "rev" | "reverse" | "length" | "len" | "systime" | "now" | "rand" | "srand"
+            "rev" | "reverse" | "flip" | "length" | "len" | "systime" | "now" | "rand" | "srand"
         );
     }
     // If args reference fields ($), NR, NF, FNR — not a generator
@@ -559,6 +559,7 @@ mod tests {
         assert!(is_generator_call("seq(1,100)"));
         assert!(is_generator_call("chr(65)"));
         assert!(!is_generator_call("rev()"));
+        assert!(!is_generator_call("flip()"));
         assert!(!is_generator_call("length()"));
         assert!(!is_generator_call("tolower($1)"));
         assert!(!is_generator_call("substr($0,1,5)"));

@@ -68,7 +68,7 @@ Process CSV (auto-detected from extension)
 .TP
 Reverse each row (CSV in, TSV out)
 .nf
-\fBfk \-t 'rev()' data.csv\fR
+\fBfk \-t 'flip()' data.csv\fR
 .fi
 .
 .TP
@@ -124,8 +124,8 @@ Fields from structured readers (CSV, TSV, JSON) are joined by \fBOFS\fR
 \fB\-O,\fR to preserve CSV.
 .
 .PP
-\fBBare function call:\fR a program without braces like \fBrev()\fR
-becomes \fB{print rev()}\fR automatically, printing the result of
+\fBBare function call:\fR a program without braces like \fBflip()\fR
+becomes \fB{print flip()}\fR automatically, printing the result of
 each call (in this case, the reversed fields of each record).
 .
 .\" ─────────────────────────────────────────────────────────────
@@ -642,7 +642,7 @@ Randomize order, re-key as 1..N. Returns array name for chaining.
 \fBrev(\fIarr\fB)\fR
 Reverse element order, re-key as 1..N. Returns array name for chaining.
 .TP
-\fBrev()\fR
+\fBflip()\fR
 Reverse fields of the current record in place. Returns new \fB$0\fR.
 .TP
 \fBdiff(\fIa\fB,\fR \fIb\fB)\fR
@@ -960,7 +960,7 @@ END { for (d in dept) @rval print d, dept[d] }' sales.parquet\fR
 .SS fk-only tricks
 .nf
 # Bare function call auto-print (no braces needed)
-\fBfk 'rev()' data.csv\fR
+\fBfk 'flip()' data.csv\fR
 \fBfk 'tolower($1)' file\fR
 \fBfk 'length()' file\fR
 
@@ -969,7 +969,7 @@ END { for (d in dept) @rval print d, dept[d] }' sales.parquet\fR
 \fBfk -O, '{ print $1, $3 }' data.tsv\fR         # comma output
 
 # Reverse fields per row (CSV in, TSV out)
-\fBfk -t 'rev()' data.csv\fR
+\fBfk -t 'flip()' data.csv\fR
 
 # Reverse an array
 \fBseq 1 5 | fk '{ a[NR]=$1 } END { rev(a); print join(a, ",") }'\fR
@@ -1138,11 +1138,11 @@ Chainable array functions: most return the array name, enabling
 .IP \(bu 2
 \fB\-O\fR output separator, \fB\-t\fR tab output shorthand
 .IP \(bu 2
-Bare function call auto-print: \fBfk 'rev()' file\fR \(-> \fB{print rev()}\fR
+Bare function call auto-print: \fBfk 'flip()' file\fR \(-> \fB{print flip()}\fR
 .IP \(bu 2
 Short aliases for all builtins: \fBlen\fR, \fBavg\fR, \fBmed\fR, \fBsd\fR, \fBjp\fR, \fBsw\fR, etc.
 .IP \(bu 2
-\fBrev()\fR reverses fields of the current record; \fBrev(arr)\fR reverses an array
+\fBflip()\fR reverses fields of the current record; \fBrev(arr)\fR reverses an array
 .IP \(bu 2
 Transparent decompression of .gz, .zst, .bz2, .xz, .lz4 files
 .IP \(bu 2

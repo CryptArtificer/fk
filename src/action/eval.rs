@@ -178,8 +178,11 @@ impl<'a> Executor<'a> {
                     "inv" | "invert" => return self.builtin_invert(args),
                     "tidy" => return self.builtin_compact(args),
                     "shuf" | "shuffle" => return self.builtin_shuffle(args),
+                    "flip" => return self.builtin_reverse_fields(),
                     "rev" | "reverse" if args.is_empty() => {
-                        return self.builtin_reverse_fields();
+                        let s = self.rt.get_field(0);
+                        let reversed: String = s.chars().rev().collect();
+                        return Value::from_string(reversed);
                     }
                     "rev" | "reverse" if args.len() == 1 => {
                         if let Expr::Var(v) = &args[0]

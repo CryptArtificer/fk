@@ -163,7 +163,7 @@ Phase 20: Array convenience & language constructs — collect(a, expr): per-reco
  Sorted for-in: for (k in arr) @sort/@rsort/@nsort/@rnsort/@val/@rval.
  Hidden easter egg: --hierarchical-menu renders an RLE-encoded Great Auk
  silhouette in black & white using Unicode half-block characters.
- rev(arr): reverse array, re-key 1..N. rev() no-args: reverse record fields.
+ rev(arr): reverse array, re-key 1..N. flip(): reverse record fields.
  -O sep: output field separator. -t: tab output shorthand.
  Bare func call auto-print: fk 'func()' → {print func()}.
  Function aliases: short names for all builtins (len, idx, lower, upper, etc.).

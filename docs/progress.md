@@ -242,7 +242,7 @@
 - [x] Sorted `for (k in arr) @sort` — deterministic iteration with `@sort`, `@rsort`, `@nsort`, `@rnsort`, `@val`, `@rval`
 - [x] Hidden easter egg: `--hierarchical-menu` — RLE-encoded Great Auk silhouette, black & white, Unicode half-block rendering
 - [x] `rev(arr)` — reverse array elements in place, re-keyed 1..N
-- [x] `rev()` (no args) — reverse fields of current record, returns new $0
+- [x] `flip()` — reverse fields of current record, returns new $0
 - [x] `-O sep` — set output field separator (OFS) from CLI
 - [x] `-t` — tab-separated output (shorthand for `-O '\t'`)
 - [x] Bare function call auto-print: `fk 'func()' file` wraps to `{print func()}`
