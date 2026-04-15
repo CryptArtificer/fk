@@ -76,7 +76,7 @@ impl<'a> Executor<'a> {
                 }
             }
             Statement::While(cond, body) => loop {
-                if !self.eval_expr(cond).is_truthy() {
+                if self.eval_number(cond) == 0.0 {
                     break;
                 }
                 match self.exec_block(body) {
@@ -93,7 +93,7 @@ impl<'a> Executor<'a> {
                     Some(signal) => return Some(signal),
                     None => {}
                 }
-                if !self.eval_expr(cond).is_truthy() {
+                if self.eval_number(cond) == 0.0 {
                     break;
                 }
             },
@@ -108,7 +108,7 @@ impl<'a> Executor<'a> {
                 }
                 loop {
                     if let Some(cond_expr) = cond
-                        && !self.eval_expr(cond_expr).is_truthy()
+                        && self.eval_number(cond_expr) == 0.0
                     {
                         break;
                     }

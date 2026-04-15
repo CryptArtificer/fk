@@ -7,6 +7,193 @@ use crate::runtime::Value;
 use super::{Executor, bool_val};
 
 impl<'a> Executor<'a> {
+    /// Fast path: evaluate an expression as f64 without constructing a Value.
+    /// Covers the common cases in arithmetic tight loops.
+    pub(crate) fn eval_number(&mut self, expr: &Expr) -> f64 {
+        match expr {
+            Expr::NumberLit(n) => *n,
+            Expr::Var(name) => self.rt.get_number(name),
+            Expr::BinOp(left, op, right) => {
+                let l = self.eval_number(left);
+                let r = self.eval_number(right);
+                match op {
+                    BinOp::Add => l + r,
+                    BinOp::Sub => l - r,
+                    BinOp::Mul => l * r,
+                    BinOp::Pow => {
+                        let ei = r as i32;
+                        if r == ei as f64 && ei >= 0 && ei <= 10 {
+                            match ei {
+                                0 => 1.0,
+                                1 => l,
+                                2 => l * l,
+                                3 => l * l * l,
+                                _ => {
+                                    let mut res = 1.0;
+                                    let mut b = l;
+                                    let mut e = ei as u32;
+                                    while e > 0 {
+                                        if e & 1 != 0 {
+                                            res *= b;
+                                        }
+                                        b *= b;
+                                        e >>= 1;
+                                    }
+                                    res
+                                }
+                            }
+                        } else {
+                            l.powf(r)
+                        }
+                    }
+                    BinOp::Div => {
+                        if r == 0.0 {
+                            0.0
+                        } else {
+                            l / r
+                        }
+                    }
+                    BinOp::Mod => {
+                        if r == 0.0 {
+                            0.0
+                        } else {
+                            l % r
+                        }
+                    }
+                    BinOp::Lt => {
+                        if l < r {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
+                    BinOp::Le => {
+                        if l <= r {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
+                    BinOp::Gt => {
+                        if l > r {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
+                    BinOp::Ge => {
+                        if l >= r {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
+                    BinOp::Eq => {
+                        if l == r {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
+                    BinOp::Ne => {
+                        if l != r {
+                            1.0
+                        } else {
+                            0.0
+                        }
+                    }
+                }
+            }
+            Expr::UnaryMinus(inner) => -self.eval_number(inner),
+            Expr::Increment(target, pre) => {
+                let n = self.eval_number(target);
+                let new = n + 1.0;
+                if let Expr::Var(name) = target.as_ref() {
+                    self.rt.set_number(name, new);
+                } else {
+                    self.assign_to(target, Value::from_number(new));
+                }
+                if *pre { new } else { n }
+            }
+            Expr::Decrement(target, pre) => {
+                let n = self.eval_number(target);
+                let new = n - 1.0;
+                if let Expr::Var(name) = target.as_ref() {
+                    self.rt.set_number(name, new);
+                } else {
+                    self.assign_to(target, Value::from_number(new));
+                }
+                if *pre { new } else { n }
+            }
+            Expr::LogicalAnd(left, right) => {
+                if self.eval_number(left) == 0.0 {
+                    0.0
+                } else if self.eval_number(right) != 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            Expr::LogicalOr(left, right) => {
+                if self.eval_number(left) != 0.0 {
+                    1.0
+                } else if self.eval_number(right) != 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            Expr::LogicalNot(inner) => {
+                if self.eval_number(inner) == 0.0 {
+                    1.0
+                } else {
+                    0.0
+                }
+            }
+            Expr::Assign(target, value) => {
+                let n = self.eval_number(value);
+                if let Expr::Var(name) = target.as_ref() {
+                    self.rt.set_number(name, n);
+                } else {
+                    self.assign_to(target, Value::from_number(n));
+                }
+                n
+            }
+            Expr::CompoundAssign(target, op, value) => {
+                let current = self.eval_number(target);
+                let rhs = self.eval_number(value);
+                let result = match op {
+                    BinOp::Add => current + rhs,
+                    BinOp::Sub => current - rhs,
+                    BinOp::Mul => current * rhs,
+                    BinOp::Div => {
+                        if rhs == 0.0 {
+                            0.0
+                        } else {
+                            current / rhs
+                        }
+                    }
+                    BinOp::Mod => {
+                        if rhs == 0.0 {
+                            0.0
+                        } else {
+                            current % rhs
+                        }
+                    }
+                    BinOp::Pow => current.powf(rhs),
+                    _ => return self.eval_expr(expr).to_number(),
+                };
+                if let Expr::Var(name) = target.as_ref() {
+                    self.rt.set_number(name, result);
+                } else {
+                    self.assign_to(target, Value::from_number(result));
+                }
+                result
+            }
+            _ => self.eval_expr(expr).to_number(),
+        }
+    }
+
     pub(crate) fn eval_expr(&mut self, expr: &Expr) -> Value {
         match expr {
             Expr::NumberLit(n) => Value::from_number(*n),
@@ -24,11 +211,16 @@ impl<'a> Executor<'a> {
                 let key = self.eval_expr(key_expr).into_string();
                 bool_val(self.rt.array_has_key(array, &key))
             }
-            Expr::BinOp(left, op, right) => {
-                let l = self.eval_expr(left);
-                let r = self.eval_expr(right);
-                eval_binop(l, op, r)
-            }
+            Expr::BinOp(left, op, right) => match op {
+                BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow => {
+                    Value::from_number(self.eval_number(expr))
+                }
+                _ => {
+                    let l = self.eval_expr(left);
+                    let r = self.eval_expr(right);
+                    eval_binop(l, op, r)
+                }
+            },
             Expr::LogicalAnd(left, right) => {
                 let l = self.eval_expr(left);
                 if !l.is_truthy() {
@@ -80,17 +272,64 @@ impl<'a> Executor<'a> {
             }
             Expr::Assign(target, value) => {
                 let val = self.eval_expr(value);
-                self.assign_to(target, val.clone());
+                if let Expr::Var(name) = target.as_ref() {
+                    self.rt.set_value(name, val.clone());
+                } else {
+                    self.assign_to(target, val.clone());
+                }
                 val
             }
             Expr::CompoundAssign(target, op, value) => {
-                let current = self.eval_lvalue(target);
-                let rhs = self.eval_expr(value);
-                let result = eval_binop(current, op, rhs);
-                self.assign_to(target, result.clone());
-                result
+                if let Expr::Var(name) = target.as_ref() {
+                    let current = self.rt.get_number(name);
+                    let rhs = self.eval_number(value);
+                    let result = match op {
+                        BinOp::Add => current + rhs,
+                        BinOp::Sub => current - rhs,
+                        BinOp::Mul => current * rhs,
+                        BinOp::Div => {
+                            if rhs == 0.0 {
+                                0.0
+                            } else {
+                                current / rhs
+                            }
+                        }
+                        BinOp::Mod => {
+                            if rhs == 0.0 {
+                                0.0
+                            } else {
+                                current % rhs
+                            }
+                        }
+                        BinOp::Pow => current.powf(rhs),
+                        _ => {
+                            let l = self.rt.get_value(name);
+                            let r = self.eval_expr(value);
+                            let res = eval_binop(l, op, r);
+                            self.rt.set_value(name, res.clone());
+                            return res;
+                        }
+                    };
+                    self.rt.set_number(name, result);
+                    Value::from_number(result)
+                } else {
+                    let current = self.eval_lvalue(target);
+                    let rhs = self.eval_expr(value);
+                    let result = eval_binop(current, op, rhs);
+                    self.assign_to(target, result.clone());
+                    result
+                }
             }
             Expr::Increment(target, pre) => {
+                if let Expr::Var(name) = target.as_ref() {
+                    let n = self.rt.get_number(name);
+                    self.rt.set_number(name, n + 1.0);
+                    return if *pre {
+                        Value::from_number(n + 1.0)
+                    } else {
+                        Value::from_number(n)
+                    };
+                }
                 let current = self.eval_lvalue(target);
                 let n = current.to_number();
                 let new_val = Value::from_number(n + 1.0);
@@ -98,6 +337,15 @@ impl<'a> Executor<'a> {
                 if *pre { new_val } else { Value::from_number(n) }
             }
             Expr::Decrement(target, pre) => {
+                if let Expr::Var(name) = target.as_ref() {
+                    let n = self.rt.get_number(name);
+                    self.rt.set_number(name, n - 1.0);
+                    return if *pre {
+                        Value::from_number(n - 1.0)
+                    } else {
+                        Value::from_number(n)
+                    };
+                }
                 let current = self.eval_lvalue(target);
                 let n = current.to_number();
                 let new_val = Value::from_number(n - 1.0);
@@ -118,7 +366,11 @@ impl<'a> Executor<'a> {
             }
             Expr::NullFence(inner) => {
                 let val = self.eval_expr(inner);
-                if val.is_null() { Value::from_string(String::new()) } else { val }
+                if val.is_null() {
+                    Value::from_string(String::new())
+                } else {
+                    val
+                }
             }
             Expr::NullCoalesce(left, right) => {
                 let val = self.eval_expr(left);
@@ -371,7 +623,35 @@ pub(crate) fn eval_binop(left: Value, op: &BinOp, right: Value) -> Value {
         BinOp::Add => Value::from_number(left.to_number() + right.to_number()),
         BinOp::Sub => Value::from_number(left.to_number() - right.to_number()),
         BinOp::Mul => Value::from_number(left.to_number() * right.to_number()),
-        BinOp::Pow => Value::from_number(left.to_number().powf(right.to_number())),
+        BinOp::Pow => {
+            let base = left.to_number();
+            let exp = right.to_number();
+            let ei = exp as i32;
+            let result = if exp == ei as f64 && ei >= 0 && ei <= 10 {
+                match ei {
+                    0 => 1.0,
+                    1 => base,
+                    2 => base * base,
+                    3 => base * base * base,
+                    _ => {
+                        let mut r = 1.0;
+                        let mut b = base;
+                        let mut e = ei as u32;
+                        while e > 0 {
+                            if e & 1 != 0 {
+                                r *= b;
+                            }
+                            b *= b;
+                            e >>= 1;
+                        }
+                        r
+                    }
+                }
+            } else {
+                base.powf(exp)
+            };
+            Value::from_number(result)
+        }
         BinOp::Div => {
             let r = right.to_number();
             if r == 0.0 {

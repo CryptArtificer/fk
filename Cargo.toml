@@ -14,11 +14,17 @@ parquet = ["dep:parquet", "dep:arrow"]
 
 [dependencies]
 regex = "1.12.3"
+rustc-hash = "2"
 parquet = { version = "54", optional = true, default-features = false, features = ["arrow", "snap", "zstd", "lz4"] }
 arrow = { version = "54", optional = true, default-features = false, features = ["prettyprint"] }
 
 [dev-dependencies]
 criterion = "0.8.2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
 
 [[bench]]
 name = "field_split"

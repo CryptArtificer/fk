@@ -1,4 +1,5 @@
-use std::collections::{HashMap, hash_map};
+use rustc_hash::FxHashMap as HashMap;
+use std::collections::hash_map;
 
 use crate::builtins;
 use crate::field;
@@ -64,6 +65,14 @@ impl Value {
             n,
             flags: NUM_VALID,
         }
+    }
+
+    /// Overwrite with a numeric value in place (no allocation).
+    #[inline]
+    pub fn set_number_fast(&mut self, n: f64) {
+        self.n = n;
+        self.flags = NUM_VALID;
+        self.s.clear();
     }
 
     /// Get numeric value (fast path if number is already cached).
@@ -139,7 +148,11 @@ impl Value {
     }
 
     pub fn null() -> Self {
-        Value { s: String::new(), n: 0.0, flags: 0 }
+        Value {
+            s: String::new(),
+            n: 0.0,
+            flags: 0,
+        }
     }
 
     pub fn is_null(&self) -> bool {
@@ -198,9 +211,9 @@ impl Default for Runtime {
 impl Runtime {
     pub fn new() -> Self {
         Runtime {
-            variables: HashMap::new(),
-            arrays: HashMap::new(),
-            array_meta: HashMap::new(),
+            variables: HashMap::default(),
+            arrays: HashMap::default(),
+            array_meta: HashMap::default(),
             fields: Vec::new(),
             field_offsets: Vec::new(),
             fields_lazy: false,
@@ -218,6 +231,41 @@ impl Runtime {
             ofmt: "%.6g".to_string(),
             convfmt: "%.6g".to_string(),
             filename: String::new(),
+        }
+    }
+
+    /// Get a variable's numeric value directly (avoids Value clone).
+    #[inline]
+    pub fn get_number(&self, name: &str) -> f64 {
+        match name {
+            "NR" => self.nr as f64,
+            "NF" => self.nf as f64,
+            "FNR" => self.fnr as f64,
+            _ => {
+                if let Some(v) = self.variables.get(name) {
+                    v.to_number()
+                } else {
+                    0.0
+                }
+            }
+        }
+    }
+
+    /// Set a variable's numeric value directly (avoids Value construction).
+    #[inline]
+    pub fn set_number(&mut self, name: &str, n: f64) {
+        match name {
+            "NR" => self.nr = n as u64,
+            "NF" => self.nf = n as usize,
+            "FNR" => self.fnr = n as u64,
+            _ => {
+                if let Some(existing) = self.variables.get_mut(name) {
+                    existing.set_number_fast(n);
+                } else {
+                    self.variables
+                        .insert(name.to_string(), Value::from_number(n));
+                }
+            }
         }
     }
 
@@ -254,7 +302,11 @@ impl Runtime {
             "CONVFMT" => self.convfmt = val.into_string(),
             "FILENAME" => self.filename = val.into_string(),
             _ => {
-                self.variables.insert(name.to_string(), val);
+                if let Some(existing) = self.variables.get_mut(name) {
+                    *existing = val;
+                } else {
+                    self.variables.insert(name.to_string(), val);
+                }
             }
         }
     }
