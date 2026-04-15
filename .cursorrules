@@ -173,6 +173,12 @@ Phase 21: Null coalesce (??) operator — returns left if non-empty string, else
  clr(var) / clear(var): return value then clear variable to "". Single-purpose primitive.
  seq(from, to) 2-arg form: returns values joined by ORS (generator, wraps as BEGIN).
  Generator detection: bare func calls without field/record deps wrap as BEGIN{print ...}.
+Phase 22: Arithmetic fast path — eval_number() bypasses Value for numeric exprs,
+ FxHashMap replaces std HashMap, integer pow → direct multiply, set_number/get_number
+ for in-place f64 ops. Release: LTO + codegen-units=1 + strip.
+ rev() 0-arg now reverses $0 string (was field reversal). flip(): reverse fields.
+ Mandelbrot showcase (examples/22-mandelbrot.sh): ASCII + 256-color half-block + benchmark.
+ POSIX/gawk gap report in BUGS.md.
 Phase 18: Auto-subtitle for plotbox — AST-derived data-source description
   (array_sources + var_sources in ProgramInfo, one level of variable
   indirection), combined with FILENAME at hist() time. Smart formatting:

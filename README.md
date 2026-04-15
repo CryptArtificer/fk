@@ -281,15 +281,17 @@ echo "" | fk 'BEGIN { print parsedate("2025-01-15 10:30:00", "%Y-%m-%d %H:%M:%S"
 
 ## Performance
 
+Arithmetic compute matches awk and gawk (Mandelbrot benchmark: `examples/22-mandelbrot.sh`).
+Startup is ~10ms slower due to statically linked parquet/arrow/zstd (7.6MB binary vs 295KB awk).
+
+Key optimizations: `eval_number()` fast path bypasses Value allocation for numeric expressions,
+`FxHashMap` replaces std HashMap, integer exponents use direct multiplication, `set_number()`
+writes f64 in-place without constructing Values. Release profile uses LTO + codegen-units=1.
+
 `make bench-compare` runs fk and awk head-to-head on a 1M-line CSV.
 For more reliable numbers, use `make suite-perf-strict` which warms up,
 runs multiple trials, and reports median/p90 into `bench_data/`.
 See `docs/perf-baseline.md` for the latest strict baseline snapshot.
-
-Performance varies by workload and machine. In general, fk is faster on
-multi-field arithmetic and pattern-heavy workloads, while simple Unix tools
-(`wc`, `head`) can remain faster for single-purpose tasks. Use the strict
-perf report for current, apples-to-apples numbers.
 
 Parquet support reads 1M rows, auto-extracts column names, and runs
 pattern-action programs with named field access — no other awk can do this.

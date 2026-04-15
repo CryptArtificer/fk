@@ -254,3 +254,17 @@
 - [x] `clr(var)` / `clear(var)` — return value, then clear variable to ""
 - [x] `seq(from, to)` 2-arg form — return values joined by ORS (generator)
 - [x] Generator detection — bare func calls without field/record deps wrap as `BEGIN{print ...}`
+
+#### Phase 22 — Arithmetic fast path & consistency
+- [x] `rev()` 0-arg now reverses `$0` as string (consistent with `length()` → `length($0)`)
+- [x] `flip()` — new name for field-order reversal (was `rev()` 0-arg)
+- [x] `eval_number()` fast path — arithmetic expressions bypass Value allocation entirely
+- [x] `get_number()` / `set_number()` — direct f64 read/write to HashMap, no Value clone
+- [x] Integer exponent fast path — `x**2` compiles to `x*x`, up to exponent 10
+- [x] `FxHashMap` (rustc-hash) replaces std HashMap for variable storage
+- [x] Comparisons, logical ops, assignments routed through `eval_number` in numeric context
+- [x] While/for conditions use `eval_number` directly
+- [x] Increment/decrement on Var targets use `set_number` (skip Value construction)
+- [x] Release profile: `lto = "thin"`, `codegen-units = 1`, `strip = true`
+- [x] Mandelbrot showcase (`examples/22-mandelbrot.sh`): ASCII, 256-color half-block, benchmark vs awk/gawk
+- [x] POSIX/gawk compatibility gap report (`BUGS.md`): verified, prioritized
